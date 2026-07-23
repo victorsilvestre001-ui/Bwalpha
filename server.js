@@ -7,16 +7,23 @@ const authRoutes = require('./authRoutes');
 const signalsRoutes = require('./signalsRoutes');
 const chatRoutes = require('./chatRoutes');
 const calendarRoutes = require('./calendarRoutes');
+const checkoutRoutes = require('./checkoutRoutes');
+const stripeWebhook = require('./stripeWebhook');
 
 const app = express();
 
 app.use(cors());
+
+// Webhook do Stripe PRECISA vir antes do express.json() (precisa do corpo cru)
+app.use('/api/stripe/webhook', stripeWebhook);
+
 app.use(express.json({ limit: '10mb' }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/signals', signalsRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/calendar', calendarRoutes);
+app.use('/api/checkout', checkoutRoutes);
 
 app.get('/', (req, res) => {
     res.json({ status: 'BWAlpha AI backend rodando 🚀' });
@@ -31,8 +38,13 @@ CREATE TABLE IF NOT EXISTS users (
     plan VARCHAR(20) DEFAULT 'free',
     subscription_status VARCHAR(20) DEFAULT 'inactive',
     subscription_expires_at TIMESTAMP,
+    stripe_customer_id VARCHAR(100),
+    stripe_subscription_id VARCHAR(100),
     created_at TIMESTAMP DEFAULT NOW()
 );
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(100);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id VARCHAR(100);
 
 CREATE TABLE IF NOT EXISTS signals (
     id SERIAL PRIMARY KEY,
