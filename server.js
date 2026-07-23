@@ -10,12 +10,12 @@ const calendarRoutes = require('./calendarRoutes');
 const checkoutRoutes = require('./checkoutRoutes');
 const stripeWebhook = require('./stripeWebhook');
 const { router: marketRoutes } = require('./marketRoutes');
+const { router: telegramRoutes, setupWebhook } = require('./telegramRoutes');
 
 const app = express();
 
 app.use(cors());
 
-// Webhook do Stripe PRECISA vir antes do express.json() (precisa do corpo cru)
 app.use('/api/stripe/webhook', stripeWebhook);
 
 app.use(express.json({ limit: '10mb' }));
@@ -26,6 +26,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/checkout', checkoutRoutes);
 app.use('/api/market', marketRoutes);
+app.use('/api/telegram', telegramRoutes);
 
 app.get('/', (req, res) => {
     res.json({ status: 'BWAlpha AI backend rodando 🚀' });
@@ -58,9 +59,12 @@ CREATE TABLE IF NOT EXISTS signals (
     status VARCHAR(20) DEFAULT 'open',
     result_pips NUMERIC(10,2),
     source VARCHAR(30) DEFAULT 'bwalpha',
+    telegram_message_id BIGINT,
     created_at TIMESTAMP DEFAULT NOW(),
     closed_at TIMESTAMP
 );
+
+ALTER TABLE signals ADD COLUMN IF NOT EXISTS telegram_message_id BIGINT;
 
 CREATE TABLE IF NOT EXISTS chat_history (
     id SERIAL PRIMARY KEY,
@@ -111,5 +115,6 @@ const PORT = process.env.PORT || 3001;
 runMigrations().then(() => {
     app.listen(PORT, () => {
         console.log(`Servidor rodando na porta ${PORT}`);
+        setupWebhook();
     });
 });
