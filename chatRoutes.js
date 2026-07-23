@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('./db');
 const { authMiddleware, requirePaidPlan } = require('./authMiddleware');
+const { getQuotes } = require('./marketRoutes');
 
 const router = express.Router();
 
@@ -12,6 +13,8 @@ Você pode ajudar com:
 - Análise de prints/gráficos enviados pelo usuário (tendência, suporte, resistência)
 - Explicação de indicadores técnicos
 - Dúvidas sobre os pares EURUSD e EURJPY
+
+Você recebe cotações reais e atualizadas em tempo real no início da conversa (formato "[Cotações atuais em tempo real: ...]"). Use esses valores exatos quando o usuário perguntar sobre preços atuais — nunca invente ou estime um preço se a cotação real estiver disponível.
 
 Regras importantes:
 - Não responda perguntas fora do escopo de trading/mercados financeiros
@@ -34,6 +37,26 @@ router.post('/', authMiddleware, requirePaidPlan, async (req, res) => {
 
     try {
         const userContent = [];
+
+        // Injeta cotações reais e atuais no contexto, pra IA responder com preços de verdade
+        try {
+            const quotes = await getQuotes();
+            if (quotes.length > 0) {
+                const quotesText = quotes
+                    .filter((q) => !q.error)
+                    .map((q) => `${q.label}: ${q.rate} (bid ${q.bid} / ask ${q.ask})`)
+                    .join(', ');
+                if (quotesText) {
+                    userContent.push({
+                        type: 'text',
+                        text: `[Cotações atuais em tempo real: ${quotesText}]`,
+                    });
+                }
+            }
+        } catch (e) {
+            // Se falhar ao buscar cotação, segue sem ela (não trava o chat)
+        }
+
         if (message) userContent.push({ type: 'text', text: message });
         if (image_base64) {
             userContent.push({

@@ -9,6 +9,7 @@ const chatRoutes = require('./chatRoutes');
 const calendarRoutes = require('./calendarRoutes');
 const checkoutRoutes = require('./checkoutRoutes');
 const stripeWebhook = require('./stripeWebhook');
+const { router: marketRoutes } = require('./marketRoutes');
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use('/api/signals', signalsRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/checkout', checkoutRoutes);
+app.use('/api/market', marketRoutes);
 
 app.get('/', (req, res) => {
     res.json({ status: 'BWAlpha AI backend rodando 🚀' });
