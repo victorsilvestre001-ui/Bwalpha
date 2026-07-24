@@ -27,7 +27,7 @@ async function postSignalToTelegram(signal) {
         `⏱ Timeframe: ${timeframe}\n` +
         `🎯 Entrada: ${agora}\n\n` +
         `🚀 Execute este sinal pela plataforma: ${affiliateLink}\n\n` +
-        `_Responda esta mensagem com "green" ou "red" pra fechar o sinal._`;
+        `Responda esta mensagem com "green" ou "red" pra fechar o sinal.`;
 
     try {
         const res = await fetch(`${TELEGRAM_API}/sendMessage`, {
@@ -36,11 +36,14 @@ async function postSignalToTelegram(signal) {
             body: JSON.stringify({
                 chat_id: process.env.TELEGRAM_CHAT_ID,
                 text,
-                parse_mode: 'Markdown',
             }),
         });
         const data = await res.json();
-        return data.ok ? data.result.message_id : null;
+        if (!data.ok) {
+            console.error('Telegram sendMessage falhou:', JSON.stringify(data));
+            return null;
+        }
+        return data.result.message_id;
     } catch (err) {
         console.error('Erro ao postar sinal no Telegram:', err.message);
         return null;
