@@ -25,8 +25,6 @@ router.post('/webhook', async (req, res) => {
         );
 
         const signal = result.rows[0];
-
-        // Posta no Telegram e vincula o message_id ao sinal (pra depois reconhecer o "green/red")
         const telegramMessageId = await postSignalToTelegram(signal);
         if (telegramMessageId) {
             const updated = await pool.query(
@@ -40,6 +38,32 @@ router.post('/webhook', async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Erro ao registrar sinal' });
+    }
+});
+
+router.post('/test', authMiddleware, async (req, res) => {
+    try {
+        const result = await pool.query(
+            `INSERT INTO signals (pair, direction, entry_price, stop_loss, take_profit, source)
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+            ['EURUSD', 'BUY', 1.1380, 1.1350, 1.1430, 'teste']
+        );
+
+        const signal = result.rows[0];
+        const telegramMessageId = await postSignalToTelegram(signal);
+
+        if (telegramMessageId) {
+            const updated = await pool.query(
+                `UPDATE signals SET telegram_message_id = $1 WHERE id = $2 RETURNING *`,
+                [telegramMessageId, signal.id]
+            );
+            return res.status(201).json(updated.rows[0]);
+        }
+
+        res.status(201).json(signal);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Erro ao criar sinal de teste' });
     }
 });
 
