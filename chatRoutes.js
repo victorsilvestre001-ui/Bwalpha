@@ -1,7 +1,7 @@
 const express = require('express');
 const pool = require('./db');
 const { authMiddleware, requirePaidPlan } = require('./authMiddleware');
-const { getQuotes } = require('./marketRoutes');
+const { getQuotes, getIndicators, getEconomicSnapshot } = require('./marketRoutes');
 
 const router = express.Router();
 
@@ -27,7 +27,7 @@ Regras importantes:
   Probabilidade de continuação: [Baixa/Média/Alta]
   Observação: [alerta sobre notícias/eventos relevantes, se aplicável]`;
 
-router.post('/', authMiddleware, requirePaidPlan, async (req, res) => {
+router.post('/', authMiddleware, async (req, res) => {
     const { message, image_base64 } = req.body;
     const userId = req.user.id;
 
@@ -36,6 +36,25 @@ router.post('/', authMiddleware, requirePaidPlan, async (req, res) => {
     }
 
     try {
+        // Plano free: limitado a 3 perguntas por dia. VIP: sem limite.
+        const userResult = await pool.query('SELECT plan FROM users WHERE id = $1', [userId]);
+        const plan = userResult.rows[0]?.plan;
+
+        if (plan !== 'vip') {
+            const countResult = await pool.query(
+                `SELECT COUNT(*) AS total FROM chat_history
+                 WHERE user_id = $1 AND role = 'user' AND created_at >= CURRENT_DATE`,
+                [userId]
+            );
+            const usedToday = parseInt(countResult.rows[0].total, 10);
+
+            if (usedToday >= 3) {
+                return res.status(403).json({
+                    error: 'Você atingiu o limite de 3 perguntas gratuitas hoje. Vire VIP pra ter acesso ilimitado ao assistente.',
+                    limitReached: true,
+                });
+            }
+        }
         const userContent = [];
 
         // Injeta cotações reais e atuais no contexto, pra IA responder com preços de verdade
@@ -53,8 +72,30 @@ router.post('/', authMiddleware, requirePaidPlan, async (req, res) => {
                     });
                 }
             }
+
+            const indicators = await getIndicators();
+            if (indicators) {
+                userContent.push({
+                    type: 'text',
+                    text: `[Indicador técnico: RSI(14) diário do EURUSD = ${indicators.rsi.toFixed(2)} (${indicators.date})]`,
+                });
+            }
+
+            const econ = await getEconomicSnapshot();
+            if (econ) {
+                const parts = [];
+                if (econ.cpi) parts.push(`CPI: ${econ.cpi.value} (${econ.cpi.date})`);
+                if (econ.fedRate) parts.push(`Fed Funds Rate: ${econ.fedRate.value}% (${econ.fedRate.date})`);
+                if (econ.unemployment) parts.push(`Desemprego EUA: ${econ.unemployment.value}% (${econ.unemployment.date})`);
+                if (parts.length > 0) {
+                    userContent.push({
+                        type: 'text',
+                        text: `[Dados macroeconômicos mais recentes (EUA): ${parts.join(', ')}]`,
+                    });
+                }
+            }
         } catch (e) {
-            // Se falhar ao buscar cotação, segue sem ela (não trava o chat)
+            // Se falhar ao buscar dados de mercado, segue sem eles (não trava o chat)
         }
 
         if (message) userContent.push({ type: 'text', text: message });
@@ -96,6 +137,29 @@ router.post('/', authMiddleware, requirePaidPlan, async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Erro ao consultar a IA' });
+    }
+});
+
+router.get('/limit', authMiddleware, async (req, res) => {
+    try {
+        const userResult = await pool.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+        const plan = userResult.rows[0]?.plan;
+
+        if (plan === 'vip') {
+            return res.json({ plan, unlimited: true });
+        }
+
+        const countResult = await pool.query(
+            `SELECT COUNT(*) AS total FROM chat_history
+             WHERE user_id = $1 AND role = 'user' AND created_at >= CURRENT_DATE`,
+            [req.user.id]
+        );
+        const usedToday = parseInt(countResult.rows[0].total, 10);
+
+        res.json({ plan, unlimited: false, usedToday, remaining: Math.max(0, 3 - usedToday) });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Erro ao verificar limite' });
     }
 });
 
