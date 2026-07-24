@@ -2,29 +2,24 @@ const express = require('express');
 const { authMiddleware } = require('./authMiddleware');
 
 const router = express.Router();
+const AV_BASE = 'https://www.alphavantage.co/query';
+const KEY = () => process.env.ALPHA_VANTAGE_API_KEY;
 
 const PAIRS = [
     { from: 'EUR', to: 'USD', label: 'EURUSD' },
     { from: 'EUR', to: 'JPY', label: 'EURJPY' },
-    { from: 'GBP', to: 'USD', label: 'GBPUSD' },
     { from: 'XAU', to: 'USD', label: 'XAUUSD' },
 ];
 
-// Cache em memória — evita estourar o limite de requisições da Alpha Vantage
-// (free tier: 5 req/min, 25/dia). Atualiza no máximo 1x por minuto.
-let cache = { data: null, updatedAt: 0 };
-const CACHE_TTL_MS = 60 * 1000;
+let quotesCache = { data: null, updatedAt: 0 };
+const QUOTES_TTL_MS = 6 * 60 * 60 * 1000;
 
 async function fetchQuote(pair) {
-    const url = `https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=${pair.from}&to_currency=${pair.to}&apikey=${process.env.ALPHA_VANTAGE_API_KEY}`;
+    const url = `${AV_BASE}?function=CURRENCY_EXCHANGE_RATE&from_currency=${pair.from}&to_currency=${pair.to}&apikey=${KEY()}`;
     const res = await fetch(url);
     const data = await res.json();
     const rateData = data['Realtime Currency Exchange Rate'];
-
-    if (!rateData) {
-        return { label: pair.label, error: true };
-    }
-
+    if (!rateData) return { label: pair.label, error: true };
     return {
         label: pair.label,
         rate: parseFloat(rateData['5. Exchange Rate']),
@@ -35,34 +30,175 @@ async function fetchQuote(pair) {
 }
 
 async function getQuotes() {
-    const isStale = Date.now() - cache.updatedAt > CACHE_TTL_MS;
-
-    if (!cache.data || isStale) {
+    const isStale = Date.now() - quotesCache.updatedAt > QUOTES_TTL_MS;
+    if (!quotesCache.data || isStale) {
         try {
-            // Sequencial (não paralelo) pra não estourar rate limit da API
             const results = [];
-            for (const pair of PAIRS) {
-                const quote = await fetchQuote(pair);
-                results.push(quote);
-            }
-            cache = { data: results, updatedAt: Date.now() };
+            for (const pair of PAIRS) results.push(await fetchQuote(pair));
+            quotesCache = { data: results, updatedAt: Date.now() };
         } catch (err) {
             console.error('Erro ao buscar cotações:', err.message);
-            // Se falhar, mantém o cache antigo (se existir) em vez de quebrar
         }
     }
+    return quotesCache.data || [];
+}
 
-    return cache.data || [];
+let indicatorsCache = { data: null, updatedAt: 0 };
+const INDICATORS_TTL_MS = 12 * 60 * 60 * 1000;
+
+async function getIndicators() {
+    const isStale = Date.now() - indicatorsCache.updatedAt > INDICATORS_TTL_MS;
+    if (!indicatorsCache.data || isStale) {
+        try {
+            const url = `${AV_BASE}?function=RSI&symbol=EURUSD&interval=daily&time_period=14&series_type=close&apikey=${KEY()}`;
+            const res = await fetch(url);
+            const data = await res.json();
+            const series = data['Technical Analysis: RSI'];
+            if (series) {
+                const dates = Object.keys(series).sort().reverse();
+                const latestDate = dates[0];
+                indicatorsCache = {
+                    data: {
+                        pair: 'EURUSD',
+                        rsi: parseFloat(series[latestDate]['RSI']),
+                        date: latestDate,
+                    },
+                    updatedAt: Date.now(),
+                };
+            }
+        } catch (err) {
+            console.error('Erro ao buscar indicadores:', err.message);
+        }
+    }
+    return indicatorsCache.data || null;
+}
+
+let econCache = { data: null, updatedAt: 0 };
+const ECON_TTL_MS = 24 * 60 * 60 * 1000;
+
+async function fetchEconSeries(functionName) {
+    const url = `${AV_BASE}?function=${functionName}&apikey=${KEY()}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const series = data.data;
+    if (!series || !series.length) return null;
+    return { date: series[0].date, value: series[0].value };
+}
+
+async function getEconomicSnapshot() {
+    const isStale = Date.now() - econCache.updatedAt > ECON_TTL_MS;
+    if (!econCache.data || isStale) {
+        try {
+            const [cpi, fedRate, unemployment] = await Promise.all([
+                fetchEconSeries('CPI'),
+                fetchEconSeries('FEDERAL_FUNDS_RATE'),
+                fetchEconSeries('UNEMPLOYMENT'),
+            ]);
+            econCache = {
+                data: { cpi, fedRate, unemployment },
+                updatedAt: Date.now(),
+            };
+        } catch (err) {
+            console.error('Erro ao buscar dados macro:', err.message);
+        }
+    }
+    return econCache.data || null;
+}
+
+let newsCache = { data: null, updatedAt: 0 };
+const NEWS_TTL_MS = 6 * 60 * 60 * 1000;
+
+async function getNews() {
+    const isStale = Date.now() - newsCache.updatedAt > NEWS_TTL_MS;
+    if (!newsCache.data || isStale) {
+        try {
+            const url = `${AV_BASE}?function=NEWS_SENTIMENT&topics=forex&limit=10&apikey=${KEY()}`;
+            const res = await fetch(url);
+            const data = await res.json();
+            const feed = data.feed || [];
+            newsCache = {
+                data: feed.slice(0, 8).map((item) => ({
+                    title: item.title,
+                    url: item.url,
+                    source: item.source,
+                    sentiment: item.overall_sentiment_label,
+                    time_published: item.time_published,
+                })),
+                updatedAt: Date.now(),
+            };
+        } catch (err) {
+            console.error('Erro ao buscar notícias:', err.message);
+        }
+    }
+    return newsCache.data || [];
+}
+
+let historyCache = { data: null, updatedAt: 0 };
+const HISTORY_TTL_MS = 24 * 60 * 60 * 1000;
+
+async function getHistory() {
+    const isStale = Date.now() - historyCache.updatedAt > HISTORY_TTL_MS;
+    if (!historyCache.data || isStale) {
+        try {
+            const url = `${AV_BASE}?function=FX_DAILY&from_symbol=EUR&to_symbol=USD&outputsize=compact&apikey=${KEY()}`;
+            const res = await fetch(url);
+            const data = await res.json();
+            const series = data['Time Series FX (Daily)'];
+            if (series) {
+                const dates = Object.keys(series).sort().slice(-30);
+                historyCache = {
+                    data: dates.map((date) => ({
+                        date,
+                        close: parseFloat(series[date]['4. close']),
+                    })),
+                    updatedAt: Date.now(),
+                };
+            }
+        } catch (err) {
+            console.error('Erro ao buscar histórico:', err.message);
+        }
+    }
+    return historyCache.data || [];
 }
 
 router.get('/quotes', authMiddleware, async (req, res) => {
     try {
-        const quotes = await getQuotes();
-        res.json(quotes);
+        res.json(await getQuotes());
     } catch (err) {
-        console.error(err);
         res.status(500).json({ error: 'Erro ao buscar cotações' });
     }
 });
 
-module.exports = { router, getQuotes };
+router.get('/indicators', authMiddleware, async (req, res) => {
+    try {
+        res.json(await getIndicators());
+    } catch (err) {
+        res.status(500).json({ error: 'Erro ao buscar indicadores' });
+    }
+});
+
+router.get('/economic-snapshot', authMiddleware, async (req, res) => {
+    try {
+        res.json(await getEconomicSnapshot());
+    } catch (err) {
+        res.status(500).json({ error: 'Erro ao buscar dados macro' });
+    }
+});
+
+router.get('/news', authMiddleware, async (req, res) => {
+    try {
+        res.json(await getNews());
+    } catch (err) {
+        res.status(500).json({ error: 'Erro ao buscar notícias' });
+    }
+});
+
+router.get('/history', authMiddleware, async (req, res) => {
+    try {
+        res.json(await getHistory());
+    } catch (err) {
+        res.status(500).json({ error: 'Erro ao buscar histórico' });
+    }
+});
+
+module.exports = { router, getQuotes, getIndicators, getEconomicSnapshot, getNews, getHistory };
