@@ -59,4 +59,3 @@ router.post('/portal-session', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
-const VIP_PRICE_ID = 'price_1TxXUV1kvSRT3RoOh4ss9vCS';
