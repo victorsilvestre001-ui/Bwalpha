@@ -6,7 +6,8 @@ const router = express.Router();
 
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-const VIP_PRICE_ID = 'price_1TwKmk1zbvxTzBS9O3S0q8xa';
+const VIP_PRICE_ID = 'price_1TxXUV1kvSRT3RoOh4ss9vCS';
+
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://bwalpha-frontend.vercel.app';
 
 // Cria uma sessão de checkout do Stripe pra assinatura VIP
