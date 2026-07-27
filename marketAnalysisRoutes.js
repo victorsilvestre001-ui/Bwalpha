@@ -25,6 +25,7 @@ Considere na análise:
 - Candlestick de confirmação.
 - Horário da sessão (Londres e Nova York têm prioridade).
 - Notícias econômicas de alto impacto (evite operações durante eventos de grande volatilidade).
+- Confirmação multi-timeframe: você receberá a tendência do H1 (h1_trend: alta, baixa ou lateral). NUNCA sinalize uma operação contra essa tendência maior — só opere COMPRA se h1_trend for "alta", e só VENDA se h1_trend for "baixa". Se h1_trend for "lateral", não emita sinal.
 
 Objetivo:
 Gerar apenas sinais de alta probabilidade, evitando entradas de baixa qualidade.
@@ -71,7 +72,7 @@ function isFresh(timestamp) {
 // tenha dados suficientes — sem eles, nunca inventamos e recusamos a análise.
 const REQUIRED_FIELDS = [
     'pair', 'timestamp', 'price', 'ema9', 'ema21', 'ema200',
-    'rsi', 'macd', 'atr', 'session',
+    'rsi', 'macd', 'atr', 'session', 'h1_trend',
 ];
 
 function getMissingFields(data) {
@@ -189,6 +190,21 @@ router.post('/tradingview', async (req, res) => {
         const parsed = parseAISignal(aiText);
 
         if (parsed && parsed.entry_price && parsed.stop_loss && parsed.take_profit) {
+            // Trava extra, independente da IA: nunca aceita um sinal contra a
+            // tendência do H1, mesmo que a IA tenha sugerido um.
+            const h1Trend = String(data.h1_trend).toLowerCase();
+            const alignedWithH1 =
+                (parsed.direction === 'BUY' && h1Trend === 'alta') ||
+                (parsed.direction === 'SELL' && h1Trend === 'baixa');
+
+            if (!alignedWithH1) {
+                return res.json({
+                    signal_created: false,
+                    reason: `Sinal descartado: direção ${parsed.direction} não está alinhada com a tendência do H1 (${data.h1_trend}).`,
+                    ai_analysis: aiText,
+                });
+            }
+
             const result = await pool.query(
                 `INSERT INTO signals (pair, direction, entry_price, stop_loss, take_profit, source)
                  VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
