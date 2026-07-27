@@ -1,15 +1,17 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
+
 const pool = require('./db');
 const authRoutes = require('./authRoutes');
 const signalsRoutes = require('./signalsRoutes');
 const chatRoutes = require('./chatRoutes');
 const calendarRoutes = require('./calendarRoutes');
-const marketAnalysisRoutes = require('./marketAnalysisRoutes');
+const checkoutRoutes = require('./checkoutRoutes');
 const stripeWebhook = require('./stripeWebhook');
 const { router: marketRoutes } = require('./marketRoutes');
 const { router: telegramRoutes, setupWebhook } = require('./telegramRoutes');
+const marketAnalysisRoutes = require('./marketAnalysisRoutes');
 
 const app = express();
 
@@ -23,10 +25,10 @@ app.use('/api/auth', authRoutes);
 app.use('/api/signals', signalsRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/calendar', calendarRoutes);
-app.use('/api/webhook/market', marketAnalysisRoutes);
 app.use('/api/checkout', checkoutRoutes);
 app.use('/api/market', marketRoutes);
 app.use('/api/telegram', telegramRoutes);
+app.use('/api/webhook/market', marketAnalysisRoutes);
 
 app.get('/', (req, res) => {
     res.json({ status: 'BWAlpha AI backend rodando 🚀' });
