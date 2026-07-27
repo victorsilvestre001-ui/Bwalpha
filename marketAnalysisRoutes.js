@@ -78,6 +78,27 @@ function getMissingFields(data) {
     return REQUIRED_FIELDS.filter((f) => data[f] === undefined || data[f] === null || data[f] === '');
 }
 
+// Verifica notícias de alto impacto de verdade, consultando o calendário econômico
+// já sincronizado no banco (rota /api/calendar/sync) — nunca confia no que vier do
+// TradingView, já que o Pine Script não tem acesso a esse dado.
+const NEWS_WINDOW_MINUTES = 30;
+
+async function checkHighImpactNews(pair) {
+    const relevantCountries = pair === 'EURJPY' ? ['EUR', 'JPY'] : ['EUR', 'USD'];
+
+    const result = await pool.query(
+        `SELECT event_name, country, event_time FROM economic_events
+         WHERE impact = 'high'
+         AND country = ANY($1)
+         AND event_time BETWEEN NOW() - INTERVAL '${NEWS_WINDOW_MINUTES} minutes'
+                             AND NOW() + INTERVAL '${NEWS_WINDOW_MINUTES} minutes'
+         ORDER BY event_time ASC`,
+        [relevantCountries]
+    );
+
+    return result.rows;
+}
+
 function parseAISignal(text) {
     if (!text || !text.includes('📈')) return null;
 
@@ -141,6 +162,10 @@ router.post('/tradingview', async (req, res) => {
     }
 
     try {
+        const upcomingNews = await checkHighImpactNews(data.pair.toUpperCase());
+        data.high_impact_news = upcomingNews.length > 0;
+        data.high_impact_news_details = upcomingNews.map((n) => `${n.event_name} (${n.country})`);
+
         const userMessage = `Dados de mercado recebidos em tempo real (JSON):\n\n${JSON.stringify(data, null, 2)}\n\nAnalise e responda no formato definido.`;
 
         const response = await fetch('https://api.anthropic.com/v1/messages', {
