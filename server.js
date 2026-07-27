@@ -1,13 +1,12 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
-
 const pool = require('./db');
 const authRoutes = require('./authRoutes');
 const signalsRoutes = require('./signalsRoutes');
 const chatRoutes = require('./chatRoutes');
 const calendarRoutes = require('./calendarRoutes');
-const checkoutRoutes = require('./checkoutRoutes');
+const marketAnalysisRoutes = require('./marketAnalysisRoutes');
 const stripeWebhook = require('./stripeWebhook');
 const { router: marketRoutes } = require('./marketRoutes');
 const { router: telegramRoutes, setupWebhook } = require('./telegramRoutes');
