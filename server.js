@@ -23,6 +23,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/signals', signalsRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/calendar', calendarRoutes);
+app.use('/api/webhook/market', marketAnalysisRoutes);
 app.use('/api/checkout', checkoutRoutes);
 app.use('/api/market', marketRoutes);
 app.use('/api/telegram', telegramRoutes);
