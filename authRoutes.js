@@ -2,26 +2,11 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const pool = require('./db');
-const { authMiddleware } = require('./authMiddleware');
 
 const router = express.Router();
 
-// Retorna os dados atuais do usuário logado (plano sempre atualizado do banco)
-router.get('/me', authMiddleware, async (req, res) => {
-    try {
-        const result = await pool.query(
-            'SELECT id, name, email, plan FROM users WHERE id = $1',
-            [req.user.id]
-        );
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Usuário não encontrado' });
-        }
-        res.json({ user: result.rows[0] });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Erro ao buscar usuário' });
-    }
-});
+// Conta que deve sempre ter acesso total (dono da plataforma).
+const OWNER_EMAIL = 'victor.silvestre001@gmail.com';
 
 router.post('/register', async (req, res) => {
     const { name, email, password } = req.body;
@@ -37,11 +22,12 @@ router.post('/register', async (req, res) => {
         }
 
         const passwordHash = await bcrypt.hash(password, 10);
+        const initialPlan = email.toLowerCase() === OWNER_EMAIL ? 'owner' : 'free';
 
         const result = await pool.query(
-            `INSERT INTO users (name, email, password_hash) 
-             VALUES ($1, $2, $3) RETURNING id, name, email, plan`,
-            [name, email, passwordHash]
+            `INSERT INTO users (name, email, password_hash, plan) 
+             VALUES ($1, $2, $3, $4) RETURNING id, name, email, plan`,
+            [name, email, passwordHash, initialPlan]
         );
 
         const user = result.rows[0];
@@ -67,11 +53,21 @@ router.post('/login', async (req, res) => {
             return res.status(401).json({ error: 'Credenciais inválidas' });
         }
 
-        const user = result.rows[0];
+        let user = result.rows[0];
         const validPassword = await bcrypt.compare(password, user.password_hash);
 
         if (!validPassword) {
             return res.status(401).json({ error: 'Credenciais inválidas' });
+        }
+
+        // Garante que a conta do dono sempre tenha o plano 'owner', mesmo que
+        // tenha sido criada antes desta regra existir.
+        if (email.toLowerCase() === OWNER_EMAIL && user.plan !== 'owner') {
+            const updated = await pool.query(
+                `UPDATE users SET plan = 'owner' WHERE id = $1 RETURNING id, name, email, plan`,
+                [user.id]
+            );
+            user = { ...user, plan: updated.rows[0].plan };
         }
 
         const token = jwt.sign(
