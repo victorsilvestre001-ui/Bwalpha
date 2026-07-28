@@ -40,7 +40,7 @@ router.post('/', authMiddleware, async (req, res) => {
         const userResult = await pool.query('SELECT plan FROM users WHERE id = $1', [userId]);
         const plan = userResult.rows[0]?.plan;
 
-        if (plan !== 'vip') {
+        if (plan !== 'vip' && plan !== 'owner') {
             const countResult = await pool.query(
                 `SELECT COUNT(*) AS total FROM chat_history
                  WHERE user_id = $1 AND role = 'user' AND created_at >= CURRENT_DATE`,
@@ -145,7 +145,7 @@ router.get('/limit', authMiddleware, async (req, res) => {
         const userResult = await pool.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
         const plan = userResult.rows[0]?.plan;
 
-        if (plan === 'vip') {
+        if (plan === 'vip' || plan === 'owner') {
             return res.json({ plan, unlimited: true });
         }
 
