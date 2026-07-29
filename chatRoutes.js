@@ -122,6 +122,9 @@ router.post('/', authMiddleware, async (req, res) => {
         });
 
         const data = await response.json();
+        if (!response.ok || !data.content) {
+            console.error('Erro da API Anthropic:', response.status, JSON.stringify(data));
+        }
         const aiText = data.content?.find(c => c.type === 'text')?.text || 'Erro ao gerar resposta';
 
         await pool.query(
