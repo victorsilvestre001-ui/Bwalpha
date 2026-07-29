@@ -121,11 +121,10 @@ router.post('/', authMiddleware, async (req, res) => {
             })
         });
 
-        const data = await response.json();
+                const data = await response.json();
         if (!response.ok || !data.content) console.error('ERRO ANTHROPIC:', response.status, JSON.stringify(data));
         const aiText = data.content?.find(c => c.type === 'text')?.text || 'Erro ao gerar resposta';
 
-        await pool.query(
             `INSERT INTO chat_history (user_id, role, message) VALUES ($1, 'user', $2)`,
             [userId, message || '[imagem enviada]']
         );
