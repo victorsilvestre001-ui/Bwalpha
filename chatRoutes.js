@@ -36,7 +36,6 @@ router.post('/', authMiddleware, async (req, res) => {
     }
 
     try {
-        // Plano free: limitado a 3 perguntas por dia. VIP: sem limite.
         const userResult = await pool.query('SELECT plan FROM users WHERE id = $1', [userId]);
         const plan = userResult.rows[0]?.plan;
 
@@ -57,7 +56,6 @@ router.post('/', authMiddleware, async (req, res) => {
         }
         const userContent = [];
 
-        // Injeta cotações reais e atuais no contexto, pra IA responder com preços de verdade
         try {
             const quotes = await getQuotes();
             if (quotes.length > 0) {
@@ -121,10 +119,13 @@ router.post('/', authMiddleware, async (req, res) => {
             })
         });
 
-                const data = await response.json();
-        if (!response.ok || !data.content) console.error('ERRO ANTHROPIC:', response.status, JSON.stringify(data));
+        const data = await response.json();
+        if (!response.ok || !data.content) {
+            console.error('ERRO ANTHROPIC:', response.status, JSON.stringify(data));
+        }
         const aiText = data.content?.find(c => c.type === 'text')?.text || 'Erro ao gerar resposta';
 
+        await pool.query(
             `INSERT INTO chat_history (user_id, role, message) VALUES ($1, 'user', $2)`,
             [userId, message || '[imagem enviada]']
         );
