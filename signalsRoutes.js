@@ -7,7 +7,6 @@ const router = express.Router();
 
 router.post('/webhook', async (req, res) => {
     const secret = req.headers['x-webhook-secret'] || req.query.secret;
-
     if (secret !== process.env.WEBHOOK_SECRET) {
         return res.status(401).json({ error: 'Não autorizado' });
     }
