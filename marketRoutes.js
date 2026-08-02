@@ -8,6 +8,7 @@ const KEY = () => process.env.ALPHA_VANTAGE_API_KEY;
 const PAIRS = [
     { from: 'EUR', to: 'USD', label: 'EURUSD' },
     { from: 'EUR', to: 'JPY', label: 'EURJPY' },
+    { from: 'GBP', to: 'USD', label: 'GBPUSD' },
     { from: 'XAU', to: 'USD', label: 'XAUUSD' },
 ];
 
@@ -161,11 +162,160 @@ async function getHistory() {
     return historyCache.data || [];
 }
 
+// ---- Sinal técnico (EMA9/EMA21 + RSI14 + MACD) para EURUSD/EURJPY em M1/M5 ----
+
+const SIGNAL_PAIRS = {
+    EURUSD: { from: 'EUR', to: 'USD' },
+    EURJPY: { from: 'EUR', to: 'JPY' },
+};
+const SIGNAL_INTERVALS = { M1: '1min', M5: '5min' };
+
+function emaSeries(values, period) {
+    const k = 2 / (period + 1);
+    const result = new Array(values.length).fill(null);
+    if (values.length < period) return result;
+    let sum = 0;
+    for (let i = 0; i < period; i++) sum += values[i];
+    let prev = sum / period;
+    result[period - 1] = prev;
+    for (let i = period; i < values.length; i++) {
+        prev = values[i] * k + prev * (1 - k);
+        result[i] = prev;
+    }
+    return result;
+}
+
+function rsiLast(values, period = 14) {
+    if (values.length < period + 1) return null;
+    let avgGain = 0, avgLoss = 0;
+    for (let i = 1; i <= period; i++) {
+        const diff = values[i] - values[i - 1];
+        if (diff > 0) avgGain += diff; else avgLoss -= diff;
+    }
+    avgGain /= period;
+    avgLoss /= period;
+    for (let i = period + 1; i < values.length; i++) {
+        const diff = values[i] - values[i - 1];
+        const gain = diff > 0 ? diff : 0;
+        const loss = diff < 0 ? -diff : 0;
+        avgGain = (avgGain * (period - 1) + gain) / period;
+        avgLoss = (avgLoss * (period - 1) + loss) / period;
+    }
+    if (avgLoss === 0) return 100;
+    const rs = avgGain / avgLoss;
+    return 100 - 100 / (1 + rs);
+}
+
+function macdHistogramLast(values) {
+    const ema12 = emaSeries(values, 12);
+    const ema26 = emaSeries(values, 26);
+    const macdSeries = values.map((_, i) =>
+        ema12[i] != null && ema26[i] != null ? ema12[i] - ema26[i] : null
+    );
+    const macdValid = macdSeries.filter((v) => v != null);
+    if (macdValid.length < 9) return null;
+    const signalSeries = emaSeries(macdValid, 9);
+    const lastMacd = macdValid[macdValid.length - 1];
+    const lastSignal = signalSeries[signalSeries.length - 1];
+    if (lastSignal == null) return null;
+    return lastMacd - lastSignal;
+}
+
+async function fetchIntradayCloses(pairLabel, timeframeLabel) {
+    const pair = SIGNAL_PAIRS[pairLabel];
+    const interval = SIGNAL_INTERVALS[timeframeLabel];
+    const url = `${AV_BASE}?function=FX_INTRADAY&from_symbol=${pair.from}&to_symbol=${pair.to}&interval=${interval}&outputsize=compact&apikey=${KEY()}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const series = data[`Time Series FX (${interval})`];
+    if (!series) return null;
+    const dates = Object.keys(series).sort();
+    return dates.map((d) => parseFloat(series[d]['4. close']));
+}
+
+const technicalCache = {};
+const TECHNICAL_TTL_MS = 4 * 60 * 1000;
+
+async function getTechnicalSignal(pairLabel, timeframeLabel) {
+    const cacheKey = `${pairLabel}_${timeframeLabel}`;
+    const cached = technicalCache[cacheKey];
+    if (cached && Date.now() - cached.updatedAt < TECHNICAL_TTL_MS) return cached.data;
+
+    const closes = await fetchIntradayCloses(pairLabel, timeframeLabel);
+    if (!closes || closes.length < 30) return null;
+
+    const ema9Series = emaSeries(closes, 9);
+    const ema21Series = emaSeries(closes, 21);
+    const ema9 = ema9Series[ema9Series.length - 1];
+    const ema21 = ema21Series[ema21Series.length - 1];
+    const rsiVal = rsiLast(closes, 14);
+    const macdHist = macdHistogramLast(closes);
+
+    let bullVotes = 0, bearVotes = 0;
+    if (ema9 != null && ema21 != null) {
+        if (ema9 > ema21) bullVotes += 1; else bearVotes += 1;
+    }
+    if (macdHist != null) {
+        if (macdHist > 0) bullVotes += 1; else bearVotes += 1;
+    }
+    if (rsiVal != null) {
+        if (rsiVal < 30) bullVotes += 1;
+        else if (rsiVal > 70) bearVotes += 1;
+        else if (rsiVal >= 50) bullVotes += 0.5;
+        else bearVotes += 0.5;
+    }
+
+    const direction = bullVotes >= bearVotes ? 'COMPRA' : 'VENDA';
+    const diff = Math.abs(bullVotes - bearVotes);
+    const confidence = diff >= 2 ? 'Alta' : diff >= 1 ? 'Média' : 'Baixa';
+
+    const result = {
+        pair: pairLabel,
+        timeframe: timeframeLabel,
+        price: closes[closes.length - 1],
+        ema9,
+        ema21,
+        rsi: rsiVal,
+        macdHistogram: macdHist,
+        direction,
+        confidence,
+    };
+
+    technicalCache[cacheKey] = { data: result, updatedAt: Date.now() };
+    return result;
+}
+
 router.get('/quotes', authMiddleware, async (req, res) => {
     try {
         res.json(await getQuotes());
     } catch (err) {
         res.status(500).json({ error: 'Erro ao buscar cotações' });
+    }
+});
+
+// Endpoint público (sem login) para o ticker de cotações da página inicial
+router.get('/public-quotes', async (req, res) => {
+    try {
+        res.json(await getQuotes());
+    } catch (err) {
+        res.status(500).json({ error: 'Erro ao buscar cotações' });
+    }
+});
+
+router.post('/signal', authMiddleware, async (req, res) => {
+    const { pair, timeframe } = req.body;
+    if (!SIGNAL_PAIRS[pair] || !SIGNAL_INTERVALS[timeframe]) {
+        return res.status(400).json({ error: 'Par ou timeframe inválido. Use EURUSD/EURJPY e M1/M5.' });
+    }
+    try {
+        const result = await getTechnicalSignal(pair, timeframe);
+        if (!result) {
+            return res.status(502).json({ error: 'Não foi possível calcular o sinal agora. Tente novamente.' });
+        }
+        res.json(result);
+    } catch (err) {
+        console.error('Erro ao gerar sinal técnico:', err.message);
+        res.status(500).json({ error: 'Erro ao gerar sinal técnico' });
     }
 });
 
