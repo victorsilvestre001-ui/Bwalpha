@@ -36,24 +36,6 @@ router.post('/', authMiddleware, async (req, res) => {
     }
 
     try {
-        const userResult = await pool.query('SELECT plan FROM users WHERE id = $1', [userId]);
-        const plan = userResult.rows[0]?.plan;
-
-        if (plan !== 'vip' && plan !== 'owner') {
-            const countResult = await pool.query(
-                `SELECT COUNT(*) AS total FROM chat_history
-                 WHERE user_id = $1 AND role = 'user' AND created_at >= CURRENT_DATE`,
-                [userId]
-            );
-            const usedToday = parseInt(countResult.rows[0].total, 10);
-
-            if (usedToday >= 3) {
-                return res.status(403).json({
-                    error: 'Você atingiu o limite de 3 perguntas gratuitas hoje. Vire VIP pra ter acesso ilimitado ao assistente.',
-                    limitReached: true,
-                });
-            }
-        }
         const userContent = [];
 
         try {
