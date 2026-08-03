@@ -233,7 +233,7 @@ function macdHistogramLast(values) {
     return lastMacd - lastSignal;
 }
 
-async function fetchIntradayCloses(pairLabel, timeframeLabel) {
+async function fetchIntradayCandles(pairLabel, timeframeLabel) {
     const pair = SIGNAL_PAIRS[pairLabel];
     const interval = SIGNAL_INTERVALS[timeframeLabel];
     const url = `${AV_BASE}?function=FX_INTRADAY&from_symbol=${pair.from}&to_symbol=${pair.to}&interval=${interval}&outputsize=compact&apikey=${KEY()}`;
@@ -242,7 +242,123 @@ async function fetchIntradayCloses(pairLabel, timeframeLabel) {
     const series = data[`Time Series FX (${interval})`];
     if (!series) return null;
     const dates = Object.keys(series).sort();
-    return dates.map((d) => parseFloat(series[d]['4. close']));
+    return dates.map((d) => ({
+        open: parseFloat(series[d]['1. open']),
+        high: parseFloat(series[d]['2. high']),
+        low: parseFloat(series[d]['3. low']),
+        close: parseFloat(series[d]['4. close']),
+    }));
+}
+
+// ---- Leitura de padrões de candle (Engolfo, Pin Bar, Inside/Outside Bar, Marubozu,
+// Doji, Hammer, Shooting Star, Morning Star, Evening Star) ----
+
+function candleBody(c) { return Math.abs(c.close - c.open); }
+function candleRange(c) { return c.high - c.low || 1e-9; }
+function upperWick(c) { return c.high - Math.max(c.open, c.close); }
+function lowerWick(c) { return Math.min(c.open, c.close) - c.low; }
+function isBullCandle(c) { return c.close > c.open; }
+function isBearCandle(c) { return c.close < c.open; }
+function shortTrend(closes) {
+    const n = closes.length;
+    if (n < 6) return 'flat';
+    const recent = (closes[n - 1] + closes[n - 2] + closes[n - 3]) / 3;
+    const prior = (closes[n - 6] + closes[n - 5] + closes[n - 4]) / 3;
+    if (recent > prior * 1.0002) return 'up';
+    if (recent < prior * 0.9998) return 'down';
+    return 'flat';
+}
+
+function detectCandlePatterns(candles) {
+    const n = candles.length;
+    const patterns = [];
+    let bullVotes = 0;
+    let bearVotes = 0;
+    if (n < 3) return { patterns, bullVotes, bearVotes };
+
+    const c1 = candles[n - 3];
+    const c2 = candles[n - 2];
+    const c3 = candles[n - 1];
+    const trend = shortTrend(candles.slice(0, -1).map((c) => c.close));
+
+    // Engolfo (Engulfing)
+    if (isBearCandle(c2) && isBullCandle(c3) && c3.open <= c2.close && c3.close >= c2.open) {
+        patterns.push('Engolfo de Alta');
+        bullVotes += 1;
+    } else if (isBullCandle(c2) && isBearCandle(c3) && c3.open >= c2.close && c3.close <= c2.open) {
+        patterns.push('Engolfo de Baixa');
+        bearVotes += 1;
+    }
+
+    // Outside Bar
+    if (c3.high > c2.high && c3.low < c2.low) {
+        if (isBullCandle(c3)) {
+            patterns.push('Outside Bar de Alta');
+            bullVotes += 1;
+        } else {
+            patterns.push('Outside Bar de Baixa');
+            bearVotes += 1;
+        }
+    }
+
+    // Inside Bar (consolidação — informativo, sem voto direcional)
+    if (c3.high <= c2.high && c3.low >= c2.low) {
+        patterns.push('Inside Bar (consolidação)');
+    }
+
+    const bodyRatio3 = candleBody(c3) / candleRange(c3);
+
+    // Marubozu
+    if (bodyRatio3 > 0.9) {
+        if (isBullCandle(c3)) {
+            patterns.push('Marubozu de Alta');
+            bullVotes += 1;
+        } else {
+            patterns.push('Marubozu de Baixa');
+            bearVotes += 1;
+        }
+    }
+
+    // Doji (indecisão — informativo, sem voto direcional)
+    if (bodyRatio3 < 0.1) {
+        patterns.push('Doji (indecisão)');
+    }
+
+    // Pin Bar / Hammer / Shooting Star
+    const upper3 = upperWick(c3);
+    const lower3 = lowerWick(c3);
+    const body3 = candleBody(c3);
+    if (lower3 >= body3 * 2 && lower3 >= candleRange(c3) * 0.5 && upper3 <= body3 * 0.6) {
+        if (trend === 'down') {
+            patterns.push('Hammer (reversão de alta)');
+            bullVotes += 1;
+        } else {
+            patterns.push('Pin Bar de Alta');
+            bullVotes += 0.5;
+        }
+    } else if (upper3 >= body3 * 2 && upper3 >= candleRange(c3) * 0.5 && lower3 <= body3 * 0.6) {
+        if (trend === 'up') {
+            patterns.push('Shooting Star (reversão de baixa)');
+            bearVotes += 1;
+        } else {
+            patterns.push('Pin Bar de Baixa');
+            bearVotes += 0.5;
+        }
+    }
+
+    // Morning Star / Evening Star (padrão de 3 velas)
+    const isBigBody = (c) => candleBody(c) / candleRange(c) > 0.6;
+    const isSmallBody = (c) => candleBody(c) / candleRange(c) < 0.35;
+    if (isBigBody(c1) && isBearCandle(c1) && isSmallBody(c2) && isBigBody(c3) && isBullCandle(c3) && c3.close > (c1.open + c1.close) / 2) {
+        patterns.push('Morning Star (reversão de alta)');
+        bullVotes += 1;
+    }
+    if (isBigBody(c1) && isBullCandle(c1) && isSmallBody(c2) && isBigBody(c3) && isBearCandle(c3) && c3.close < (c1.open + c1.close) / 2) {
+        patterns.push('Evening Star (reversão de baixa)');
+        bearVotes += 1;
+    }
+
+    return { patterns, bullVotes, bearVotes };
 }
 
 const technicalCache = {};
@@ -259,8 +375,9 @@ async function getTechnicalSignal(pairLabel, timeframeLabel) {
     const cached = technicalCache[cacheKey];
     if (cached) return cached;
 
-    const closes = await fetchIntradayCloses(pairLabel, timeframeLabel);
-    if (!closes || closes.length < 30) return null;
+    const candles = await fetchIntradayCandles(pairLabel, timeframeLabel);
+    if (!candles || candles.length < 30) return null;
+    const closes = candles.map((c) => c.close);
 
     const ema9Series = emaSeries(closes, 9);
     const ema21Series = emaSeries(closes, 21);
@@ -268,6 +385,7 @@ async function getTechnicalSignal(pairLabel, timeframeLabel) {
     const ema21 = ema21Series[ema21Series.length - 1];
     const rsiVal = rsiLast(closes, 14);
     const macdHist = macdHistogramLast(closes);
+    const { patterns, bullVotes: patternBull, bearVotes: patternBear } = detectCandlePatterns(candles);
 
     let bullVotes = 0, bearVotes = 0;
     if (ema9 != null && ema21 != null) {
@@ -282,6 +400,8 @@ async function getTechnicalSignal(pairLabel, timeframeLabel) {
         else if (rsiVal >= 50) bullVotes += 0.5;
         else bearVotes += 0.5;
     }
+    bullVotes += patternBull;
+    bearVotes += patternBear;
 
     const direction = bullVotes >= bearVotes ? 'COMPRA' : 'VENDA';
     const diff = Math.abs(bullVotes - bearVotes);
@@ -295,6 +415,7 @@ async function getTechnicalSignal(pairLabel, timeframeLabel) {
         ema21,
         rsi: rsiVal,
         macdHistogram: macdHist,
+        candlePatterns: patterns,
         direction,
         confidence,
     };
