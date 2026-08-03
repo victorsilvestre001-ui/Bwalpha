@@ -8,8 +8,6 @@ const KEY = () => process.env.ALPHA_VANTAGE_API_KEY;
 const PAIRS = [
     { from: 'EUR', to: 'USD', label: 'EURUSD' },
     { from: 'EUR', to: 'JPY', label: 'EURJPY' },
-    { from: 'GBP', to: 'USD', label: 'GBPUSD' },
-    { from: 'XAU', to: 'USD', label: 'XAUUSD' },
 ];
 
 let quotesCache = { data: null, updatedAt: 0 };
