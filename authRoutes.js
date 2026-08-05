@@ -8,6 +8,50 @@ const router = express.Router();
 // Conta que deve sempre ter acesso total (dono da plataforma).
 const OWNER_EMAIL = 'victor.silvestre001@gmail.com';
 
+async function sendWelcomeEmail(name, email) {
+    if (!process.env.RESEND_API_KEY) {
+        console.error('RESEND_API_KEY não configurada — e-mail de boas-vindas não enviado.');
+        return;
+    }
+    try {
+        const res = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                from: 'BwAlpha.IA <onboarding@resend.dev>',
+                to: [email],
+                subject: 'Sua conta na BwAlpha.IA foi criada 🎉',
+                html: `
+                    <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; background: #0B0E14; color: #F3EFE6; border-radius: 12px;">
+                        <h1 style="color: #B8863D; font-size: 22px; margin-bottom: 8px;">Bem-vindo(a), ${name}!</h1>
+                        <p style="font-size: 15px; line-height: 1.6; color: #F3EFE6;">
+                            Sua conta na <strong>BwAlpha.IA</strong> foi criada com sucesso usando o e-mail <strong>${email}</strong>.
+                        </p>
+                        <p style="font-size: 15px; line-height: 1.6; color: #F3EFE6;">
+                            Você já pode entrar na plataforma e acompanhar as análises de mercado em tempo real para EURUSD e EURJPY.
+                        </p>
+                        <a href="https://www.bwalphaia.com/auth" style="display: inline-block; margin-top: 16px; padding: 12px 24px; background: linear-gradient(180deg, #E7C68C, #B8863D); color: #0B0E14; text-decoration: none; border-radius: 6px; font-weight: 600;">
+                            Acessar minha conta
+                        </a>
+                        <p style="font-size: 12px; color: #8a8a8a; margin-top: 32px;">
+                            Se você não criou essa conta, pode ignorar este e-mail com segurança.
+                        </p>
+                    </div>
+                `,
+            }),
+        });
+        if (!res.ok) {
+            const errText = await res.text();
+            console.error('Erro ao enviar e-mail de boas-vindas:', res.status, errText);
+        }
+    } catch (err) {
+        console.error('Erro ao enviar e-mail de boas-vindas:', err);
+    }
+}
+
 router.post('/register', async (req, res) => {
     const { name, email, password } = req.body;
 
@@ -36,6 +80,9 @@ router.post('/register', async (req, res) => {
             process.env.JWT_SECRET,
             { expiresIn: '7d' }
         );
+
+        // Envia o e-mail de boas-vindas sem bloquear a resposta ao usuário
+        sendWelcomeEmail(user.name, user.email);
 
         res.status(201).json({ user, token });
     } catch (err) {
@@ -87,4 +134,3 @@ router.post('/login', async (req, res) => {
 });
 
 module.exports = router;
-
