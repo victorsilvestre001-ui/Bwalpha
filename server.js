@@ -6,7 +6,7 @@ const pool = require('./db');
 const authRoutes = require('./authRoutes');
 const signalsRoutes = require('./signalsRoutes');
 const chatRoutes = require('./chatRoutes');
-const calendarRoutes = require('./calendarRoutes');
+const { router: calendarRoutes, syncEconomicCalendar } = require('./calendarRoutes');
 const checkoutRoutes = require('./checkoutRoutes');
 const stripeWebhook = require('./stripeWebhook');
 const { router: marketRoutes } = require('./marketRoutes');
@@ -114,9 +114,13 @@ async function runMigrations() {
 
 const PORT = process.env.PORT || 3001;
 
+const CALENDAR_SYNC_INTERVAL_MS = 3 * 60 * 60 * 1000; // a cada 3 horas
+
 runMigrations().then(() => {
     app.listen(PORT, () => {
         console.log(`Servidor rodando na porta ${PORT}`);
         setupWebhook();
+        syncEconomicCalendar();
+        setInterval(syncEconomicCalendar, CALENDAR_SYNC_INTERVAL_MS);
     });
 });
