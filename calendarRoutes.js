@@ -52,7 +52,8 @@ router.post('/sync', async (req, res) => {
 // mais recentes da FMP. ----
 
 const RELEVANT_COUNTRIES = ['US', 'EU', 'JP', 'DE', 'FR', 'IT', 'ES'];
-const FMP_CALENDAR_URL = 'https://financialmodelingprep.com/api/v3/economic_calendar';
+const FMP_CALENDAR_URL = 'https://financialmodelingprep.com/stable/economic-calendar';
+
 
 // Eventos que a FMP às vezes não marca com "impact" explícito, mas que o
 // mercado de fato trata como alto impacto — usado como reforço/fallback.
