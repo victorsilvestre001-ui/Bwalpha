@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('./db');
+const { secureCompare } = require('./secureCompare');
 
 const router = express.Router();
 
@@ -58,7 +59,7 @@ function checkSecret(req) {
     const secretFromQuery = req.query.secret;
     const secretFromBody = req.body?.secret;
     const provided = secretFromHeader || secretFromQuery || secretFromBody;
-    return provided === process.env.WEBHOOK_SECRET;
+    return secureCompare(String(provided || ''), String(process.env.WEBHOOK_SECRET || ''));
 }
 
 function isFresh(timestamp) {
