@@ -27,6 +27,31 @@ Regras importantes:
   Probabilidade de continuação: [Baixa/Média/Alta]
   Observação: [alerta sobre notícias/eventos relevantes, se aplicável]`;
 
+// Aplica de verdade o limite diário de mensagens do plano gratuito. Antes,
+// só existia um endpoint informativo (/limit) que calculava o restante mas
+// nada impedia o próprio envio — qualquer usuário logado podia mandar
+// mensagens ilimitadas e gerar custo sem limite na API da Anthropic.
+const FREE_DAILY_MESSAGE_LIMIT = 3;
+
+async function checkChatLimit(userId) {
+    const userResult = await pool.query('SELECT plan FROM users WHERE id = $1', [userId]);
+    const plan = userResult.rows[0]?.plan;
+
+    if (plan === 'vip' || plan === 'owner') return { allowed: true };
+
+    const countResult = await pool.query(
+        `SELECT COUNT(*) AS total FROM chat_history
+         WHERE user_id = $1 AND role = 'user' AND created_at >= CURRENT_DATE`,
+        [userId]
+    );
+    const usedToday = parseInt(countResult.rows[0].total, 10);
+
+    if (usedToday >= FREE_DAILY_MESSAGE_LIMIT) {
+        return { allowed: false, usedToday };
+    }
+    return { allowed: true, usedToday };
+}
+
 router.post('/', authMiddleware, async (req, res) => {
     const { message, image_base64 } = req.body;
     const userId = req.user.id;
@@ -36,6 +61,13 @@ router.post('/', authMiddleware, async (req, res) => {
     }
 
     try {
+        const limitCheck = await checkChatLimit(userId);
+        if (!limitCheck.allowed) {
+            return res.status(429).json({
+                error: 'Limite diário de mensagens do plano gratuito atingido. Assine o VIP para uso ilimitado.',
+            });
+        }
+
         const userContent = [];
 
         try {
