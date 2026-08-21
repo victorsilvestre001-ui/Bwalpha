@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 require('dotenv').config();
 
 const pool = require('./db');
@@ -15,7 +16,27 @@ const marketAnalysisRoutes = require('./marketAnalysisRoutes');
 
 const app = express();
 
-app.use(cors());
+app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));
+
+// CORS restrito ao(s) domínio(s) reais do site — antes estava liberado pra
+// qualquer origem, o que permitia que qualquer site chamasse a API em nome
+// de um usuário caso um token JWT vazasse (ex: por XSS em outro lugar).
+const ALLOWED_ORIGINS = [
+    'https://www.bwalphaia.com',
+    'https://bwalphaia.com',
+    process.env.FRONTEND_URL,
+].filter(Boolean);
+
+app.use(cors({
+    origin: (origin, callback) => {
+        // Requisições sem origin (ex: apps mobile, curl, webhooks server-to-server) são permitidas.
+        if (!origin) return callback(null, true);
+        if (ALLOWED_ORIGINS.includes(origin) || origin.endsWith('.vercel.app')) {
+            return callback(null, true);
+        }
+        return callback(new Error('Origem não permitida pelo CORS'));
+    },
+}));
 
 app.use('/api/stripe/webhook', stripeWebhook);
 
@@ -50,6 +71,8 @@ CREATE TABLE IF NOT EXISTS users (
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(100);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id VARCHAR(100);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS cpf VARCHAR(14);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 
 CREATE TABLE IF NOT EXISTS signals (
     id SERIAL PRIMARY KEY,
