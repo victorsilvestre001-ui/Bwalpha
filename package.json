@@ -1,7 +1,7 @@
 {
   "name": "bwalpha-backend",
   "version": "1.0.0",
-  "description": "Backend do BWAlpha AI - sinais, chat de IA, calendário econômico",
+  "description": "Backend do BWAlpha AI - sinais, chat de IA, calend\u00e1rio econ\u00f4mico",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -11,6 +11,8 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "express-rate-limit": "^7.4.0",
+    "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.12.0",
     "stripe": "^16.9.0"
