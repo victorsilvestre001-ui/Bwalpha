@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('./db');
+const { secureCompare } = require('./secureCompare');
 
 const router = express.Router();
 const TELEGRAM_API = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`;
@@ -71,7 +72,7 @@ async function sendTelegramMessage(text, replyToMessageId) {
 router.post('/webhook', async (req, res) => {
     // Confere o secret token que o Telegram manda no header (configurado no setWebhook)
     const secret = req.headers['x-telegram-bot-api-secret-token'];
-    if (secret !== process.env.TELEGRAM_WEBHOOK_SECRET) {
+    if (!secureCompare(String(secret || ''), String(process.env.TELEGRAM_WEBHOOK_SECRET || ''))) {
         return res.status(401).send('Não autorizado');
     }
 
