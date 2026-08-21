@@ -359,6 +359,51 @@ function detectCandlePatterns(candles) {
     return { patterns, bullVotes, bearVotes };
 }
 
+// ---- "Estratégia Chinesa": leitura do padrão dos últimos 5 candles fechados ----
+// Baseado no indicador Lua enviado pelo Victor (ESTRATEGIA CHINESA v3, parte 1B).
+// candles[] vem em ordem crescente (mais antigo primeiro, mais recente por último).
+function getChinesaStrategySignal(candles, minCandlesConfirmacao = 2) {
+    const n = candles.length;
+    if (n < 20) return null;
+
+    // c1 = candle mais recente fechado, até c5 = quinto candle fechado antes dele
+    // (equivalente aos índices [1]..[5] do script original em Lua/PineScript-like)
+    const c1 = candles[n - 1];
+    const c2 = candles[n - 2];
+    const c3 = candles[n - 3];
+    const c4 = candles[n - 4];
+    const c5 = candles[n - 5];
+    const last5 = [c1, c2, c3, c4, c5];
+
+    const bullCount5 = last5.filter((c) => c.close > c.open).length;
+    const bearCount5 = last5.filter((c) => c.close < c.open).length;
+    const variacao5 = c1.close - c5.close;
+
+    const padraoAlta = variacao5 > 0 && bullCount5 >= minCandlesConfirmacao;
+    const padraoBaixa = variacao5 < 0 && bearCount5 >= minCandlesConfirmacao;
+
+    // Volatilidade: amplitude média dos últimos 5 candles vs. média de 20 candles
+    const range = (c) => c.high - c.low;
+    const last20 = candles.slice(n - 20, n);
+    const rangeCurto = last5.reduce((s, c) => s + range(c), 0) / 5;
+    const rangeLongo = last20.reduce((s, c) => s + range(c), 0) / 20;
+    const volatilidadeAlta = rangeCurto > rangeLongo * 1.2;
+    const volatilidadeBaixa = rangeCurto < rangeLongo * 0.8;
+
+    let direction = null;
+    if (padraoAlta) direction = 'COMPRA';
+    else if (padraoBaixa) direction = 'VENDA';
+
+    return {
+        direction,
+        bullCount5,
+        bearCount5,
+        variacao5,
+        volatilidadeAlta,
+        volatilidadeBaixa,
+    };
+}
+
 const technicalCache = {};
 const TIMEFRAME_MINUTES = { M1: 1, M5: 5 };
 
@@ -401,9 +446,28 @@ async function getTechnicalSignal(pairLabel, timeframeLabel) {
     bullVotes += patternBull;
     bearVotes += patternBear;
 
-    const direction = bullVotes >= bearVotes ? 'COMPRA' : 'VENDA';
+    const confluenceDirection = bullVotes >= bearVotes ? 'COMPRA' : 'VENDA';
     const diff = Math.abs(bullVotes - bearVotes);
-    const confidence = diff >= 2 ? 'Alta' : diff >= 1 ? 'Média' : 'Baixa';
+    const confluenceConfidence = diff >= 2 ? 'Alta' : diff >= 1 ? 'Média' : 'Baixa';
+
+    // "Estratégia Chinesa": o padrão dos últimos 5 candles decide a direção
+    // sempre que estiver claro. Os indicadores (EMA/RSI/MACD/padrões de candle)
+    // só servem de desempate quando os 5 candles não mostram um padrão nítido.
+    const chinesa = getChinesaStrategySignal(candles);
+
+    let direction;
+    let confidence;
+    if (chinesa && chinesa.direction) {
+        direction = chinesa.direction;
+        // Se os indicadores tradicionais concordam com o padrão dos 5 candles,
+        // a confiança sobe; se discordam, a confiança cai (nunca some o sinal).
+        confidence = direction === confluenceDirection
+            ? (confluenceConfidence === 'Baixa' ? 'Média' : 'Alta')
+            : 'Baixa';
+    } else {
+        direction = confluenceDirection;
+        confidence = confluenceConfidence;
+    }
 
     const result = {
         pair: pairLabel,
@@ -414,6 +478,15 @@ async function getTechnicalSignal(pairLabel, timeframeLabel) {
         rsi: rsiVal,
         macdHistogram: macdHist,
         candlePatterns: patterns,
+        chinesa5Candles: chinesa
+            ? {
+                bullCount: chinesa.bullCount5,
+                bearCount: chinesa.bearCount5,
+                variacao: chinesa.variacao5,
+                volatilidadeAlta: chinesa.volatilidadeAlta,
+                volatilidadeBaixa: chinesa.volatilidadeBaixa,
+              }
+            : null,
         direction,
         confidence,
     };
