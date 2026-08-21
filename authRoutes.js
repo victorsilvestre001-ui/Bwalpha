@@ -1,7 +1,18 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
 const pool = require('./db');
+const { authMiddleware } = require('./authMiddleware');
+
+// Limita tentativas de login/cadastro por IP, pra dificultar força bruta de senha.
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutos
+    max: 15, // no máximo 15 tentativas por IP nesse período
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Muitas tentativas. Aguarde alguns minutos e tente novamente.' },
+});
 
 const router = express.Router();
 
@@ -52,11 +63,15 @@ async function sendWelcomeEmail(name, email) {
     }
 }
 
-router.post('/register', async (req, res) => {
+router.post('/register', authLimiter, async (req, res) => {
     const { name, email, password } = req.body;
 
     if (!name || !email || !password) {
         return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
+    }
+
+    if (password.length < 8) {
+        return res.status(400).json({ error: 'A senha deve ter pelo menos 8 caracteres.' });
     }
 
     try {
@@ -91,7 +106,7 @@ router.post('/register', async (req, res) => {
     }
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', authLimiter, async (req, res) => {
     const { email, password } = req.body;
 
     try {
@@ -130,6 +145,73 @@ router.post('/login', async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Erro ao fazer login' });
+    }
+});
+
+
+// Retorna os dados completos do usuário logado (incluindo CPF e foto de perfil)
+router.get('/me', authMiddleware, async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT id, name, email, plan, cpf, avatar_url FROM users WHERE id = $1`,
+            [req.user.id]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Usuário não encontrado' });
+        }
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Erro ao buscar dados do usuário' });
+    }
+});
+
+// Atualiza CPF e/ou foto de perfil do usuário logado
+router.patch('/profile', authMiddleware, async (req, res) => {
+    const { cpf, avatar } = req.body;
+
+    // Limpa o CPF pra guardar só os números, se foi enviado
+    let cleanCpf = null;
+    if (cpf !== undefined && cpf !== null && cpf !== '') {
+        cleanCpf = String(cpf).replace(/\D/g, '');
+        if (cleanCpf.length !== 11) {
+            return res.status(400).json({ error: 'CPF inválido. Deve conter 11 dígitos.' });
+        }
+    }
+
+    // Limite de tamanho pra foto (evita payloads gigantes no banco)
+    if (avatar && avatar.length > 2_000_000) {
+        return res.status(400).json({ error: 'Imagem muito grande. Escolha uma foto menor.' });
+    }
+
+    try {
+        const fields = [];
+        const values = [];
+        let i = 1;
+
+        if (cpf !== undefined) {
+            fields.push(`cpf = $${i++}`);
+            values.push(cleanCpf);
+        }
+        if (avatar !== undefined) {
+            fields.push(`avatar_url = $${i++}`);
+            values.push(avatar);
+        }
+
+        if (fields.length === 0) {
+            return res.status(400).json({ error: 'Nada para atualizar' });
+        }
+
+        values.push(req.user.id);
+        const result = await pool.query(
+            `UPDATE users SET ${fields.join(', ')} WHERE id = $${i} RETURNING id, name, email, plan, cpf, avatar_url`,
+            values
+        );
+
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Erro ao atualizar perfil' });
     }
 });
 
