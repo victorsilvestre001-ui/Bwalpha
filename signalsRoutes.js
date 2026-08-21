@@ -1,13 +1,14 @@
 const express = require('express');
 const pool = require('./db');
-const { authMiddleware, requirePaidPlan } = require('./authMiddleware');
+const { authMiddleware, requirePaidPlan, requireOwner } = require('./authMiddleware');
 const { postSignalToTelegram } = require('./telegramRoutes');
+const { secureCompare } = require('./secureCompare');
 
 const router = express.Router();
 
 router.post('/webhook', async (req, res) => {
     const secret = req.headers['x-webhook-secret'] || req.query.secret;
-    if (secret !== process.env.WEBHOOK_SECRET) {
+    if (!secureCompare(String(secret || ''), String(process.env.WEBHOOK_SECRET || ''))) {
         return res.status(401).json({ error: 'Não autorizado' });
     }
 
@@ -41,7 +42,7 @@ router.post('/webhook', async (req, res) => {
     }
 });
 
-router.post('/test', authMiddleware, async (req, res) => {
+router.post('/test', authMiddleware, requireOwner, async (req, res) => {
     try {
         const result = await pool.query(
             `INSERT INTO signals (pair, direction, entry_price, stop_loss, take_profit, source)
@@ -101,7 +102,7 @@ router.get('/stats', authMiddleware, async (req, res) => {
     }
 });
 
-router.patch('/:id/close', authMiddleware, async (req, res) => {
+router.patch('/:id/close', authMiddleware, requireOwner, async (req, res) => {
     const { id } = req.params;
     const { status, result_pips } = req.body;
 
