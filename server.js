@@ -16,6 +16,11 @@ const marketAnalysisRoutes = require('./marketAnalysisRoutes');
 
 const app = express();
 
+// Necessário no Railway (e em qualquer PaaS atrás de proxy reverso): sem isso,
+// o express-rate-limit não consegue identificar o IP real do usuário e
+// derruba a requisição com erro (ERR_ERL_UNEXPECTED_X_FORWARDED_FOR).
+app.set('trust proxy', 1);
+
 app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));
 
 // CORS restrito ao(s) domínio(s) reais do site — antes estava liberado pra
