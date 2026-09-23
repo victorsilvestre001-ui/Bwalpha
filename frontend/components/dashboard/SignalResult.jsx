@@ -1,6 +1,7 @@
 "use client";
 import { motion } from "framer-motion";
-import { ArrowUpRight, ArrowDownRight, Clock } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight } from "lucide-react";
+import CandleTimer from "./CandleTimer";
 import { assetDigits } from "@/lib/assets";
 
 function fmt(n, digits = 5) {
@@ -14,7 +15,7 @@ const CONF_STYLE = {
   Baixa: "border-pulse/40 bg-pulse/10 text-pulse-soft"
 };
 
-export default function SignalResult({ result, analyzedAt }) {
+export default function SignalResult({ result, timing }) {
   const buy = result.direction === "COMPRA";
   const digits = assetDigits(result.pair);
   const c5 = result.chinesa5Candles;
@@ -42,12 +43,9 @@ export default function SignalResult({ result, analyzedAt }) {
             Confiança {result.confidence}
           </span>
         </div>
-        {analyzedAt && (
-          <div className="mt-4 flex items-center gap-1.5 font-mono text-[11px] text-mist-faint">
-            <Clock size={12} /> Analisado às {analyzedAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-          </div>
-        )}
       </div>
+
+      {timing && <CandleTimer direction={result.direction} timeframe={result.timeframe} {...timing} />}
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         {rows.map((r) => (

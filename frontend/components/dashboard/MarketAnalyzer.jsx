@@ -1,13 +1,15 @@
 "use client";
 import { useEffect, useState } from "react";
 import { AnimatePresence } from "framer-motion";
-import { Sparkles, AlertTriangle } from "lucide-react";
+import { Sparkles, AlertTriangle, Volume2, VolumeX } from "lucide-react";
 import { api } from "@/lib/api";
 import { ASSETS, ASSET_LIST } from "@/lib/assets";
 import TradingViewWidget from "./TradingViewWidget";
 import AnalyzingOverlay from "./AnalyzingOverlay";
 import SignalResult from "./SignalResult";
 import BrokerCard from "./BrokerCard";
+import { computeEntry } from "./CandleTimer";
+import { speak, isVoiceOn, setVoiceOn } from "@/lib/speech";
 
 const TIMEFRAMES = ["M1", "M5"];
 const MIN_ANIMATION_MS = 2600;
@@ -33,28 +35,43 @@ export default function MarketAnalyzer() {
   const [timeframe, setTimeframe] = useState("M1");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
-  const [analyzedAt, setAnalyzedAt] = useState(null);
+  const [timing, setTiming] = useState(null);
+  const [voice, setVoice] = useState(true);
   const [error, setError] = useState("");
   const [marketOpen, setMarketOpen] = useState(null);
 
   useEffect(() => {
     api.marketStatus().then((s) => setMarketOpen(!!s?.open)).catch(() => {});
+    setVoice(isVoiceOn());
   }, []);
+
+  function toggleVoice() {
+    const next = !voice;
+    setVoice(next);
+    setVoiceOn(next);
+  }
 
   async function analyze() {
     setLoading(true);
     setError("");
     setResult(null);
+    setTiming(null);
     const started = Date.now();
+    // Falar algo já no clique "libera" a voz no Safari/iPhone para o anúncio do resultado.
+    speak(`Analisando ${pair}`);
     try {
       const data = await api.signal(pair, timeframe);
       const wait = MIN_ANIMATION_MS - (Date.now() - started);
       if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      const { entry, expiry } = computeEntry(timeframe, Date.now());
       setResult(data);
-      setAnalyzedAt(new Date());
+      setTiming({ requestedAt: started, entry, expiry });
+      const hora = new Date(entry).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+      speak(`Próximo candle: ${data.direction === "COMPRA" ? "compra" : "venda"}. Entrada às ${hora}.`);
     } catch (err) {
       if (err.data?.marketClosed) setMarketOpen(false);
       setError(err.message || "Não foi possível gerar o sinal agora.");
+      speak("Não foi possível gerar o sinal agora.");
     } finally {
       setLoading(false);
     }
@@ -67,7 +84,12 @@ export default function MarketAnalyzer() {
           <AnimatePresence>{loading && <AnalyzingOverlay />}</AnimatePresence>
 
           <div className="flex items-center justify-between">
-            <h2 className="font-display text-lg font-semibold text-mist">Nova análise</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="font-display text-lg font-semibold text-mist">Nova análise</h2>
+              <button onClick={toggleVoice} className={`rounded-lg p-1.5 transition-colors ${voice ? "text-neon hover:bg-neon/10" : "text-mist-faint hover:bg-white/5"}`} aria-label={voice ? "Silenciar voz" : "Ativar voz"} title={voice ? "Voz ligada" : "Voz desligada"}>
+                {voice ? <Volume2 size={16} /> : <VolumeX size={16} />}
+              </button>
+            </div>
             {marketOpen != null && (
               <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider ${marketOpen ? "bg-neon/10 text-neon" : "bg-ember/10 text-ember-soft"}`}>
                 <span className={`h-1.5 w-1.5 rounded-full ${marketOpen ? "bg-neon" : "bg-ember"}`} />
@@ -98,7 +120,7 @@ export default function MarketAnalyzer() {
           )}
         </div>
 
-        {result && <SignalResult result={result} analyzedAt={analyzedAt} />}
+        {result && <SignalResult result={result} timing={timing} />}
 
         <BrokerCard />
       </div>
