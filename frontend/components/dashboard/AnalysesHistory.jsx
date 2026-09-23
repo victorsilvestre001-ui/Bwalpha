@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ArrowUpRight, ArrowDownRight, Loader2, Trophy, XCircle, ListChecks, Percent, RefreshCw } from "lucide-react";
 import { api } from "@/lib/api";
 import { now } from "@/lib/clock";
+import BankrollSimulator from "./BankrollSimulator";
 
 const FILTERS = [
   { id: "all", label: "Todas" },
@@ -146,6 +147,7 @@ export default function AnalysesHistory() {
           O resultado é conferido no candle de entrada: WIN quando o candle fecha a favor do sinal, RED quando fecha contra.
         </p>
       </div>
+      <BankrollSimulator />
     </div>
   );
 }
