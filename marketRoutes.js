@@ -248,7 +248,7 @@ function macdHistogramLast(values) {
 }
 
 async function fetchTwelveDataCandles(pair, interval) {
-    const url = `${TD_BASE}/time_series?symbol=${encodeURIComponent(pair.td)}&interval=${interval}&outputsize=100&apikey=${TD_KEY()}`;
+    const url = `${TD_BASE}/time_series?symbol=${encodeURIComponent(pair.td)}&interval=${interval}&outputsize=100&timezone=UTC&apikey=${TD_KEY()}`;
     const res = await fetch(url);
     const data = await res.json();
     if (data?.status !== 'ok' || !Array.isArray(data.values)) {
@@ -260,6 +260,7 @@ async function fetchTwelveDataCandles(pair, interval) {
         .slice()
         .reverse()
         .map((v) => ({
+            time: Date.parse(`${v.datetime.replace(' ', 'T')}Z`),
             open: parseFloat(v.open),
             high: parseFloat(v.high),
             low: parseFloat(v.low),
@@ -282,6 +283,7 @@ async function fetchIntradayCandles(pairLabel, timeframeLabel) {
     if (!series) return null;
     const dates = Object.keys(series).sort();
     return dates.map((d) => ({
+        time: Date.parse(`${d.replace(' ', 'T')}Z`),
         open: parseFloat(series[d]['1. open']),
         high: parseFloat(series[d]['2. high']),
         low: parseFloat(series[d]['3. low']),
@@ -445,6 +447,115 @@ function getChinesaStrategySignal(candles, minCandlesConfirmacao = 2) {
     };
 }
 
+// ---- Indicador "bwalpha" (script Lua do Victor para IQ Option), partes 1, 2 e 3 ----
+// A parte 1B (padrão dos 5 candles) é a getChinesaStrategySignal acima.
+
+function smaAt(values, period, end) {
+    if (end + 1 < period) return null;
+    let sum = 0;
+    for (let i = end - period + 1; i <= end; i++) sum += values[i];
+    return sum / period;
+}
+
+function wmaAt(values, period, end) {
+    if (end + 1 < period) return null;
+    let num = 0, den = 0;
+    for (let k = 0; k < period; k++) {
+        const w = period - k; // peso maior para o valor mais recente
+        num += values[end - k] * w;
+        den += w;
+    }
+    return num / den;
+}
+
+function stdevAt(values, period, end) {
+    const mean = smaAt(values, period, end);
+    if (mean == null) return null;
+    let sq = 0;
+    for (let i = end - period + 1; i <= end; i++) sq += (values[i] - mean) ** 2;
+    return Math.sqrt(sq / period);
+}
+
+// closed = só candles fechados (mais antigo primeiro); forming = candle atual (pode ser null).
+function getBwalphaIndicator(closed, forming, chinesa, opts = {}) {
+    const { maFast = 1, maSlow = 34, signalPeriod = 2, periodoSR = 15 } = opts;
+
+    // PARTE 1: buffer1 = sma(open, fast) - sma(open, slow); buffer2 = wma(buffer1, signal).
+    // Usa o "open", que já é conhecido quando o candle abre — por isso inclui o candle atual.
+    const bars = forming ? [...closed, forming] : closed;
+    const opens = bars.map((c) => c.open);
+    const buffer1 = opens.map((_, i) => {
+        const f = smaAt(opens, maFast, i);
+        const sl = smaAt(opens, maSlow, i);
+        return f == null || sl == null ? null : f - sl;
+    });
+    const b2At = (i) => {
+        if (i + 1 < signalPeriod) return null;
+        const win = buffer1.slice(i - signalPeriod + 1, i + 1);
+        if (win.some((v) => v == null)) return null;
+        return wmaAt(win, signalPeriod, signalPeriod - 1);
+    };
+    const last = bars.length - 1;
+    const b1 = buffer1[last], b1p = buffer1[last - 1];
+    const b2 = b2At(last), b2p = b2At(last - 1);
+    let cruzamento = null;
+    if ([b1, b1p, b2, b2p].every((v) => v != null)) {
+        if (b1 > b2 && b1p < b2p) cruzamento = 'CALL';
+        else if (b1 < b2 && b1p > b2p) cruzamento = 'PUT';
+    }
+
+    // PARTE 2: bandas (sma10 ± stdev10 × fator) + estocástico(5,1), adaptados à volatilidade.
+    const closes = closed.map((c) => c.close);
+    const n = closed.length - 1;
+    let fatorBanda = 1.6, limiteInferior = 15, limiteSuperior = 85;
+    if (chinesa?.volatilidadeAlta) { fatorBanda = 2.0; limiteInferior = 10; limiteSuperior = 90; }
+    else if (chinesa?.volatilidadeBaixa) { fatorBanda = 1.3; limiteInferior = 20; limiteSuperior = 80; }
+
+    const media = smaAt(closes, 10, n);
+    const desvio = stdevAt(closes, 10, n);
+    const bandaSuperior = media != null ? media + desvio * fatorBanda : null;
+    const bandaInferior = media != null ? media - desvio * fatorBanda : null;
+
+    const last5 = closed.slice(-5);
+    const hh = Math.max(...last5.map((c) => c.high));
+    const ll = Math.min(...last5.map((c) => c.low));
+    const estocastico = hh > ll ? ((closes[n] - ll) / (hh - ll)) * 100 : 50;
+
+    let alerta = null;
+    if (bandaInferior != null && closes[n] <= bandaInferior && estocastico <= limiteInferior) alerta = 'CALL';
+    else if (bandaSuperior != null && closes[n] >= bandaSuperior && estocastico >= limiteSuperior) alerta = 'PUT';
+
+    // PARTE 3: suporte/resistência dinâmicos (mínima/máxima dos últimos N candles).
+    const lastSR = closed.slice(-periodoSR);
+    const resistencia = Math.max(...lastSR.map((c) => c.high));
+    const suporte = Math.min(...lastSR.map((c) => c.low));
+
+    return {
+        cruzamento,
+        buffer1: b1,
+        buffer2: b2,
+        alerta,
+        estocastico,
+        limiteInferior,
+        limiteSuperior,
+        bandaSuperior,
+        bandaInferior,
+        fatorBanda,
+        suporte,
+        resistencia,
+    };
+}
+
+// Remove o candle que ainda está se formando (se houver), para que as leituras usem
+// só candles fechados — igual aos índices [1]..[5] do script original.
+function splitFormingCandle(candles, intervalMs, now = Date.now()) {
+    const lastCandle = candles[candles.length - 1];
+    if (lastCandle && Number.isFinite(lastCandle.time) && lastCandle.time + intervalMs > now) {
+        return { closed: candles.slice(0, -1), forming: lastCandle };
+    }
+    return { closed: candles, forming: null };
+}
+
 const technicalCache = {};
 const TIMEFRAME_MINUTES = { M1: 1, M5: 5 };
 
@@ -459,8 +570,9 @@ async function getTechnicalSignal(pairLabel, timeframeLabel) {
     const cached = technicalCache[cacheKey];
     if (cached) return cached;
 
-    const candles = await fetchIntradayCandles(pairLabel, timeframeLabel);
-    if (!candles || candles.length < 30) return null;
+    const allCandles = await fetchIntradayCandles(pairLabel, timeframeLabel);
+    if (!allCandles || allCandles.length < 40) return null;
+    const { closed: candles, forming } = splitFormingCandle(allCandles, intervalMs);
     const closes = candles.map((c) => c.close);
 
     const ema9Series = emaSeries(closes, 9);
@@ -487,6 +599,13 @@ async function getTechnicalSignal(pairLabel, timeframeLabel) {
     bullVotes += patternBull;
     bearVotes += patternBear;
 
+    const chinesa = getChinesaStrategySignal(candles);
+    const bwalpha = getBwalphaIndicator(candles, forming, chinesa);
+    if (bwalpha.cruzamento === 'CALL') bullVotes += 1;
+    if (bwalpha.cruzamento === 'PUT') bearVotes += 1;
+    if (bwalpha.alerta === 'CALL') bullVotes += 1;
+    if (bwalpha.alerta === 'PUT') bearVotes += 1;
+
     const confluenceDirection = bullVotes >= bearVotes ? 'COMPRA' : 'VENDA';
     const diff = Math.abs(bullVotes - bearVotes);
     const confluenceConfidence = diff >= 2 ? 'Alta' : diff >= 1 ? 'Média' : 'Baixa';
@@ -494,7 +613,6 @@ async function getTechnicalSignal(pairLabel, timeframeLabel) {
     // "Estratégia Chinesa": o padrão dos últimos 5 candles decide a direção
     // sempre que estiver claro. Os indicadores (EMA/RSI/MACD/padrões de candle)
     // só servem de desempate quando os 5 candles não mostram um padrão nítido.
-    const chinesa = getChinesaStrategySignal(candles);
 
     let direction;
     let confidence;
@@ -513,7 +631,7 @@ async function getTechnicalSignal(pairLabel, timeframeLabel) {
     const result = {
         pair: pairLabel,
         timeframe: timeframeLabel,
-        price: closes[closes.length - 1],
+        price: (forming || candles[candles.length - 1]).close,
         ema9,
         ema21,
         rsi: rsiVal,
@@ -528,6 +646,7 @@ async function getTechnicalSignal(pairLabel, timeframeLabel) {
                 volatilidadeBaixa: chinesa.volatilidadeBaixa,
               }
             : null,
+        bwalpha,
         direction,
         confidence,
     };
