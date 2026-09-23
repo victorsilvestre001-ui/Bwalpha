@@ -6,8 +6,28 @@ const router = express.Router();
 
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-module.exports = router;
-const VIP_PRICE_ID = 'price_1Tze961kvSRT3RoOkxXhq787';
+const VIP_PRICE_ID = process.env.STRIPE_VIP_PRICE_ID || 'price_1Tze961kvSRT3RoOkxXhq787';
+
+// O VIP é uma assinatura mensal. Se o preço cadastrado no Stripe for de pagamento
+// único (não recorrente), o Stripe recusa o checkout em modo "subscription"; nesse
+// caso montamos a cobrança mensal com o mesmo valor, moeda e produto do preço.
+let vipLineItemCache = null;
+async function getVipLineItem() {
+    if (vipLineItemCache) return vipLineItemCache;
+    const price = await stripe.prices.retrieve(VIP_PRICE_ID);
+    vipLineItemCache = price.recurring
+        ? { price: price.id, quantity: 1 }
+        : {
+            price_data: {
+                currency: price.currency,
+                unit_amount: price.unit_amount,
+                product: typeof price.product === 'string' ? price.product : price.product.id,
+                recurring: { interval: 'month' },
+            },
+            quantity: 1,
+        };
+    return vipLineItemCache;
+}
 
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://bwalpha-frontend.vercel.app';
@@ -18,7 +38,7 @@ router.post('/create-session', authMiddleware, async (req, res) => {
         const session = await stripe.checkout.sessions.create({
             mode: 'subscription',
             payment_method_types: ['card'],
-            line_items: [{ price: VIP_PRICE_ID, quantity: 1 }],
+            line_items: [await getVipLineItem()],
             customer_email: req.user.email,
             success_url: `${FRONTEND_URL}/dashboard?vip=success`,
             cancel_url: `${FRONTEND_URL}/dashboard?vip=cancelled`,

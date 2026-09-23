@@ -1,5 +1,5 @@
 const express = require('express');
-const { authMiddleware } = require('./authMiddleware');
+const { authMiddleware, requireVip } = require('./authMiddleware');
 
 const router = express.Router();
 const AV_BASE = 'https://www.alphavantage.co/query';
@@ -685,7 +685,7 @@ router.get('/status', (req, res) => {
     res.json({ open: isMarketOpen() });
 });
 
-router.post('/signal', authMiddleware, async (req, res) => {
+router.post('/signal', authMiddleware, requireVip, async (req, res) => {
     const { pair, timeframe } = req.body;
     if (!SIGNAL_PAIRS[pair] || !SIGNAL_INTERVALS[timeframe]) {
         return res.status(400).json({ error: 'Par ou timeframe inválido. Use EURUSD/EURJPY/XAUUSD e M1/M5.' });

@@ -54,7 +54,7 @@ export default function Sidebar({ user, tab, onChangeTab, onLogout }) {
         {!isPaid(user) && (
           <button onClick={() => onChangeTab("perfil")} className="grad-border mb-4 rounded-xl bg-void-card p-4 text-left">
             <div className="flex items-center gap-2 font-display text-sm font-semibold text-mist"><Crown size={16} className="text-neon" /> Seja VIP</div>
-            <p className="mt-1 text-xs text-mist-dim">IA ilimitada e recursos extras.</p>
+            <p className="mt-1 text-xs text-mist-dim">Libere os sinais da IA.</p>
           </button>
         )}
 

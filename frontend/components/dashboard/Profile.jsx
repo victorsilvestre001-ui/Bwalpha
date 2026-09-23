@@ -107,7 +107,7 @@ export default function Profile({ user, onUserChange, onUpgrade, upgrading }) {
             </>
           ) : (
             <>
-              <p className="mt-3 text-sm text-mist-dim">Desbloqueie o assistente de IA ilimitado, análise de prints e o histórico de sinais.</p>
+              <p className="mt-3 text-sm text-mist-dim">Desbloqueie os sinais da IA (EURUSD, EURJPY e Ouro), o indicador bwalpha e o assistente de IA ilimitado.</p>
               <button onClick={onUpgrade} disabled={upgrading} className="btn-primary mt-6 w-full !py-3.5">
                 {upgrading ? <Loader2 size={16} className="animate-spin" /> : <><Crown size={16} /> Assinar VIP</>}
               </button>

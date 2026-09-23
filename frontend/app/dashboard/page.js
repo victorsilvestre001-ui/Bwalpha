@@ -2,6 +2,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, X } from "lucide-react";
+import { isPaid } from "@/components/dashboard/Sidebar";
 import Sidebar from "@/components/dashboard/Sidebar";
 import MarketAnalyzer from "@/components/dashboard/MarketAnalyzer";
 import ChatAssistant from "@/components/dashboard/ChatAssistant";
@@ -45,7 +46,10 @@ function Dashboard() {
   async function handleUpgrade() {
     setUpgrading(true);
     try { const { url } = await api.createCheckoutSession(); window.location.href = url; }
-    catch { setUpgrading(false); }
+    catch (err) {
+      setUpgrading(false);
+      setBanner({ ok: false, text: err.message || "Não foi possível abrir o pagamento agora. Tente novamente." });
+    }
   }
 
   if (!user) return null;
@@ -71,7 +75,7 @@ function Dashboard() {
           <p className="mt-1 text-sm text-mist-dim">{subtitle}</p>
         </div>
 
-        {tab === "analise" && <MarketAnalyzer />}
+        {tab === "analise" && <MarketAnalyzer isVip={isPaid(user)} onUpgrade={handleUpgrade} upgrading={upgrading} />}
         {tab === "assistente" && <ChatAssistant onUpgrade={() => setTab("perfil")} />}
         {tab === "calendario" && <EconomicCalendar />}
         {tab === "perfil" && <Profile user={user} onUserChange={setUser} onUpgrade={handleUpgrade} upgrading={upgrading} />}

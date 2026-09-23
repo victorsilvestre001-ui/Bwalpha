@@ -25,6 +25,21 @@ function requirePaidPlan(req, res, next) {
     next();
 }
 
+// Confere o plano direto no banco (e não no token): quem acabou de assinar o VIP
+// ainda tem um token antigo com plan='free' até fazer login de novo.
+async function requireVip(req, res, next) {
+    try {
+        const pool = require('./db');
+        const result = await pool.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+        const plan = result.rows[0]?.plan;
+        if (plan === 'vip' || plan === 'owner') return next();
+        return res.status(403).json({ error: 'Os sinais da IA são exclusivos para assinantes VIP.', vipRequired: true });
+    } catch (err) {
+        console.error('Erro ao verificar plano:', err.message);
+        return res.status(500).json({ error: 'Erro ao verificar seu plano' });
+    }
+}
+
 // Reservado para futuras rotas de administração (ex: painel de métricas,
 // gestão de usuários). Por enquanto só a conta marcada como plan='owner'
 // passa por aqui.
@@ -35,4 +50,4 @@ function requireOwner(req, res, next) {
     next();
 }
 
-module.exports = { authMiddleware, requirePaidPlan, requireOwner };
+module.exports = { authMiddleware, requirePaidPlan, requireOwner, requireVip };
