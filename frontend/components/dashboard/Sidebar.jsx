@@ -1,11 +1,11 @@
 "use client";
-import { LineChart, Bot, CalendarDays, UserRound, LogOut, Crown } from "lucide-react";
+import { LineChart, Bot, History, UserRound, LogOut, Crown } from "lucide-react";
 import Logo from "@/components/Logo";
 
 export const TABS = [
   { id: "analise", label: "Análise", icon: LineChart },
   { id: "assistente", label: "Assistente IA", icon: Bot },
-  { id: "calendario", label: "Calendário", icon: CalendarDays },
+  { id: "historico", label: "Histórico", icon: History },
   { id: "perfil", label: "Perfil", icon: UserRound }
 ];
 

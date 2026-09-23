@@ -46,9 +46,12 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
       const data = await api.signal(pair, timeframe);
       const wait = MIN_ANIMATION_MS - (now() - started);
       if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-      const { entry, expiry } = computeEntry(timeframe, now());
+      // Usa a entrada calculada e salva pelo servidor (a mesma que vai para o histórico).
+      const local = computeEntry(timeframe, now());
+      const entry = data.entry ?? local.entry;
+      const expiry = data.expiry ?? local.expiry;
       setResult(data);
-      setTiming({ requestedAt: started, entry, expiry });
+      setTiming({ requestedAt: data.requestedAt ?? started, entry, expiry });
     } catch (err) {
       if (err.data?.marketClosed) setMarketOpen(false);
       if (err.data?.vipRequired) { setError(err.message); return; }
@@ -97,7 +100,7 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
               <div className="flex items-center justify-center gap-2 font-display text-sm font-semibold text-mist">
                 <Lock size={15} className="text-neon" /> Sinais exclusivos para VIP
               </div>
-              <p className="mt-1 text-xs text-mist-dim">Assine para receber o sinal do próximo candle, o indicador bwalpha e a contagem de entrada.</p>
+              <p className="mt-1 text-xs text-mist-dim">Assine para receber o sinal do próximo candle, a contagem de entrada e o histórico de Win/Red.</p>
               <button onClick={onUpgrade} disabled={upgrading} className="btn-primary mt-4 w-full !py-3.5">
                 {upgrading ? <Loader2 size={16} className="animate-spin" /> : <><Crown size={16} /> Quero ser VIP</>}
               </button>

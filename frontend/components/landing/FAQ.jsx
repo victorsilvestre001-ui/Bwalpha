@@ -5,7 +5,7 @@ import Reveal from "@/components/Reveal";
 
 const QA = [
   { q: "O que é a TradeOn AI?", a: "É uma plataforma de análise que combina indicadores técnicos e inteligência artificial para sugerir a direção de EURUSD, EURJPY e Ouro (XAUUSD) nos timeframes M1 e M5." },
-  { q: "Preciso pagar para usar?", a: "Criar conta é grátis e libera o painel, o gráfico, o calendário e 3 mensagens por dia com a IA. Os sinais de compra e venda são exclusivos do plano VIP." },
+  { q: "Preciso pagar para usar?", a: "Criar conta é grátis e libera o painel, o gráfico e 3 mensagens por dia com a IA. Os sinais de compra e venda são exclusivos do plano VIP." },
   { q: "Os sinais garantem lucro?", a: "Não. Nenhuma ferramenta garante resultado. Os sinais são apoio à decisão — sempre use gestão de risco e opere apenas o que pode perder." },
   { q: "Quando o mercado está aberto?", a: "O Forex abre domingo às 22h (UTC) e fecha sexta às 22h (UTC). Fora desse horário o painel avisa que o mercado está fechado." },
   { q: "Como cancelo o VIP?", a: "Direto no painel, em Perfil → Gerenciar assinatura. O cancelamento é feito pelo portal seguro de pagamentos." }

@@ -7,14 +7,14 @@ import Sidebar from "@/components/dashboard/Sidebar";
 import AutoUpdate from "@/components/AutoUpdate";
 import MarketAnalyzer from "@/components/dashboard/MarketAnalyzer";
 import ChatAssistant from "@/components/dashboard/ChatAssistant";
-import EconomicCalendar from "@/components/dashboard/EconomicCalendar";
+import AnalysesHistory from "@/components/dashboard/AnalysesHistory";
 import Profile from "@/components/dashboard/Profile";
 import { api, getSessionUser, clearSession } from "@/lib/api";
 
 const TITLES = {
   analise: ["Análise de mercado", "Escolha o ativo e o timeframe e deixe a IA ler o gráfico."],
   assistente: ["Assistente IA", "Tire dúvidas e envie prints do seu gráfico."],
-  calendario: ["Calendário econômico", "Próximos eventos que podem mexer com o mercado."],
+  historico: ["Histórico de análises", "Todas as análises que você gerou, com o resultado de cada uma."],
   perfil: ["Perfil e plano", "Seus dados e sua assinatura."]
 };
 
@@ -79,7 +79,7 @@ function Dashboard() {
 
         {tab === "analise" && <MarketAnalyzer isVip={isPaid(user)} onUpgrade={handleUpgrade} upgrading={upgrading} />}
         {tab === "assistente" && <ChatAssistant onUpgrade={() => setTab("perfil")} />}
-        {tab === "calendario" && <EconomicCalendar />}
+        {tab === "historico" && <AnalysesHistory />}
         {tab === "perfil" && <Profile user={user} onUserChange={setUser} onUpgrade={handleUpgrade} upgrading={upgrading} />}
       </div>
     </main>

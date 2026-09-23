@@ -1,4 +1,4 @@
-import { Brain, CandlestickChart, CalendarClock, MessageSquareText, Gauge, ShieldCheck } from "lucide-react";
+import { Brain, CandlestickChart, History, MessageSquareText, Gauge, ShieldCheck } from "lucide-react";
 import Reveal from "@/components/Reveal";
 
 const FEATURES = [
@@ -6,7 +6,7 @@ const FEATURES = [
   { icon: CandlestickChart, title: "Leitura dos 5 candles", text: "A estratégia de 5 candles identifica o padrão recente e ajusta a confiança conforme os indicadores concordam.", accent: "text-volt" },
   { icon: Gauge, title: "Nível de confiança", text: "Cada sinal vem classificado como Alta, Média ou Baixa confiança, para você decidir com clareza.", accent: "text-pulse-soft" },
   { icon: MessageSquareText, title: "Assistente de IA", text: "Tire dúvidas de trading, envie prints do gráfico e receba análise em linguagem simples.", accent: "text-neon" },
-  { icon: CalendarClock, title: "Calendário econômico", text: "Veja os próximos eventos de alto impacto antes de operar e evite surpresas de volatilidade.", accent: "text-volt" },
+  { icon: History, title: "Histórico de Win e Red", text: "Cada análise fica registrada e é conferida automaticamente no fechamento do candle, com sua taxa de acerto.", accent: "text-volt" },
   { icon: ShieldCheck, title: "Gráfico integrado", text: "Gráfico em tempo real direto no painel, sem trocar de aba enquanto você analisa.", accent: "text-pulse-soft" }
 ];
 

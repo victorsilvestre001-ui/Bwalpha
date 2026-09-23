@@ -58,7 +58,7 @@ export const api = {
   marketStatus: () => request("/api/market/status", { auth: false }),
   serverTime: () => request("/api/market/time", { auth: false }),
   signal: (pair, timeframe) => request("/api/market/signal", { method: "POST", body: { pair, timeframe } }),
-  calendar: () => request("/api/calendar"),
+  analyses: (status = "all") => request(`/api/analyses?status=${encodeURIComponent(status)}`),
   chat: (message, image_base64) => request("/api/chat", { method: "POST", body: { message, image_base64 } }),
   chatHistory: () => request("/api/chat/history"),
   chatLimit: () => request("/api/chat/limit"),

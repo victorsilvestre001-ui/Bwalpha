@@ -13,6 +13,7 @@ const stripeWebhook = require('./stripeWebhook');
 const { router: marketRoutes } = require('./marketRoutes');
 const { router: telegramRoutes, setupWebhook } = require('./telegramRoutes');
 const marketAnalysisRoutes = require('./marketAnalysisRoutes');
+const { router: analysesRoutes, resolvePendingAnalyses } = require('./analysesRoutes');
 
 const app = express();
 
@@ -55,6 +56,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/checkout', checkoutRoutes);
 app.use('/api/market', marketRoutes);
+app.use('/api/analyses', analysesRoutes);
 app.use('/api/telegram', telegramRoutes);
 app.use('/api/webhook/market', marketAnalysisRoutes);
 
@@ -131,6 +133,26 @@ CREATE INDEX IF NOT EXISTS idx_signals_pair ON signals(pair);
 CREATE INDEX IF NOT EXISTS idx_signals_status ON signals(status);
 CREATE INDEX IF NOT EXISTS idx_chat_user ON chat_history(user_id);
 CREATE INDEX IF NOT EXISTS idx_events_time ON economic_events(event_time);
+
+CREATE TABLE IF NOT EXISTS analyses (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    pair VARCHAR(20) NOT NULL,
+    timeframe VARCHAR(5) NOT NULL,
+    direction VARCHAR(10) NOT NULL,
+    confidence VARCHAR(10),
+    requested_at TIMESTAMPTZ NOT NULL,
+    entry_time TIMESTAMPTZ NOT NULL,
+    expiry_time TIMESTAMPTZ NOT NULL,
+    open_price NUMERIC(14,6),
+    close_price NUMERIC(14,6),
+    result VARCHAR(10),
+    resolved_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_analyses_user ON analyses(user_id, requested_at DESC);
+CREATE INDEX IF NOT EXISTS idx_analyses_pending ON analyses(expiry_time) WHERE result IS NULL;
 `;
 
 async function runMigrations() {
@@ -152,5 +174,7 @@ runMigrations().then(() => {
         setupWebhook();
         syncEconomicCalendar();
         setInterval(syncEconomicCalendar, CALENDAR_SYNC_INTERVAL_MS);
+        // Confere WIN/RED das análises cujo candle já fechou, mesmo sem ninguém abrir o histórico.
+        setInterval(resolvePendingAnalyses, 60 * 1000);
     });
 });

@@ -1,5 +1,6 @@
 const express = require('express');
 const { authMiddleware, requireVip } = require('./authMiddleware');
+const pool = require('./db');
 
 const router = express.Router();
 const AV_BASE = 'https://www.alphavantage.co/query';
@@ -247,8 +248,8 @@ function macdHistogramLast(values) {
     return lastMacd - lastSignal;
 }
 
-async function fetchTwelveDataCandles(pair, interval) {
-    const url = `${TD_BASE}/time_series?symbol=${encodeURIComponent(pair.td)}&interval=${interval}&outputsize=100&timezone=UTC&apikey=${TD_KEY()}`;
+async function fetchTwelveDataCandles(pair, interval, outputsize = 100) {
+    const url = `${TD_BASE}/time_series?symbol=${encodeURIComponent(pair.td)}&interval=${interval}&outputsize=${outputsize}&timezone=UTC&apikey=${TD_KEY()}`;
     const res = await fetch(url);
     const data = await res.json();
     if (data?.status !== 'ok' || !Array.isArray(data.values)) {
@@ -268,10 +269,10 @@ async function fetchTwelveDataCandles(pair, interval) {
         }));
 }
 
-async function fetchIntradayCandles(pairLabel, timeframeLabel) {
+async function fetchIntradayCandles(pairLabel, timeframeLabel, outputsize = 100) {
     const pair = SIGNAL_PAIRS[pairLabel];
     const interval = SIGNAL_INTERVALS[timeframeLabel];
-    if (TD_KEY()) return fetchTwelveDataCandles(pair, interval);
+    if (TD_KEY()) return fetchTwelveDataCandles(pair, interval, outputsize);
     if (pair.from === 'XAU') {
         console.error('XAUUSD precisa da variável TWELVE_DATA_API_KEY configurada.');
         return null;
@@ -692,6 +693,16 @@ router.get('/status', (req, res) => {
     res.json({ open: isMarketOpen() });
 });
 
+// Entrada = abertura do próximo candle; se faltar menos de 10s, vai para o seguinte
+// (mesma regra do painel). Calculado no servidor, que tem o relógio certo.
+const MIN_ENTRY_LEAD_MS = 10_000;
+function computeEntry(timeframeLabel, fromMs = Date.now()) {
+    const tf = TIMEFRAME_MINUTES[timeframeLabel] * 60 * 1000;
+    let entry = Math.ceil((fromMs + 1) / tf) * tf;
+    if (entry - fromMs < MIN_ENTRY_LEAD_MS) entry += tf;
+    return { entry, expiry: entry + tf };
+}
+
 router.post('/signal', authMiddleware, requireVip, async (req, res) => {
     const { pair, timeframe } = req.body;
     if (!SIGNAL_PAIRS[pair] || !SIGNAL_INTERVALS[timeframe]) {
@@ -705,7 +716,22 @@ router.post('/signal', authMiddleware, requireVip, async (req, res) => {
         if (!result) {
             return res.status(502).json({ error: 'Não foi possível calcular o sinal agora. Tente novamente.' });
         }
-        res.json(result);
+        const requestedAt = Date.now();
+        const { entry, expiry } = computeEntry(timeframe, requestedAt);
+        let analysisId = null;
+        try {
+            const saved = await pool.query(
+                `INSERT INTO analyses (user_id, pair, timeframe, direction, confidence, requested_at, entry_time, expiry_time)
+                 VALUES ($1, $2, $3, $4, $5, to_timestamp($6 / 1000.0), to_timestamp($7 / 1000.0), to_timestamp($8 / 1000.0))
+                 RETURNING id`,
+                [req.user.id, pair, timeframe, result.direction, result.confidence, requestedAt, entry, expiry]
+            );
+            analysisId = saved.rows[0].id;
+        } catch (err) {
+            // O histórico não pode impedir o sinal de ser entregue.
+            console.error('Erro ao salvar análise no histórico:', err.message);
+        }
+        res.json({ ...result, analysisId, requestedAt, entry, expiry });
     } catch (err) {
         console.error('Erro ao gerar sinal técnico:', err.message);
         res.status(500).json({ error: 'Erro ao gerar sinal técnico' });
@@ -744,4 +770,4 @@ router.get('/history', authMiddleware, async (req, res) => {
     }
 });
 
-module.exports = { router, getQuotes, getIndicators, getEconomicSnapshot, getNews, getHistory };
+module.exports = { router, getQuotes, getIndicators, getEconomicSnapshot, getNews, getHistory, fetchIntradayCandles, TIMEFRAME_MINUTES };
