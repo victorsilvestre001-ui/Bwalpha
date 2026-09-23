@@ -2,7 +2,6 @@
 import { motion } from "framer-motion";
 import { ArrowUpRight, ArrowDownRight } from "lucide-react";
 import CandleTimer from "./CandleTimer";
-import BwalphaPanel from "./BwalphaPanel";
 import { assetDigits } from "@/lib/assets";
 
 function fmt(n, digits = 5) {
@@ -56,8 +55,6 @@ export default function SignalResult({ result, timing }) {
           </div>
         ))}
       </div>
-
-      {result.bwalpha && <BwalphaPanel data={result.bwalpha} pair={result.pair} price={result.price} />}
 
       {c5 && (
         <div className="rounded-xl border border-void-line bg-void-deep/60 p-4">
