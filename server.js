@@ -27,6 +27,8 @@ app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false 
 // qualquer origem, o que permitia que qualquer site chamasse a API em nome
 // de um usuário caso um token JWT vazasse (ex: por XSS em outro lugar).
 const ALLOWED_ORIGINS = [
+    'https://www.tradeonia.com.br',
+    'https://tradeonia.com.br',
     'https://www.bwalphaia.com',
     'https://bwalphaia.com',
     process.env.FRONTEND_URL,

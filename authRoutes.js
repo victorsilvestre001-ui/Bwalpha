@@ -44,7 +44,7 @@ async function sendWelcomeEmail(name, email) {
                         <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">
                             Você já pode entrar na plataforma e acompanhar as análises de mercado em tempo real para EURUSD, EURJPY e XAUUSD (ouro).
                         </p>
-                        <a href="https://www.bwalphaia.com/auth" style="display: inline-block; margin-top: 16px; padding: 12px 24px; background: linear-gradient(100deg, #00F0A8, #3D8BFF); color: #05070F; text-decoration: none; border-radius: 6px; font-weight: 600;">
+                        <a href="${process.env.FRONTEND_URL || 'https://www.bwalphaia.com'}/auth" style="display: inline-block; margin-top: 16px; padding: 12px 24px; background: linear-gradient(100deg, #00F0A8, #3D8BFF); color: #05070F; text-decoration: none; border-radius: 6px; font-weight: 600;">
                             Acessar minha conta
                         </a>
                         <p style="font-size: 12px; color: #8a8a8a; margin-top: 32px;">

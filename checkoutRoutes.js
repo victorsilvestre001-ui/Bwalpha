@@ -30,7 +30,7 @@ async function getVipLineItem() {
 }
 
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://bwalpha-frontend.vercel.app';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.bwalphaia.com';
 
 // Cria uma sessão de checkout do Stripe pra assinatura VIP
 router.post('/create-session', authMiddleware, async (req, res) => {
