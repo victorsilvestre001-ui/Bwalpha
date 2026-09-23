@@ -10,6 +10,7 @@ import SignalResult from "./SignalResult";
 import BrokerCard from "./BrokerCard";
 import { computeEntry } from "./CandleTimer";
 import Dropdown from "./Dropdown";
+import { now, syncClock } from "@/lib/clock";
 
 const ASSET_OPTIONS = ASSET_LIST.map((k) => ({ value: k, label: k, hint: ASSETS[k].name }));
 const TIMEFRAME_OPTIONS = [
@@ -29,6 +30,7 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
 
   useEffect(() => {
     api.marketStatus().then((s) => setMarketOpen(!!s?.open)).catch(() => {});
+    syncClock({ force: true });
   }, []);
 
   async function analyze() {
@@ -36,12 +38,13 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
     setError("");
     setResult(null);
     setTiming(null);
-    const started = Date.now();
+    syncClock();
+    const started = now();
     try {
       const data = await api.signal(pair, timeframe);
-      const wait = MIN_ANIMATION_MS - (Date.now() - started);
+      const wait = MIN_ANIMATION_MS - (now() - started);
       if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-      const { entry, expiry } = computeEntry(timeframe, Date.now());
+      const { entry, expiry } = computeEntry(timeframe, now());
       setResult(data);
       setTiming({ requestedAt: started, entry, expiry });
     } catch (err) {

@@ -681,6 +681,13 @@ router.get('/public-quotes', async (req, res) => {
     }
 });
 
+// Horário do servidor (UTC em ms) para o site corrigir o relógio do aparelho do usuário,
+// que pode estar adiantado ou atrasado em relação ao horário da corretora.
+router.get('/time', (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({ now: Date.now() });
+});
+
 router.get('/status', (req, res) => {
     res.json({ open: isMarketOpen() });
 });

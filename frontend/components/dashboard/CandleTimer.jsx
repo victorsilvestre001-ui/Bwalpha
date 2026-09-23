@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { Timer, CheckCircle2 } from "lucide-react";
+import { now as serverNow } from "@/lib/clock";
 
 const TF_MS = { M1: 60_000, M5: 300_000 };
 // Se faltar menos que isso para o próximo candle abrir, a entrada vai para o candle seguinte
@@ -24,9 +25,9 @@ function mmss(ms) {
 }
 
 export default function CandleTimer({ direction, timeframe, requestedAt, entry, expiry }) {
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(() => serverNow());
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 250);
+    const id = setInterval(() => setNow(serverNow()), 250);
     return () => clearInterval(id);
   }, []);
 

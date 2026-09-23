@@ -56,6 +56,7 @@ export const api = {
   updateProfile: (patch) => request("/api/auth/profile", { method: "PATCH", body: patch }),
   publicQuotes: () => request("/api/market/public-quotes", { auth: false }),
   marketStatus: () => request("/api/market/status", { auth: false }),
+  serverTime: () => request("/api/market/time", { auth: false }),
   signal: (pair, timeframe) => request("/api/market/signal", { method: "POST", body: { pair, timeframe } }),
   calendar: () => request("/api/calendar"),
   chat: (message, image_base64) => request("/api/chat", { method: "POST", body: { message, image_base64 } }),
