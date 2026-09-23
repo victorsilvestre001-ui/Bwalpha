@@ -11,7 +11,7 @@ const PLANS = [
     cta: "Criar conta grátis",
     href: "/auth?mode=register",
     highlight: false,
-    items: ["Painel de análise EURUSD e EURJPY", "Timeframes M1 e M5", "Gráfico em tempo real", "Calendário econômico", "3 mensagens por dia com a IA"]
+    items: ["Análise de EURUSD, EURJPY e Ouro (XAUUSD)", "Timeframes M1 e M5", "Gráfico em tempo real", "Calendário econômico", "3 mensagens por dia com a IA"]
   },
   {
     name: "VIP",

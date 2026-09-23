@@ -10,7 +10,7 @@ import Profile from "@/components/dashboard/Profile";
 import { api, getSessionUser, clearSession } from "@/lib/api";
 
 const TITLES = {
-  analise: ["Análise de mercado", "Escolha o par e o timeframe e deixe a IA ler o gráfico."],
+  analise: ["Análise de mercado", "Escolha o ativo e o timeframe e deixe a IA ler o gráfico."],
   assistente: ["Assistente IA", "Tire dúvidas e envie prints do seu gráfico."],
   calendario: ["Calendário econômico", "Próximos eventos que podem mexer com o mercado."],
   perfil: ["Perfil e plano", "Seus dados e sua assinatura."]

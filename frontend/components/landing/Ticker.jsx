@@ -1,10 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { assetDigits } from "@/lib/assets";
 
 const FALLBACK = [
   { label: "EURUSD", rate: null },
-  { label: "EURJPY", rate: null }
+  { label: "EURJPY", rate: null },
+  { label: "XAUUSD", rate: null }
 ];
 
 export default function Ticker() {
@@ -17,7 +19,7 @@ export default function Ticker() {
   }, []);
 
   const items = [
-    ...quotes.map((q) => ({ k: q.label, v: q.rate ? q.rate.toFixed(q.label.endsWith("JPY") ? 3 : 5) : "—" })),
+    ...quotes.map((q) => ({ k: q.label, v: q.rate ? q.rate.toFixed(assetDigits(q.label)) : "—" })),
     { k: "Mercado", v: open == null ? "—" : open ? "ABERTO" : "FECHADO" },
     { k: "Timeframes", v: "M1 · M5" },
     { k: "Engine", v: "TradeOn AI v2" }

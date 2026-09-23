@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef } from "react";
+import { ASSETS } from "@/lib/assets";
 
 export default function TradingViewWidget({ pair = "EURUSD", timeframe = "M1" }) {
   const ref = useRef(null);
@@ -18,7 +19,7 @@ export default function TradingViewWidget({ pair = "EURUSD", timeframe = "M1" })
     script.async = true;
     script.innerHTML = JSON.stringify({
       autosize: true,
-      symbol: `FX:${pair}`,
+      symbol: ASSETS[pair]?.tv || `FX:${pair}`,
       interval: timeframe === "M5" ? "5" : "1",
       timezone: "America/Sao_Paulo",
       theme: "dark",

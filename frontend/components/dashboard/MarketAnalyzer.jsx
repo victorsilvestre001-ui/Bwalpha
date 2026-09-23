@@ -3,12 +3,12 @@ import { useEffect, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { Sparkles, AlertTriangle } from "lucide-react";
 import { api } from "@/lib/api";
+import { ASSETS, ASSET_LIST } from "@/lib/assets";
 import TradingViewWidget from "./TradingViewWidget";
 import AnalyzingOverlay from "./AnalyzingOverlay";
 import SignalResult from "./SignalResult";
 import BrokerCard from "./BrokerCard";
 
-const PAIRS = ["EURUSD", "EURJPY"];
 const TIMEFRAMES = ["M1", "M5"];
 const MIN_ANIMATION_MS = 2600;
 
@@ -78,8 +78,8 @@ export default function MarketAnalyzer() {
 
           <div className="mt-6 space-y-4">
             <div>
-              <label className="mb-2 block font-mono text-[10px] uppercase tracking-widest text-mist-faint">Par</label>
-              <Segmented options={PAIRS} value={pair} onChange={(v) => { setPair(v); setResult(null); }} />
+              <label className="mb-2 flex justify-between font-mono text-[10px] uppercase tracking-widest text-mist-faint"><span>Ativo</span><span className="normal-case tracking-normal text-mist-dim">{ASSETS[pair].name}</span></label>
+              <Segmented options={ASSET_LIST} value={pair} onChange={(v) => { setPair(v); setResult(null); }} />
             </div>
             <div>
               <label className="mb-2 block font-mono text-[10px] uppercase tracking-widest text-mist-faint">Timeframe</label>

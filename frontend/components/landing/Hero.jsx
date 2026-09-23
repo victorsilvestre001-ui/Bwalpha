@@ -75,7 +75,7 @@ export default function Hero() {
             className="mt-6 max-w-xl text-base leading-relaxed text-mist-dim md:text-lg"
           >
             A TradeOn AI lê o mercado em segundos — médias, RSI, MACD, padrões de candle e a leitura dos últimos 5 candles —
-            e entrega uma direção clara para EURUSD e EURJPY em M1 e M5.
+            e entrega uma direção clara para EURUSD, EURJPY e Ouro (XAUUSD) em M1 e M5.
           </motion.p>
 
           <motion.div
@@ -99,7 +99,7 @@ export default function Hero() {
             {[
               { i: Zap, t: "Sinal em segundos" },
               { i: Activity, t: "5+ indicadores combinados" },
-              { i: TrendingUp, t: "EURUSD & EURJPY" }
+              { i: TrendingUp, t: "EURUSD, EURJPY & Ouro" }
             ].map(({ i: Icon, t }) => (
               <span key={t} className="flex items-center gap-2"><Icon size={16} className="text-neon" />{t}</span>
             ))}

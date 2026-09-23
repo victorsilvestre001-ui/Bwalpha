@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 import Reveal from "@/components/Reveal";
 
 const QA = [
-  { q: "O que é a TradeOn AI?", a: "É uma plataforma de análise que combina indicadores técnicos e inteligência artificial para sugerir a direção de EURUSD e EURJPY nos timeframes M1 e M5." },
+  { q: "O que é a TradeOn AI?", a: "É uma plataforma de análise que combina indicadores técnicos e inteligência artificial para sugerir a direção de EURUSD, EURJPY e Ouro (XAUUSD) nos timeframes M1 e M5." },
   { q: "Preciso pagar para usar?", a: "Não. O plano Free libera o painel de análise, o gráfico e o calendário econômico. O VIP libera o assistente de IA ilimitado e recursos extras." },
   { q: "Os sinais garantem lucro?", a: "Não. Nenhuma ferramenta garante resultado. Os sinais são apoio à decisão — sempre use gestão de risco e opere apenas o que pode perder." },
   { q: "Quando o mercado está aberto?", a: "O Forex abre domingo às 22h (UTC) e fecha sexta às 22h (UTC). Fora desse horário o painel avisa que o mercado está fechado." },

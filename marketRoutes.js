@@ -5,15 +5,34 @@ const router = express.Router();
 const AV_BASE = 'https://www.alphavantage.co/query';
 const KEY = () => process.env.ALPHA_VANTAGE_API_KEY;
 
+// Twelve Data: usada para candles intraday (M1/M5) e para o ouro (XAUUSD).
+// O FX_INTRADAY da Alpha Vantage é exclusivo do plano pago e não cobre XAU.
+const TD_BASE = 'https://api.twelvedata.com';
+const TD_KEY = () => process.env.TWELVE_DATA_API_KEY;
+
+// `td` é o símbolo no formato da Twelve Data.
 const PAIRS = [
-    { from: 'EUR', to: 'USD', label: 'EURUSD' },
-    { from: 'EUR', to: 'JPY', label: 'EURJPY' },
+    { from: 'EUR', to: 'USD', label: 'EURUSD', td: 'EUR/USD' },
+    { from: 'EUR', to: 'JPY', label: 'EURJPY', td: 'EUR/JPY' },
+    { from: 'XAU', to: 'USD', label: 'XAUUSD', td: 'XAU/USD' },
 ];
 
 let quotesCache = { data: null, updatedAt: 0 };
 const QUOTES_TTL_MS = 6 * 60 * 60 * 1000;
 
+async function fetchTwelveDataQuote(pair) {
+    const url = `${TD_BASE}/price?symbol=${encodeURIComponent(pair.td)}&apikey=${TD_KEY()}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const rate = parseFloat(data?.price);
+    if (!Number.isFinite(rate)) return { label: pair.label, error: true };
+    return { label: pair.label, rate, updated_at: new Date().toISOString() };
+}
+
 async function fetchQuote(pair) {
+    // A Alpha Vantage não tem cotação de XAU; com a chave da Twelve Data, usa ela para tudo.
+    if (TD_KEY()) return fetchTwelveDataQuote(pair);
+    if (pair.from === 'XAU') return { label: pair.label, error: true };
     const url = `${AV_BASE}?function=CURRENCY_EXCHANGE_RATE&from_currency=${pair.from}&to_currency=${pair.to}&apikey=${KEY()}`;
     const res = await fetch(url);
     const data = await res.json();
@@ -160,12 +179,9 @@ async function getHistory() {
     return historyCache.data || [];
 }
 
-// ---- Sinal técnico (EMA9/EMA21 + RSI14 + MACD) para EURUSD/EURJPY em M1/M5 ----
+// ---- Sinal técnico (EMA9/EMA21 + RSI14 + MACD) para EURUSD/EURJPY/XAUUSD em M1/M5 ----
 
-const SIGNAL_PAIRS = {
-    EURUSD: { from: 'EUR', to: 'USD' },
-    EURJPY: { from: 'EUR', to: 'JPY' },
-};
+const SIGNAL_PAIRS = Object.fromEntries(PAIRS.map((p) => [p.label, p]));
 const SIGNAL_INTERVALS = { M1: '1min', M5: '5min' };
 
 // Forex opera 24h de segunda a sexta. Fecha sexta 22h UTC, reabre domingo 22h UTC.
@@ -231,9 +247,34 @@ function macdHistogramLast(values) {
     return lastMacd - lastSignal;
 }
 
+async function fetchTwelveDataCandles(pair, interval) {
+    const url = `${TD_BASE}/time_series?symbol=${encodeURIComponent(pair.td)}&interval=${interval}&outputsize=100&apikey=${TD_KEY()}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data?.status !== 'ok' || !Array.isArray(data.values)) {
+        console.error(`Twelve Data sem candles para ${pair.td} (${interval}):`, data?.message || data?.status);
+        return null;
+    }
+    // A Twelve Data devolve do mais recente para o mais antigo; o resto do código espera o contrário.
+    return data.values
+        .slice()
+        .reverse()
+        .map((v) => ({
+            open: parseFloat(v.open),
+            high: parseFloat(v.high),
+            low: parseFloat(v.low),
+            close: parseFloat(v.close),
+        }));
+}
+
 async function fetchIntradayCandles(pairLabel, timeframeLabel) {
     const pair = SIGNAL_PAIRS[pairLabel];
     const interval = SIGNAL_INTERVALS[timeframeLabel];
+    if (TD_KEY()) return fetchTwelveDataCandles(pair, interval);
+    if (pair.from === 'XAU') {
+        console.error('XAUUSD precisa da variável TWELVE_DATA_API_KEY configurada.');
+        return null;
+    }
     const url = `${AV_BASE}?function=FX_INTRADAY&from_symbol=${pair.from}&to_symbol=${pair.to}&interval=${interval}&outputsize=compact&apikey=${KEY()}`;
     const res = await fetch(url);
     const data = await res.json();
@@ -528,7 +569,7 @@ router.get('/status', (req, res) => {
 router.post('/signal', authMiddleware, async (req, res) => {
     const { pair, timeframe } = req.body;
     if (!SIGNAL_PAIRS[pair] || !SIGNAL_INTERVALS[timeframe]) {
-        return res.status(400).json({ error: 'Par ou timeframe inválido. Use EURUSD/EURJPY e M1/M5.' });
+        return res.status(400).json({ error: 'Par ou timeframe inválido. Use EURUSD/EURJPY/XAUUSD e M1/M5.' });
     }
     if (!isMarketOpen()) {
         return res.status(409).json({ error: 'Mercado fechado no momento. Os ativos abrem de domingo às 22h até sexta às 22h (horário UTC).', marketClosed: true });

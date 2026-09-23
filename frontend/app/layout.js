@@ -2,7 +2,7 @@ import "./globals.css";
 
 export const metadata = {
   title: "TradeOn AI | Inteligência Artificial para Traders",
-  description: "A TradeOn AI analisa o mercado em segundos com Inteligência Artificial e entrega sinais para EURUSD e EURJPY com leitura técnica completa.",
+  description: "A TradeOn AI analisa o mercado em segundos com Inteligência Artificial e entrega sinais para EURUSD, EURJPY e Ouro (XAUUSD) com leitura técnica completa.",
   icons: { icon: "/icon.svg", apple: "/icon.svg" }
 };
 

@@ -1,6 +1,7 @@
 "use client";
 import { motion } from "framer-motion";
 import { ArrowUpRight, ArrowDownRight, Clock } from "lucide-react";
+import { assetDigits } from "@/lib/assets";
 
 function fmt(n, digits = 5) {
   if (n == null || Number.isNaN(Number(n))) return "—";
@@ -15,7 +16,7 @@ const CONF_STYLE = {
 
 export default function SignalResult({ result, analyzedAt }) {
   const buy = result.direction === "COMPRA";
-  const digits = result.pair?.endsWith("JPY") ? 3 : 5;
+  const digits = assetDigits(result.pair);
   const c5 = result.chinesa5Candles;
 
   const rows = [

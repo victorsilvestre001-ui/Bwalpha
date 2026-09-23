@@ -3,7 +3,7 @@ import Reveal from "@/components/Reveal";
 
 const STEPS = [
   { n: "01", icon: UserPlus, title: "Crie sua conta", text: "Cadastro em menos de um minuto. O plano gratuito já libera o painel de análise." },
-  { n: "02", icon: SlidersHorizontal, title: "Escolha par e tempo", text: "Selecione EURUSD ou EURJPY e o timeframe M1 ou M5." },
+  { n: "02", icon: SlidersHorizontal, title: "Escolha ativo e tempo", text: "Selecione EURUSD, EURJPY ou Ouro (XAUUSD) e o timeframe M1 ou M5." },
   { n: "03", icon: Rocket, title: "Receba o sinal", text: "A IA processa os indicadores e entrega direção, confiança e o detalhamento técnico." }
 ];
 
