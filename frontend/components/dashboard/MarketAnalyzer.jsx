@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { AnimatePresence } from "framer-motion";
-import { Sparkles, AlertTriangle, Lock, Crown, Loader2 } from "lucide-react";
+import { Sparkles, AlertTriangle, Lock, Crown, Loader2, Clock } from "lucide-react";
 import { api } from "@/lib/api";
 import { ASSETS, ASSET_LIST } from "@/lib/assets";
 import TradingViewWidget from "./TradingViewWidget";
@@ -27,10 +27,11 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
   const [timing, setTiming] = useState(null);
   const [error, setError] = useState("");
   const [marketOpen, setMarketOpen] = useState(null);
+  const [offset, setOffset] = useState(null);
 
   useEffect(() => {
     api.marketStatus().then((s) => setMarketOpen(!!s?.open)).catch(() => {});
-    syncClock({ force: true });
+    syncClock({ force: true }).then(setOffset);
   }, []);
 
   async function analyze() {
@@ -38,7 +39,8 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
     setError("");
     setResult(null);
     setTiming(null);
-    syncClock();
+    // Garante o relógio sincronizado antes de marcar o horário do pedido.
+    setOffset(await syncClock());
     const started = now();
     try {
       const data = await api.signal(pair, timeframe);
@@ -71,6 +73,15 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
               </span>
             )}
           </div>
+
+          {offset != null && Math.abs(offset) >= 2000 && (
+            <div className="mt-4 flex items-start gap-2 rounded-lg border border-volt/30 bg-volt/10 px-3 py-2 text-xs text-volt-soft">
+              <Clock size={14} className="mt-0.5 shrink-0" />
+              <span>
+                O relógio do seu aparelho está {Math.round(Math.abs(offset) / 1000)} s {offset > 0 ? "atrasado" : "adiantado"}. Os horários de entrada já estão corrigidos pelo horário do servidor.
+              </span>
+            </div>
+          )}
 
           <div className="mt-6 space-y-4">
             <Dropdown label="Ativo" options={ASSET_OPTIONS} value={pair} onChange={(v) => { setPair(v); setResult(null); }} />

@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, X } from "lucide-react";
 import { isPaid } from "@/components/dashboard/Sidebar";
 import Sidebar from "@/components/dashboard/Sidebar";
+import AutoUpdate from "@/components/AutoUpdate";
 import MarketAnalyzer from "@/components/dashboard/MarketAnalyzer";
 import ChatAssistant from "@/components/dashboard/ChatAssistant";
 import EconomicCalendar from "@/components/dashboard/EconomicCalendar";
@@ -59,6 +60,7 @@ function Dashboard() {
   return (
     <main className="relative min-h-screen bg-void font-body text-mist">
       <div className="aurora pointer-events-none fixed inset-0 opacity-60" />
+      <AutoUpdate />
       <Sidebar user={user} tab={tab} onChangeTab={setTab} onLogout={handleLogout} />
 
       <div className="relative px-4 pb-28 pt-6 md:px-8 lg:ml-64 lg:pb-10 lg:pt-8">
