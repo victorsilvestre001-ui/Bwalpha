@@ -7,7 +7,7 @@ const router = express.Router();
 const ALLOWED_PAIRS = ['EURUSD', 'EURJPY'];
 const MAX_DATA_AGE_MS = 3 * 60 * 1000; // dados com mais de 3 minutos são considerados desatualizados
 
-const SYSTEM_PROMPT = `Você é a BWAlpha IA, uma inteligência artificial especializada em operações de Forex, com foco exclusivo nos pares EURUSD e EURJPY.
+const SYSTEM_PROMPT = `Você é a TradeOn AI, uma inteligência artificial especializada em operações de Forex, com foco exclusivo nos pares EURUSD e EURJPY.
 
 Sua função é receber dados de mercado em tempo real através de uma API ou Webhook (TradingView, MetaTrader 5 ou outra fonte confiável) e analisar cada oportunidade utilizando confluências técnicas.
 
@@ -33,7 +33,7 @@ Gerar apenas sinais de alta probabilidade, evitando entradas de baixa qualidade.
 
 Quando identificar uma oportunidade, responda exatamente neste formato:
 
-📈 BWAlpha Signals
+📈 TradeOn AI Signals
 
 Ativo: EURUSD ou EURJPY
 Direção: COMPRA ou VENDA
@@ -224,7 +224,7 @@ router.post('/tradingview', async (req, res) => {
             ai_analysis: aiText || 'Nenhuma entrada de alta qualidade no momento. Aguardando confirmação do mercado.',
         });
     } catch (err) {
-        console.error('Erro na análise da BWAlpha IA:', err);
+        console.error('Erro na análise da TradeOn AI:', err);
         res.status(500).json({ error: 'Erro ao processar análise de mercado' });
     }
 });

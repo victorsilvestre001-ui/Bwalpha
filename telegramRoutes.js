@@ -22,7 +22,7 @@ async function postSignalToTelegram(signal) {
         'https://exnova.com/lp/start-trading/?aff=830021&aff_model=revenue&afftrack=BwAlpha';
 
     const text =
-        `📈 BWAlpha Signals\n\n` +
+        `📈 TradeOn AI Signals\n\n` +
         `${emoji} ${acao}\n` +
         `📊 Ativo: ${signal.pair}\n` +
         `⏱ Timeframe: ${timeframe}\n` +

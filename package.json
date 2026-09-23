@@ -1,7 +1,7 @@
 {
   "name": "bwalpha-backend",
   "version": "1.0.0",
-  "description": "Backend do BWAlpha AI - sinais, chat de IA, calend\u00e1rio econ\u00f4mico",
+  "description": "Backend da TradeOn AI - sinais, chat de IA, calend\u00e1rio econ\u00f4mico",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

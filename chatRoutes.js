@@ -5,7 +5,7 @@ const { getQuotes, getIndicators, getEconomicSnapshot } = require('./marketRoute
 
 const router = express.Router();
 
-const SYSTEM_PROMPT = `Você é o assistente de IA do BWAlpha, especializado exclusivamente em trading.
+const SYSTEM_PROMPT = `Você é o assistente de IA da TradeOn AI, especializado exclusivamente em trading.
 
 Você pode ajudar com:
 - Explicação de price action e estrutura de mercado

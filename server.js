@@ -57,7 +57,7 @@ app.use('/api/telegram', telegramRoutes);
 app.use('/api/webhook/market', marketAnalysisRoutes);
 
 app.get('/', (req, res) => {
-    res.json({ status: 'BWAlpha AI backend rodando 🚀' });
+    res.json({ status: 'TradeOn AI backend rodando 🚀' });
 });
 
 const SCHEMA_SQL = `
