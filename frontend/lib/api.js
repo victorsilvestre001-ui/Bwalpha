@@ -57,7 +57,7 @@ export const api = {
   publicQuotes: () => request("/api/market/public-quotes", { auth: false }),
   marketStatus: () => request("/api/market/status", { auth: false }),
   serverTime: () => request("/api/market/time", { auth: false }),
-  signal: (pair, timeframe, brokerOffsetMs = 0) => request("/api/market/signal", { method: "POST", body: { pair, timeframe, brokerOffsetMs } }),
+  signal: (pair, timeframe) => request("/api/market/signal", { method: "POST", body: { pair, timeframe } }),
   analyses: (status = "all", limit = 100) => request(`/api/analyses?status=${encodeURIComponent(status)}&limit=${limit}`),
   chat: (message, image_base64) => request("/api/chat", { method: "POST", body: { message, image_base64 } }),
   chatHistory: () => request("/api/chat/history"),

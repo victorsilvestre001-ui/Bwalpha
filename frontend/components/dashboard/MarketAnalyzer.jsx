@@ -10,8 +10,7 @@ import CandleWatch from "./CandleWatch";
 import SignalResult from "./SignalResult";
 import { computeEntry } from "./CandleTimer";
 import Dropdown from "./Dropdown";
-import { now, syncClock, brokerOffset } from "@/lib/clock";
-import BrokerClock from "./BrokerClock";
+import { now, syncClock, startClockSync } from "@/lib/clock";
 
 const ASSET_OPTIONS = ASSET_LIST.map((k) => ({ value: k, label: k, hint: ASSETS[k].name }));
 const TIMEFRAME_OPTIONS = [
@@ -45,7 +44,7 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
 
   useEffect(() => {
     api.marketStatus().then((s) => setMarketOpen(!!s?.open)).catch(() => {});
-    syncClock({ force: true }).then(setOffset);
+    return startClockSync(setOffset);
   }, []);
 
   function cancelWatch() {
@@ -59,7 +58,7 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
     setResult(null);
     setTiming(null);
     // Garante o relógio sincronizado antes de marcar os horários.
-    setOffset(await syncClock());
+    setOffset(await syncClock({ force: true }));
     if (id !== runId.current) return;
 
     if (timeframe === "M1") {
@@ -76,7 +75,7 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
     setLoading(true);
     const started = now();
     try {
-      const data = await api.signal(pair, timeframe, brokerOffset());
+      const data = await api.signal(pair, timeframe);
       if (id !== runId.current) return;
       // No M1 cada segundo conta para a entrada: sem animação mínima.
       const wait = timeframe === "M1" ? 0 : MIN_ANIMATION_MS - (now() - started);
@@ -87,7 +86,7 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
       const local = computeEntry(timeframe, now());
       const entry = data.entry ?? local.entry;
       const expiry = data.expiry ?? local.expiry;
-      setTiming({ requestedAt: data.requestedAt != null ? data.requestedAt + brokerOffset() : started, entry, expiry });
+      setTiming({ requestedAt: data.requestedAt ?? started, entry, expiry });
     } catch (err) {
       if (err.data?.marketClosed) setMarketOpen(false);
       setError(err.message || "Não foi possível gerar o sinal agora.");
@@ -120,8 +119,6 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
               </span>
             </div>
           )}
-
-          <BrokerClock />
 
           <div className="mt-6 space-y-4">
             <Dropdown label="Ativo" options={ASSET_OPTIONS} value={pair} onChange={(v) => { cancelWatch(); setPair(v); setResult(null); }} />

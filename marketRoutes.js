@@ -644,7 +644,6 @@ function computeTechnicalSignal(candles, forming) {
 const M1_MS = 60_000;
 const M1_RELEASE_BEFORE_CLOSE_MS = 13_000; // o app pede o sinal 13s antes do candle fechar
 const M1_MIN_ELAPSED_MS = 30_000;          // antes disso o candle atual ainda diz pouco
-const MAX_BROKER_OFFSET_MS = 10_000;       // ajuste manual do relógio da corretora (±10s)
 const M1_MIN_ENTRY_LEAD_MS = 4_000;
 const M1_MIN_BODY_RATIO = 0.5;
 
@@ -789,8 +788,6 @@ function computeEntry(timeframeLabel, fromMs = Date.now()) {
 
 router.post('/signal', authMiddleware, requireVip, async (req, res) => {
     const { pair, timeframe } = req.body;
-    // Relógio da corretora em relação ao servidor (ajustado pelo usuário no painel).
-    const brokerOffset = Math.max(-MAX_BROKER_OFFSET_MS, Math.min(MAX_BROKER_OFFSET_MS, Number(req.body.brokerOffsetMs) || 0));
     if (!SIGNAL_PAIRS[pair] || !SIGNAL_INTERVALS[timeframe]) {
         return res.status(400).json({ error: 'Par ou timeframe inválido. Use EURUSD/EURJPY/XAUUSD e M1/M5.' });
     }
@@ -813,8 +810,7 @@ router.post('/signal', authMiddleware, requireVip, async (req, res) => {
             result = await getM1Signal(pair, requestedAt);
             entry = bucketStart + M1_MS;
             expiry = entry + M1_MS;
-            // O prazo para entrar conta no relógio da corretora.
-            if (result && entry - (Date.now() + brokerOffset) < M1_MIN_ENTRY_LEAD_MS) {
+            if (result && entry - Date.now() < M1_MIN_ENTRY_LEAD_MS) {
                 // Não dá tempo de entrar neste candle: a entrada vai para o seguinte, com confiança baixa.
                 entry += M1_MS;
                 expiry += M1_MS;
