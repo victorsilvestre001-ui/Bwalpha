@@ -299,6 +299,7 @@
         <div class="gallery">
           <div class="thumbs">${[0, 1, 2].map(i => `<button class="${i ? '' : 'on'}" aria-label="Imagem ${i + 1}">${art(p)}</button>`).join('')}</div>
           <div class="main-img"><div class="tags">${tagsHTML(p)}</div>${art(p)}</div>
+          ${p.imgNote ? `<p class="img-note">${esc(p.imgNote)}</p>` : ''}
         </div>
         <div>
           <a class="brand-link" href="#/marca/${encodeURIComponent(p.brand)}">${esc(p.brand)}</a>

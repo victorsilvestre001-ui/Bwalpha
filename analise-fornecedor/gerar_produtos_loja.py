@@ -8,6 +8,7 @@ import re
 from pathlib import Path
 
 AQUI = Path(__file__).parent
+FOTOS = AQUI.parent / 'loja' / 'img' / 'produtos'
 fonte = (AQUI / 'gerar_planilha.py').read_text(encoding='utf-8')
 dados = {}
 exec(fonte.split('\nFONT = ')[0], dados)  # só as listas, sem gerar o .xlsx
@@ -110,6 +111,13 @@ for (k, nome, marca, cat, qtd, preco_forn, imin, imax, fonte_preco, venda, rec, 
          'tags': tags, 'desc': descricao(nome, marca, sub)}
     if k in VARIACOES:
         p['shades'] = VARIACOES[k]
+    foto = FOTOS / f"{slug(k)}.jpg"
+    if foto.exists():
+        p['img'] = f'img/produtos/{foto.name}'
+        if qtd > 1 and k != 'cilios_8d':
+            p['imgNote'] = f'Foto do expositor do fabricante com {qtd} unidades. Você recebe 1 unidade.'
+        elif k in VARIACOES:
+            p['imgNote'] = f'Foto da versão {VARIACOES[k][0]}.'
     produtos.append(p)
     preco_por_chave[k] = venda
 
@@ -124,13 +132,30 @@ for nome, comps, preco in KITS:
         nomes[c] = nomes.get(c, 0) + 1
     itens = [f"{n}x {next(p['name'] for p in produtos if p['id'] == slug(c))}" if n > 1 else next(p['name'] for p in produtos if p['id'] == slug(c))
              for c, n in nomes.items()]
+    kit_id = 'kit-' + slug(re.sub(r'[^a-z0-9]+', '_', nome.lower()).strip('_'))
+    fotos = [FOTOS / f'{slug(c)}.jpg' for c in dict.fromkeys(comps)]
+    img_kit = None
+    if all(f.exists() for f in fotos):
+        from PIL import Image
+        n = len(fotos)
+        grade = 2 if n > 1 else 1
+        lado = 480 // grade
+        quadro = Image.new('RGB', (480, 480), 'white')
+        for i, f in enumerate(fotos[:4]):
+            x, y = (i % grade) * lado, (i // grade) * lado
+            if n == 3 and i == 2:
+                x = lado // 2
+            quadro.paste(Image.open(f).resize((lado, lado)), (x, y))
+        quadro.save(FOTOS / f'{kit_id}.jpg', quality=85, optimize=True)
+        img_kit = f'img/produtos/{kit_id}.jpg'
     produtos.append({
-        'id': 'kit-' + slug(re.sub(r'[^a-z0-9]+', '_', nome.lower()).strip('_')),
+        'id': kit_id,
         'name': f'Kit {nome.split(" (")[0]}', 'brand': 'Élan Beauté', 'cat': 'kits', 'sub': tipo_kit.get(nome, 'Kits Maquiagem'),
         'price': preco, 'separados': separados,
         'stock': min(next(p['stock'] for p in produtos if p['id'] == slug(c)) // n for c, n in nomes.items()),
         'shape': 'kit', 'colors': ['#ffc2d6', '#d9265f'],
         'tags': ['mais-vendido'] if preco >= 49.9 else [],
+        **({'img': img_kit, 'imgNote': 'Montagem com as fotos dos produtos do kit.'} if img_kit else {}),
         'desc': 'Kit com: ' + ' + '.join(itens) + f'. Comprando separado sai R$ {separados:.2f}'.replace('.', ',') + '.',
     })
 

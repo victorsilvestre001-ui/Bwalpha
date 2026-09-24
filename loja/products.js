@@ -91,7 +91,9 @@ window.PRODUCTS = [
       "#c98a6b"
     ],
     "tags": [],
-    "desc": "Pó Compacto Choco Fun da Fenzza. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+    "desc": "Pó Compacto Choco Fun da Fenzza. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar.",
+    "img": "img/produtos/choco-fun.jpg",
+    "imgNote": "Foto do expositor do fabricante com 24 unidades. Você recebe 1 unidade."
   },
   {
     "id": "blush-velvet",
@@ -107,7 +109,9 @@ window.PRODUCTS = [
       "#c98a6b"
     ],
     "tags": [],
-    "desc": "Blush Matte Velvet Cheeks da Dapop. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+    "desc": "Blush Matte Velvet Cheeks da Dapop. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar.",
+    "img": "img/produtos/blush-velvet.jpg",
+    "imgNote": "Foto do expositor do fabricante com 24 unidades. Você recebe 1 unidade."
   },
   {
     "id": "contorno-velvet",
@@ -123,7 +127,9 @@ window.PRODUCTS = [
       "#c98a6b"
     ],
     "tags": [],
-    "desc": "Contorno Velvet (DP2471) da Dapop. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+    "desc": "Contorno Velvet (DP2471) da Dapop. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar.",
+    "img": "img/produtos/contorno-velvet.jpg",
+    "imgNote": "Foto do expositor do fabricante com 24 unidades. Você recebe 1 unidade."
   },
   {
     "id": "ilum-velvet",
@@ -139,7 +145,9 @@ window.PRODUCTS = [
       "#c98a6b"
     ],
     "tags": [],
-    "desc": "Iluminador Velvet Glow da Dapop. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+    "desc": "Iluminador Velvet Glow da Dapop. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar.",
+    "img": "img/produtos/ilum-velvet.jpg",
+    "imgNote": "Foto do expositor do fabricante com 24 unidades. Você recebe 1 unidade."
   },
   {
     "id": "micelar-pantenol",
@@ -157,7 +165,8 @@ window.PRODUCTS = [
     "tags": [
       "leve3pague2"
     ],
-    "desc": "Água Micelar Pantenol e Ác. Hialurônico 200ml da Dapop. Para a rotina de limpeza e preparo da pele, de manhã e à noite."
+    "desc": "Água Micelar Pantenol e Ác. Hialurônico 200ml da Dapop. Para a rotina de limpeza e preparo da pele, de manhã e à noite.",
+    "img": "img/produtos/micelar-pantenol.jpg"
   },
   {
     "id": "tonico-glicolico",
@@ -175,7 +184,8 @@ window.PRODUCTS = [
     "tags": [
       "leve3pague2"
     ],
-    "desc": "Tônico Facial Ácido Glicólico 200ml da Dapop. Para a rotina de limpeza e preparo da pele, de manhã e à noite."
+    "desc": "Tônico Facial Ácido Glicólico 200ml da Dapop. Para a rotina de limpeza e preparo da pele, de manhã e à noite.",
+    "img": "img/produtos/tonico-glicolico.jpg"
   },
   {
     "id": "adstringente",
@@ -193,7 +203,8 @@ window.PRODUCTS = [
     "tags": [
       "leve3pague2"
     ],
-    "desc": "Loção Adstringente Chá Verde 200ml da Dapop. Para a rotina de limpeza e preparo da pele, de manhã e à noite."
+    "desc": "Loção Adstringente Chá Verde 200ml da Dapop. Para a rotina de limpeza e preparo da pele, de manhã e à noite.",
+    "img": "img/produtos/adstringente.jpg"
   },
   {
     "id": "kit4-esponjas",
@@ -211,7 +222,8 @@ window.PRODUCTS = [
     "tags": [
       "mais-vendido"
     ],
-    "desc": "Kit Esponjas Makeup Blender Puff c/4 da Mahav. Acessório prático para a sua rotina de beleza."
+    "desc": "Kit Esponjas Makeup Blender Puff c/4 da Mahav. Acessório prático para a sua rotina de beleza.",
+    "img": "img/produtos/kit4-esponjas.jpg"
   },
   {
     "id": "cilios-8d",
@@ -238,7 +250,9 @@ window.PRODUCTS = [
       "F019",
       "F020",
       "F022"
-    ]
+    ],
+    "img": "img/produtos/cilios-8d.jpg",
+    "imgNote": "Foto da versão F007."
   },
   {
     "id": "serum-ah",
@@ -256,7 +270,8 @@ window.PRODUCTS = [
     "tags": [
       "relampago"
     ],
-    "desc": "Sérum Facial Ácido Hialurônico Reflection 30ml da Safira. Sérum facial de absorção rápida para usar antes do hidratante."
+    "desc": "Sérum Facial Ácido Hialurônico Reflection 30ml da Safira. Sérum facial de absorção rápida para usar antes do hidratante.",
+    "img": "img/produtos/serum-ah.jpg"
   },
   {
     "id": "serum-clareador",
@@ -272,7 +287,8 @@ window.PRODUCTS = [
       "#e59a2f"
     ],
     "tags": [],
-    "desc": "Sérum Facial Clareador Reflection 30ml da Safira. Sérum facial de absorção rápida para usar antes do hidratante."
+    "desc": "Sérum Facial Clareador Reflection 30ml da Safira. Sérum facial de absorção rápida para usar antes do hidratante.",
+    "img": "img/produtos/serum-clareador.jpg"
   },
   {
     "id": "serum-vitc",
@@ -290,7 +306,8 @@ window.PRODUCTS = [
     "tags": [
       "mais-vendido"
     ],
-    "desc": "Sérum Facial Vitamina C Reflection 30ml da Safira. Sérum facial de absorção rápida para usar antes do hidratante."
+    "desc": "Sérum Facial Vitamina C Reflection 30ml da Safira. Sérum facial de absorção rápida para usar antes do hidratante.",
+    "img": "img/produtos/serum-vitc.jpg"
   },
   {
     "id": "ureia",
@@ -308,7 +325,8 @@ window.PRODUCTS = [
     "tags": [
       "relampago"
     ],
-    "desc": "Creme Hidratante Ureia 3% 200g da Safira. Hidratação para o corpo com fragrância gostosa."
+    "desc": "Creme Hidratante Ureia 3% 200g da Safira. Hidratação para o corpo com fragrância gostosa.",
+    "img": "img/produtos/ureia.jpg"
   },
   {
     "id": "tatoo-brow",
@@ -326,7 +344,9 @@ window.PRODUCTS = [
     "tags": [
       "leve3pague2"
     ],
-    "desc": "Máscara para Sobrancelhas Tatoo Brow da Femme Paris. Para sobrancelhas alinhadas e definidas o dia todo."
+    "desc": "Máscara para Sobrancelhas Tatoo Brow da Femme Paris. Para sobrancelhas alinhadas e definidas o dia todo.",
+    "img": "img/produtos/tatoo-brow.jpg",
+    "imgNote": "Foto do expositor do fabricante com 24 unidades. Você recebe 1 unidade."
   },
   {
     "id": "contorno-stick",
@@ -344,7 +364,9 @@ window.PRODUCTS = [
     "tags": [
       "relampago"
     ],
-    "desc": "Contorno Stick da Femme Paris. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+    "desc": "Contorno Stick da Femme Paris. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar.",
+    "img": "img/produtos/contorno-stick.jpg",
+    "imgNote": "Foto do expositor do fabricante com 24 unidades. Você recebe 1 unidade."
   },
   {
     "id": "gloss-peeloff",
@@ -362,7 +384,9 @@ window.PRODUCTS = [
     "tags": [
       "leve3pague2"
     ],
-    "desc": "Lip Gloss Peel-Off da Femme Paris. Cor e brilho para os lábios, prático para levar na bolsa."
+    "desc": "Lip Gloss Peel-Off da Femme Paris. Cor e brilho para os lábios, prático para levar na bolsa.",
+    "img": "img/produtos/gloss-peeloff.jpg",
+    "imgNote": "Foto do expositor do fabricante com 24 unidades. Você recebe 1 unidade."
   },
   {
     "id": "pentes",
@@ -378,7 +402,8 @@ window.PRODUCTS = [
       "#b5838d"
     ],
     "tags": [],
-    "desc": "Conjunto de Pentes e Acessórios c/9 peças da —. Acessório prático para a sua rotina de beleza."
+    "desc": "Conjunto de Pentes e Acessórios c/9 peças da —. Acessório prático para a sua rotina de beleza.",
+    "img": "img/produtos/pentes.jpg"
   },
   {
     "id": "tapioca",
@@ -397,7 +422,9 @@ window.PRODUCTS = [
       "mais-vendido",
       "leve3pague2"
     ],
-    "desc": "Pó de Tapioca Lilás Selva Neon da Miss Rôse. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+    "desc": "Pó de Tapioca Lilás Selva Neon da Miss Rôse. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar.",
+    "img": "img/produtos/tapioca.jpg",
+    "imgNote": "Foto do expositor do fabricante com 15 unidades. Você recebe 1 unidade."
   },
   {
     "id": "tint-brow",
@@ -415,7 +442,9 @@ window.PRODUCTS = [
     "tags": [
       "leve3pague2"
     ],
-    "desc": "Tint Brow Preenche Sobrancelha da Wike Make. Para sobrancelhas alinhadas e definidas o dia todo."
+    "desc": "Tint Brow Preenche Sobrancelha da Wike Make. Para sobrancelhas alinhadas e definidas o dia todo.",
+    "img": "img/produtos/tint-brow.jpg",
+    "imgNote": "Foto do expositor do fabricante com 24 unidades. Você recebe 1 unidade."
   },
   {
     "id": "gel-sobrancelha",
@@ -433,7 +462,9 @@ window.PRODUCTS = [
     "tags": [
       "leve3pague2"
     ],
-    "desc": "Gel Fixador de Sobrancelhas com Pente da Wike Make. Para sobrancelhas alinhadas e definidas o dia todo."
+    "desc": "Gel Fixador de Sobrancelhas com Pente da Wike Make. Para sobrancelhas alinhadas e definidas o dia todo.",
+    "img": "img/produtos/gel-sobrancelha.jpg",
+    "imgNote": "Foto do expositor do fabricante com 24 unidades. Você recebe 1 unidade."
   },
   {
     "id": "gloss-chaveiro",
@@ -451,7 +482,9 @@ window.PRODUCTS = [
     "tags": [
       "leve3pague2"
     ],
-    "desc": "Lip Gloss com Chaveiro da Wike Make. Cor e brilho para os lábios, prático para levar na bolsa."
+    "desc": "Lip Gloss com Chaveiro da Wike Make. Cor e brilho para os lábios, prático para levar na bolsa.",
+    "img": "img/produtos/gloss-chaveiro.jpg",
+    "imgNote": "Foto do expositor do fabricante com 24 unidades. Você recebe 1 unidade."
   },
   {
     "id": "body-libertad",
@@ -467,7 +500,8 @@ window.PRODUCTS = [
       "#e0a96d"
     ],
     "tags": [],
-    "desc": "Hidratante Corporal Body Cream Libertad 150ml da Cap Life. Hidratação para o corpo com fragrância gostosa."
+    "desc": "Hidratante Corporal Body Cream Libertad 150ml da Cap Life. Hidratação para o corpo com fragrância gostosa.",
+    "img": "img/produtos/body-libertad.jpg"
   },
   {
     "id": "betterme-hidratante",
@@ -483,7 +517,8 @@ window.PRODUCTS = [
       "#e0a96d"
     ],
     "tags": [],
-    "desc": "Super Hidratante Corporal e Facial Vitamina C 150g da Better Me. Hidratação para o corpo com fragrância gostosa."
+    "desc": "Super Hidratante Corporal e Facial Vitamina C 150g da Better Me. Hidratação para o corpo com fragrância gostosa.",
+    "img": "img/produtos/betterme-hidratante.jpg"
   },
   {
     "id": "pink21-all-day",
@@ -499,7 +534,9 @@ window.PRODUCTS = [
       "#b0244d"
     ],
     "tags": [],
-    "desc": "Batom Líquido Efeito Matte All Day da Pink 21. Cor e brilho para os lábios, prático para levar na bolsa."
+    "desc": "Batom Líquido Efeito Matte All Day da Pink 21. Cor e brilho para os lábios, prático para levar na bolsa.",
+    "img": "img/produtos/pink21-all-day.jpg",
+    "imgNote": "Foto do expositor do fabricante com 48 unidades. Você recebe 1 unidade."
   },
   {
     "id": "splash-fem",
@@ -526,7 +563,9 @@ window.PRODUCTS = [
       "Golden Vip",
       "Yara Zahra",
       "Good Angel"
-    ]
+    ],
+    "img": "img/produtos/splash-fem.jpg",
+    "imgNote": "Foto da versão Obsession Pink."
   },
   {
     "id": "splash-men",
@@ -549,7 +588,9 @@ window.PRODUCTS = [
       "Asad Black",
       "Royal Black",
       "Hayat Al Gold"
-    ]
+    ],
+    "img": "img/produtos/splash-men.jpg",
+    "imgNote": "Foto da versão Asad Black."
   },
   {
     "id": "body-cream-natuza",
@@ -573,7 +614,9 @@ window.PRODUCTS = [
       "Obsession Pink",
       "Good Angel",
       "Golden Vip"
-    ]
+    ],
+    "img": "img/produtos/body-cream-natuza.jpg",
+    "imgNote": "Foto da versão Libertad."
   },
   {
     "id": "pink21-primer-hidro",
@@ -589,7 +632,8 @@ window.PRODUCTS = [
       "#c98a6b"
     ],
     "tags": [],
-    "desc": "Primer Hidratante Hidro 45ml (CS6372) da Pink 21. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+    "desc": "Primer Hidratante Hidro 45ml (CS6372) da Pink 21. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar.",
+    "img": "img/produtos/pink21-primer-hidro.jpg"
   },
   {
     "id": "amora-blush-bastao",
@@ -605,7 +649,9 @@ window.PRODUCTS = [
       "#c98a6b"
     ],
     "tags": [],
-    "desc": "Blush em Bastão Amora da Pink 21. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+    "desc": "Blush em Bastão Amora da Pink 21. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar.",
+    "img": "img/produtos/amora-blush-bastao.jpg",
+    "imgNote": "Foto do expositor do fabricante com 24 unidades. Você recebe 1 unidade."
   },
   {
     "id": "color-contour",
@@ -624,7 +670,9 @@ window.PRODUCTS = [
       "mais-vendido",
       "leve3pague2"
     ],
-    "desc": "Contorno em Bastão Color Contour da Pink 21. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+    "desc": "Contorno em Bastão Color Contour da Pink 21. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar.",
+    "img": "img/produtos/color-contour.jpg",
+    "imgNote": "Foto do expositor do fabricante com 48 unidades. Você recebe 1 unidade."
   },
   {
     "id": "the-pink-blush",
@@ -642,7 +690,9 @@ window.PRODUCTS = [
     "tags": [
       "relampago"
     ],
-    "desc": "Blush Líquido The Pink Multiuso da Pink 21. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+    "desc": "Blush Líquido The Pink Multiuso da Pink 21. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar.",
+    "img": "img/produtos/the-pink-blush.jpg",
+    "imgNote": "Foto do expositor do fabricante com 24 unidades. Você recebe 1 unidade."
   },
   {
     "id": "iconic-paleta",
@@ -664,7 +714,9 @@ window.PRODUCTS = [
     "shades": [
       "Cor 01",
       "Cor 03"
-    ]
+    ],
+    "img": "img/produtos/iconic-paleta.jpg",
+    "imgNote": "Foto da versão Cor 01."
   },
   {
     "id": "pink21-corretivo-cs5963",
@@ -682,7 +734,9 @@ window.PRODUCTS = [
     "tags": [
       "leve3pague2"
     ],
-    "desc": "Corretivo Líquido (CS5963) da Pink 21. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+    "desc": "Corretivo Líquido (CS5963) da Pink 21. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar.",
+    "img": "img/produtos/pink21-corretivo-cs5963.jpg",
+    "imgNote": "Foto do expositor do fabricante com 24 unidades. Você recebe 1 unidade."
   },
   {
     "id": "color-cover",
@@ -701,7 +755,9 @@ window.PRODUCTS = [
       "relampago",
       "leve3pague2"
     ],
-    "desc": "Corretivo em Bastão Color Cover da Pink 21. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+    "desc": "Corretivo em Bastão Color Cover da Pink 21. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar.",
+    "img": "img/produtos/color-cover.jpg",
+    "imgNote": "Foto do expositor do fabricante com 48 unidades. Você recebe 1 unidade."
   },
   {
     "id": "blush-multifuncional",
@@ -719,7 +775,9 @@ window.PRODUCTS = [
     "tags": [
       "mais-vendido"
     ],
-    "desc": "Blush Líquido Multifuncional da Pink 21. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+    "desc": "Blush Líquido Multifuncional da Pink 21. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar.",
+    "img": "img/produtos/blush-multifuncional.jpg",
+    "imgNote": "Foto do expositor do fabricante com 24 unidades. Você recebe 1 unidade."
   },
   {
     "id": "sp-mascara-36h",
@@ -737,7 +795,9 @@ window.PRODUCTS = [
     "tags": [
       "novo"
     ],
-    "desc": "Máscara para Cílios 36h Curva e Volume da Super Poderes. Para valorizar o olhar, da maquiagem leve do dia à produção da noite."
+    "desc": "Máscara para Cílios 36h Curva e Volume da Super Poderes. Para valorizar o olhar, da maquiagem leve do dia à produção da noite.",
+    "img": "img/produtos/sp-mascara-36h.jpg",
+    "imgNote": "Foto do expositor do fabricante com 24 unidades. Você recebe 1 unidade."
   },
   {
     "id": "bf-iluminador-stick",
@@ -755,7 +815,9 @@ window.PRODUCTS = [
     "tags": [
       "novo"
     ],
-    "desc": "Iluminador Stick Multifuncional da Bellafemme. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+    "desc": "Iluminador Stick Multifuncional da Bellafemme. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar.",
+    "img": "img/produtos/bf-iluminador-stick.jpg",
+    "imgNote": "Foto do expositor do fabricante com 24 unidades. Você recebe 1 unidade."
   },
   {
     "id": "bf-corretivo-stick",
@@ -773,7 +835,9 @@ window.PRODUCTS = [
     "tags": [
       "novo"
     ],
-    "desc": "Corretivo Stick Multifuncional da Bellafemme. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+    "desc": "Corretivo Stick Multifuncional da Bellafemme. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar.",
+    "img": "img/produtos/bf-corretivo-stick.jpg",
+    "imgNote": "Foto do expositor do fabricante com 24 unidades. Você recebe 1 unidade."
   },
   {
     "id": "bf-blush-stick",
@@ -792,7 +856,9 @@ window.PRODUCTS = [
       "mais-vendido",
       "novo"
     ],
-    "desc": "Blush Stick Multifuncional (BF10197) da Bellafemme. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+    "desc": "Blush Stick Multifuncional (BF10197) da Bellafemme. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar.",
+    "img": "img/produtos/bf-blush-stick.jpg",
+    "imgNote": "Foto do expositor do fabricante com 24 unidades. Você recebe 1 unidade."
   },
   {
     "id": "kit-pincas",
@@ -811,7 +877,8 @@ window.PRODUCTS = [
       "mais-vendido",
       "novo"
     ],
-    "desc": "Kit de Pinças para Sobrancelha (4 pinças) da Ruby Anjo. Acessório prático para a sua rotina de beleza."
+    "desc": "Kit de Pinças para Sobrancelha (4 pinças) da Ruby Anjo. Acessório prático para a sua rotina de beleza.",
+    "img": "img/produtos/kit-pincas.jpg"
   },
   {
     "id": "kit-pele-de-vidro",
@@ -830,6 +897,8 @@ window.PRODUCTS = [
     "tags": [
       "mais-vendido"
     ],
+    "img": "img/produtos/kit-pele-de-vidro.jpg",
+    "imgNote": "Montagem com as fotos dos produtos do kit.",
     "desc": "Kit com: Sérum Facial Ácido Hialurônico Reflection 30ml + Sérum Facial Vitamina C Reflection 30ml + Sérum Facial Clareador Reflection 30ml, Comprando separado sai R$ 50,70."
   },
   {
@@ -849,6 +918,8 @@ window.PRODUCTS = [
     "tags": [
       "mais-vendido"
     ],
+    "img": "img/produtos/kit-pele-perfeita.jpg",
+    "imgNote": "Montagem com as fotos dos produtos do kit.",
     "desc": "Kit com: Blush Matte Velvet Cheeks + Contorno Velvet + Iluminador Velvet Glow + Pó de Tapioca Lilás Selva Neon, Comprando separado sai R$ 56,60."
   },
   {
@@ -866,6 +937,8 @@ window.PRODUCTS = [
       "#d9265f"
     ],
     "tags": [],
+    "img": "img/produtos/kit-rotina-skincare.jpg",
+    "imgNote": "Montagem com as fotos dos produtos do kit.",
     "desc": "Kit com: Água Micelar Pantenol e Ác. Hialurônico 200ml + Tônico Facial Ácido Glicólico 200ml + Loção Adstringente Chá Verde 200ml, Comprando separado sai R$ 40,70."
   },
   {
@@ -883,6 +956,8 @@ window.PRODUCTS = [
       "#d9265f"
     ],
     "tags": [],
+    "img": "img/produtos/kit-olhar-poderoso.jpg",
+    "imgNote": "Montagem com as fotos dos produtos do kit.",
     "desc": "Kit com: 3x Cílios Postiços 8D (F007/F011/F012/F015/F019/F020/F022) + Máscara para Cílios 36h Curva e Volume + Máscara para Sobrancelhas Tatoo Brow, Comprando separado sai R$ 55,50."
   },
   {
@@ -900,6 +975,8 @@ window.PRODUCTS = [
       "#d9265f"
     ],
     "tags": [],
+    "img": "img/produtos/kit-sobrancelha-perfeita.jpg",
+    "imgNote": "Montagem com as fotos dos produtos do kit.",
     "desc": "Kit com: Tint Brow Preenche Sobrancelha + Gel Fixador de Sobrancelhas com Pente + Máscara para Sobrancelhas Tatoo Brow + Kit de Pinças para Sobrancelha (4 pinças), Comprando separado sai R$ 58,60."
   },
   {
@@ -917,6 +994,8 @@ window.PRODUCTS = [
       "#d9265f"
     ],
     "tags": [],
+    "img": "img/produtos/kit-perfumada-splash-creme.jpg",
+    "imgNote": "Montagem com as fotos dos produtos do kit.",
     "desc": "Kit com: Body Splash 120ml femininos (7 fragrâncias) + Hidratante Body Cream 120ml (4 fragrâncias), Comprando separado sai R$ 47,80."
   },
   {
@@ -934,6 +1013,8 @@ window.PRODUCTS = [
       "#d9265f"
     ],
     "tags": [],
+    "img": "img/produtos/kit-presente-masculino-2-splash.jpg",
+    "imgNote": "Montagem com as fotos dos produtos do kit.",
     "desc": "Kit com: 2x Body Splash For Men 120ml (3 fragrâncias), Comprando separado sai R$ 49,80."
   },
   {
@@ -953,6 +1034,8 @@ window.PRODUCTS = [
     "tags": [
       "mais-vendido"
     ],
+    "img": "img/produtos/kit-make-completa.jpg",
+    "imgNote": "Montagem com as fotos dos produtos do kit.",
     "desc": "Kit com: Paleta de Sombras The Iconic (Cor 01 e Cor 03) + Blush Líquido The Pink Multiuso + Contorno em Bastão Color Contour + Primer Hidratante Hidro 45ml, Comprando separado sai R$ 65,60."
   },
   {
@@ -972,6 +1055,8 @@ window.PRODUCTS = [
     "tags": [
       "mais-vendido"
     ],
+    "img": "img/produtos/kit-pele-pink-21.jpg",
+    "imgNote": "Montagem com as fotos dos produtos do kit.",
     "desc": "Kit com: Corretivo em Bastão Color Cover + Contorno em Bastão Color Contour + Blush Líquido Multifuncional + Primer Hidratante Hidro 45ml, Comprando separado sai R$ 56,60."
   },
   {
@@ -991,6 +1076,8 @@ window.PRODUCTS = [
     "tags": [
       "mais-vendido"
     ],
+    "img": "img/produtos/kit-trio-stick-bellafemme.jpg",
+    "imgNote": "Montagem com as fotos dos produtos do kit.",
     "desc": "Kit com: Blush Stick Multifuncional + Iluminador Stick Multifuncional + Corretivo Stick Multifuncional, Comprando separado sai R$ 59,70."
   }
 ];
