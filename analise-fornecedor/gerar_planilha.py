@@ -159,6 +159,26 @@ PRODUTOS = [
     ('coelho_lip_oil', 'Lip Oil Hidratante Coelho Encantado', 'MiaTeen', 'Maquiagem – Lábios', 36, 194.70, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (muitos gloss)', 'N', 10, 'Caixa com 36'),
     ('curl_up', 'Máscara para Cílios Curl Up', 'Pink 21', 'Maquiagem – Olhos', 24, 177.90, 12.90, 14.90, 'Estimado', 14.90, 'Opcional', 'N', 10, 'A Super Poderes 36h é mais barata'),
     ('extra_gloss', 'Lip Gloss Extra Gloss', 'Pink 21', 'Maquiagem – Lábios', 24, 158.80, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (muitos gloss)', 'N', 10, ''),
+    # Lote 11
+    ('passion_contorno_labios', 'Contorno para Lábios Full Cover Passion', 'Pink 21', 'Maquiagem – Lábios', 48, 304.60, 7.69, 12.90, 'Estimado', 9.90, 'Confirmar qtd', 'N', 11, 'Qtd na caixa cortada no print ("C/4..."): considerei 48'),
+    ('duo_sobrancelha', 'Paleta de Sobrancelha Duo', 'Wike Make', 'Maquiagem – Sobrancelhas', 1, 6.20, 12.90, 14.90, 'Estimado', 14.90, 'Opcional', 'N', 11, 'Com pincel'),
+    ('wike_po_compacto', 'Pó Compacto (2 coleções de cores)', 'Wike Make', 'Maquiagem – Rosto', 24, 151.50, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 11, ''),
+    ('wike_glamour', 'Lip Gloss Glamour', 'Wike Make', 'Maquiagem – Lábios', 24, 151.50, 7.52, 10.00, 'Estimado', 11.90, 'Evitar (muitos gloss)', 'N', 11, ''),
+    ('wike_loop', 'Lip Gloss Loop com chaveiro', 'Wike Make', 'Maquiagem – Lábios', 24, 144.40, 7.52, 10.00, 'Estimado', 11.90, 'Evitar (muitos gloss)', 'N', 11, ''),
+    ('donut_glaze', 'Lip Gloss Donut Glaze', 'Pink 21', 'Maquiagem – Lábios', 24, 158.80, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (muitos gloss)', 'N', 11, ''),
+    ('diamond_pink', 'Lip Gloss Diamond Pink', 'Pink 21', 'Maquiagem – Lábios', 24, 126.40, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (muitos gloss)', 'N', 11, ''),
+    ('all_day_stay', 'Batom Líquido All Day Stay', 'Pink 21', 'Maquiagem – Lábios', 48, 317.60, 10.00, 24.99, 'Estimado', 14.90, 'Evitar (All Day é mais barato)', 'N', 11, 'Caixa com 48'),
+    ('pink21_blush_contorno_bastao', 'Blush e Contorno em Bastão', 'Pink 21', 'Maquiagem – Rosto', 24, 158.80, 14.90, 18.50, 'Estimado', 14.90, 'Opcional', 'N', 11, ''),
+    ('lip_oil_juicy', 'Lip Oil Juicy (CS5287)', 'Pink 21', 'Maquiagem – Lábios', 24, 160.40, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (muitos gloss)', 'N', 11, ''),
+    ('pink21_corretivo_esponja', 'Corretivo Líquido com Aplicador Esponja', 'Pink 21', 'Maquiagem – Rosto', 24, 126.40, 12.90, 12.90, 'Estimado', 12.90, 'Confirmar qtd', 'N', 11, 'Qtd na caixa cortada no print: considerei 24'),
+    ('toalhas_compactas', 'Toalhas Compactas (pacote c/6)', 'Vivai', 'Acessórios', 1, 3.99, 7.90, 9.90, 'Estimado', 8.90, 'Só em kit / brinde', 'N', 11, ''),
+    ('bf_iluminador_stick', 'Iluminador Stick Multifuncional', 'Bellafemme', 'Maquiagem – Rosto', 24, 145.80, 19.90, 26.90, 'Estimado', 19.90, 'Comprar (kit Trio Stick)', 'S', 11, 'Mesma linha do Blush Stick (R$ 26,90 no site da marca)'),
+    ('bf_corretivo_stick', 'Corretivo Stick Multifuncional', 'Bellafemme', 'Maquiagem – Rosto', 24, 145.80, 19.90, 26.90, 'Estimado', 19.90, 'Comprar (kit Trio Stick)', 'S', 11, 'Mesma linha do Blush Stick'),
+    ('bf_blush_stick', 'Blush Stick Multifuncional (BF10197)', 'Bellafemme', 'Maquiagem – Rosto', 24, 145.80, 23.70, 26.90, 'Confirmado', 19.90, 'Comprar', 'S', 11, 'R$ 26,90 no site oficial da Bella Femme'),
+    ('bf_glazed', 'Batom Hidratante Glazed', 'Bellafemme', 'Maquiagem – Lábios', 24, 116.70, 12.90, 14.90, 'Estimado', 12.90, 'Opcional', 'N', 11, ''),
+    ('bf_cronos', 'Batom Cronos (BF10149)', 'Bellafemme', 'Maquiagem – Lábios', 24, 126.40, 12.90, 14.90, 'Estimado', 12.90, 'Opcional', 'N', 11, ''),
+    ('bf_po_tons_escuros', 'Pó Compacto 4 Tonalidades Tons Escuros', 'Bellafemme', 'Maquiagem – Rosto', 24, 129.60, 16.90, 20.00, 'Estimado', 16.90, 'Opcional (confirmar qtd)', 'N', 11, 'Qtd cortada no print: considerei 24 (outro atacado vende caixa de 32). Pó para pele negra tem pouca oferta: bom diferencial'),
+    ('ursinho_gloss', 'Brilho Labial Ursinho', 'Maria Pink', 'Maquiagem – Lábios', 24, 165.30, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (muitos gloss)', 'N', 11, ''),
 ]
 
 # (nome, componentes (chaves; repetir = mais de uma unidade), preço de venda)
@@ -173,6 +193,7 @@ KITS = [
     ('Presente Masculino (2 splash)', ['splash_men', 'splash_men'], 44.90),
     ('Make Completa', ['iconic_paleta', 'the_pink_blush', 'color_contour', 'pink21_primer_hidro'], 59.90),
     ('Pele Pink 21', ['color_cover', 'color_contour', 'blush_multifuncional', 'pink21_primer_hidro'], 49.90),
+    ('Trio Stick Bellafemme', ['bf_blush_stick', 'bf_iluminador_stick', 'bf_corretivo_stick'], 54.90),
 ]
 
 FONT = 'Arial'
