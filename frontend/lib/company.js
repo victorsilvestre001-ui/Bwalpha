@@ -5,6 +5,6 @@ export const COMPANY = {
   brand: "TradeOn AI",
   name: process.env.NEXT_PUBLIC_COMPANY_NAME || "",
   document: process.env.NEXT_PUBLIC_COMPANY_DOC || "",
-  email: process.env.NEXT_PUBLIC_CONTACT_EMAIL || "",
+  email: process.env.NEXT_PUBLIC_CONTACT_EMAIL || "tradeonia@gmail.com",
   updatedAt: "24 de setembro de 2026"
 };
