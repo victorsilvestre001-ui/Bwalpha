@@ -166,9 +166,9 @@
 
   // ---------- Páginas ----------
   const slides = [
-    { bg: 'linear-gradient(120deg,#ffe3ec,#ffc9dc)', eyebrow: '⚡ Oferta relâmpago', title: 'Até 50% OFF em maquiagem importada', text: 'Os queridinhos das blogueiras com preço de outlet. Só até meia-noite!', cta: 'Aproveitar ofertas', href: '#/ofertas', ids: ['paleta-sunset', 'po-solto-cherry', 'spray-fixador'] },
-    { bg: 'linear-gradient(120deg,#f3f0ff,#d0bfff)', eyebrow: '🔥 Leve 3 pague 2', title: 'Monte seu kit e pague só 2', text: 'Batons, glosses, esmaltes, esponjas e muito mais. O desconto entra sozinho no carrinho.', cta: 'Montar meu kit', href: '#/promo/leve3pague2', ids: ['batom-matte-rose', 'esmalte-gel', 'gloss-cristal'] },
-    { bg: 'linear-gradient(120deg,#fff4e0,#ffd8a8)', eyebrow: '✨ Skincare', title: 'Pele de vidro com Vitamina C', text: 'Rotina completa com até 40% OFF e frete grátis acima de R$ 199.', cta: 'Ver skincare', href: '#/c/skincare', ids: ['hidratante-gel', 'serum-vitc', 'protetor-50'] }
+    { bg: 'linear-gradient(120deg,#ffe3ec,#ffc9dc)', eyebrow: '⚡ Oferta relâmpago', title: 'Até 50% OFF em maquiagem importada', text: 'Os queridinhos das blogueiras com preço de outlet. Só até meia-noite!', cta: 'Aproveitar ofertas', href: '#/ofertas', img: 'img/banner-maquiagem.jpg', fade: '#f3b4c2', alt: 'Mulher negra aplicando sombra com pincel', ids: ['paleta-sunset', 'po-solto-cherry', 'spray-fixador'] },
+    { bg: 'linear-gradient(120deg,#f3f0ff,#d0bfff)', eyebrow: '🔥 Leve 3 pague 2', title: 'Monte seu kit e pague só 2', text: 'Batons, glosses, esmaltes, esponjas e muito mais. O desconto entra sozinho no carrinho.', cta: 'Montar meu kit', href: '#/promo/leve3pague2', img: 'img/banner-batom.jpg', fade: '#bba6da', alt: 'Mulher branca passando batom líquido', ids: ['batom-matte-rose', 'esmalte-gel', 'gloss-cristal'] },
+    { bg: 'linear-gradient(120deg,#fff4e0,#ffd8a8)', eyebrow: '✨ Skincare', title: 'Pele de vidro com Vitamina C', text: 'Rotina completa com até 40% OFF e frete grátis acima de R$ 199.', cta: 'Ver skincare', href: '#/c/skincare', img: 'img/banner-skincare.jpg', fade: '#dca483', alt: 'Mulher negra aplicando sérum de vitamina C', ids: ['hidratante-gel', 'serum-vitc', 'protetor-50'] }
   ];
   let slideTimer;
 
@@ -179,9 +179,9 @@
     const brands = [...new Set(PRODUCTS.map(p => p.brand))];
     app.innerHTML = `
       <section class="hero">
-        <div class="slides" id="slides">${slides.map(s => `
-          <div class="slide" style="background:${s.bg}"><div class="container">
-            <div><span class="eyebrow">${s.eyebrow}</span><h1>${s.title}</h1><p>${s.text}</p><a class="btn btn-primary btn-lg" href="${s.href}">${s.cta} →</a></div>
+        <div class="slides" id="slides">${slides.map((s, i) => `
+          <div class="slide${s.img ? ' has-photo' : ''}" style="background:${s.bg}${s.img ? `;--fade:${s.fade}` : ''}">${s.img ? `<img class="slide-photo" src="${s.img}" alt="${esc(s.alt)}"${i ? ' loading="lazy"' : ''} onerror="this.parentNode.classList.remove('has-photo');this.remove()">` : ''}<div class="container">
+            <div class="slide-copy"><span class="eyebrow">${s.eyebrow}</span><h1>${s.title}</h1><p>${s.text}</p><a class="btn btn-primary btn-lg" href="${s.href}">${s.cta} →</a></div>
             <div class="slide-art">${s.ids.map(id => art(byId[id])).join('')}</div>
           </div></div>`).join('')}</div>
         <div class="dots" id="dots">${slides.map((_, i) => `<button aria-label="Banner ${i + 1}" data-slide="${i}"></button>`).join('')}</div>
