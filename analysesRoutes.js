@@ -80,6 +80,7 @@ const FILTERS = {
     win: `AND result = 'win'`,
     loss: `AND result = 'loss'`,
     pending: `AND result IS NULL`,
+    decided: `AND result IN ('win', 'loss')`,
     all: '',
 };
 

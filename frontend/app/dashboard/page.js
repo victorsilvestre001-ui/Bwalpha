@@ -15,7 +15,7 @@ import { track } from "@/lib/track";
 const TITLES = {
   analise: ["Análise de mercado", "Escolha o ativo e o timeframe e deixe a IA ler o gráfico."],
   assistente: ["Assistente IA", "Tire dúvidas e envie prints do seu gráfico."],
-  historico: ["Histórico de análises", "Todas as análises que você gerou, com o resultado de cada uma."],
+  historico: ["Histórico de análises", "Seus últimos sinais conferidos e a sua taxa de acerto."],
   perfil: ["Perfil e plano", "Seus dados e sua assinatura."]
 };
 
