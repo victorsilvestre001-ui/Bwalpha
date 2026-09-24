@@ -10,6 +10,7 @@ const chatRoutes = require('./chatRoutes');
 const { router: calendarRoutes, syncEconomicCalendar } = require('./calendarRoutes');
 const checkoutRoutes = require('./checkoutRoutes');
 const stripeWebhook = require('./stripeWebhook');
+const { router: kiwifyWebhook } = require('./kiwifyWebhook');
 const { router: marketRoutes } = require('./marketRoutes');
 const { router: telegramRoutes, setupWebhook } = require('./telegramRoutes');
 const marketAnalysisRoutes = require('./marketAnalysisRoutes');
@@ -47,6 +48,7 @@ app.use(cors({
 }));
 
 app.use('/api/stripe/webhook', stripeWebhook);
+app.use('/api/kiwify/webhook', kiwifyWebhook);
 
 app.use(express.json({ limit: '10mb' }));
 
@@ -81,6 +83,18 @@ CREATE TABLE IF NOT EXISTS users (
 ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(100);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id VARCHAR(100);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS cpf VARCHAR(14);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS payment_provider VARCHAR(20);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS kiwify_subscription_id VARCHAR(100);
+
+-- Compras da Kiwify por e-mail (vale também para quem comprou antes de criar a conta).
+CREATE TABLE IF NOT EXISTS vip_grants (
+    email VARCHAR(150) PRIMARY KEY,
+    provider VARCHAR(20) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    subscription_id VARCHAR(100),
+    expires_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 
 CREATE TABLE IF NOT EXISTS signals (

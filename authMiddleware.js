@@ -30,8 +30,18 @@ function requirePaidPlan(req, res, next) {
 async function requireVip(req, res, next) {
     try {
         const pool = require('./db');
-        const result = await pool.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
-        const plan = result.rows[0]?.plan;
+        const result = await pool.query(
+            'SELECT plan, subscription_status, subscription_expires_at FROM users WHERE id = $1',
+            [req.user.id]
+        );
+        const row = result.rows[0];
+        let plan = row?.plan;
+        // Assinatura cancelada: o VIP vale até o fim do período pago e depois volta para free.
+        if (plan === 'vip' && row.subscription_status === 'canceled' && row.subscription_expires_at
+            && new Date(row.subscription_expires_at) <= new Date()) {
+            await pool.query(`UPDATE users SET plan = 'free' WHERE id = $1`, [req.user.id]);
+            plan = 'free';
+        }
         if (plan === 'vip' || plan === 'owner') return next();
         return res.status(403).json({ error: 'Os sinais da IA são exclusivos para assinantes VIP.', vipRequired: true });
     } catch (err) {

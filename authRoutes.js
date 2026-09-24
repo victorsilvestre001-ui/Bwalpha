@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const pool = require('./db');
 const { authMiddleware } = require('./authMiddleware');
+const { applyPendingGrant } = require('./kiwifyWebhook');
 
 // Limita tentativas de login/cadastro por IP, pra dificultar força bruta de senha.
 const authLimiter = rateLimit({
@@ -89,7 +90,8 @@ router.post('/register', authLimiter, async (req, res) => {
             [name, email, passwordHash, initialPlan]
         );
 
-        const user = result.rows[0];
+        // Quem comprou o VIP na Kiwify antes de criar a conta já entra como VIP.
+        const user = await applyPendingGrant(result.rows[0]);
         const token = jwt.sign(
             { id: user.id, email: user.email, plan: user.plan },
             process.env.JWT_SECRET,
@@ -131,6 +133,7 @@ router.post('/login', authLimiter, async (req, res) => {
             );
             user = { ...user, plan: updated.rows[0].plan };
         }
+        user = await applyPendingGrant(user);
 
         const token = jwt.sign(
             { id: user.id, email: user.email, plan: user.plan },

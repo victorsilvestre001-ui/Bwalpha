@@ -32,8 +32,26 @@ async function getVipLineItem() {
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.bwalphaia.com';
 
-// Cria uma sessão de checkout do Stripe pra assinatura VIP
+// Com KIWIFY_CHECKOUT_URL configurada, o VIP é vendido pela Kiwify (o webhook libera o plano
+// pelo e-mail da compra, por isso o e-mail da conta já vai preenchido). Sem ela, usa o Stripe.
+function kiwifyCheckoutUrl(user) {
+    const url = new URL(process.env.KIWIFY_CHECKOUT_URL);
+    if (user.email) url.searchParams.set('email', user.email);
+    if (user.name) url.searchParams.set('name', user.name);
+    return url.toString();
+}
+
+// Cria uma sessão de checkout pra assinatura VIP
 router.post('/create-session', authMiddleware, async (req, res) => {
+    if (process.env.KIWIFY_CHECKOUT_URL) {
+        try {
+            const { rows } = await pool.query('SELECT name, email FROM users WHERE id = $1', [req.user.id]);
+            return res.json({ url: kiwifyCheckoutUrl(rows[0] || req.user) });
+        } catch (err) {
+            console.error('Erro ao montar checkout Kiwify:', err.message);
+            return res.status(500).json({ error: 'Erro ao iniciar checkout' });
+        }
+    }
     try {
         const session = await stripe.checkout.sessions.create({
             mode: 'subscription',
@@ -57,9 +75,15 @@ router.post('/create-session', authMiddleware, async (req, res) => {
 router.post('/portal-session', authMiddleware, async (req, res) => {
     try {
         const result = await pool.query(
-            'SELECT stripe_customer_id FROM users WHERE id = $1',
+            'SELECT stripe_customer_id, payment_provider FROM users WHERE id = $1',
             [req.user.id]
         );
+        if (result.rows[0]?.payment_provider === 'kiwify') {
+            if (process.env.KIWIFY_MANAGE_URL) return res.json({ url: process.env.KIWIFY_MANAGE_URL });
+            return res.status(400).json({
+                error: 'Sua assinatura é gerenciada pela Kiwify: use o link do e-mail de compra ou fale com a gente em tradeonia@gmail.com.',
+            });
+        }
         const customerId = result.rows[0]?.stripe_customer_id;
 
         if (!customerId) {
