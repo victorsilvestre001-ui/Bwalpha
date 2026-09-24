@@ -74,7 +74,26 @@ PRODUTOS = [
     ('alleva_translucido', 'Pó Solto Translúcido Soft Sheer', 'Alleva', 'Maquiagem – Rosto', 18, 89.60, 12.90, 14.90, 'Estimado', 13.90, 'Opcional', 'N', 4, 'Caixa com 18'),
     ('splash_fem', 'Body Splash 120ml femininos (7 fragrâncias)', 'Natuza', 'Perfumaria', 1, 6.80, 19.90, 29.90, 'Estimado', 24.90, 'Comprar', 'S', 4, 'Obsession Pink, Libertad, Sahar Al Noor, Royal Rose, Golden Vip, Yara Zahra, Good Angel. Body splash árabe de 200ml de outras marcas sai por ~R$ 59,90'),
     ('splash_men', 'Body Splash For Men 120ml (3 fragrâncias)', 'Natuza', 'Perfumaria', 1, 6.80, 19.90, 29.90, 'Estimado', 24.90, 'Comprar', 'S', 4, 'Asad Black, Royal Black, Hayat Al Gold'),
-    ('body_cream_natuza', 'Hidratante Body Cream 120ml (3 fragrâncias)', 'Natuza', 'Corpo', 1, 6.60, 19.90, 24.90, 'Estimado', 22.90, 'Comprar (kit Perfumada)', 'S', 4, 'Libertad, Obsession Pink, Good Angel'),
+    ('body_cream_natuza', 'Hidratante Body Cream 120ml (4 fragrâncias)', 'Natuza', 'Corpo', 1, 6.60, 19.90, 24.90, 'Estimado', 22.90, 'Comprar (kit Perfumada)', 'S', 4, 'Libertad, Obsession Pink, Good Angel, Golden Vip (lote 5)'),
+    # Lote 5
+    ('alleva_fix_all', 'Pó Solto Blindagem Fix All', 'Alleva', 'Maquiagem – Rosto', 18, 89.60, 12.90, 14.90, 'Estimado', 13.90, 'Opcional', 'N', 5, 'Caixa com 18'),
+    ('mia_trio_snow', 'Trio de Sombras Snow', 'Mia Make', 'Maquiagem – Olhos', 24, 160.20, 10.00, 14.90, 'Estimado', 14.90, 'Opcional', 'N', 5, ''),
+    ('mia_duo_lips', 'Duo Lips Contorno e Batom', 'Mia Make', 'Maquiagem – Lábios', 24, 165.99, 12.90, 14.90, 'Estimado', 14.90, 'Opcional', 'N', 5, 'Duas coleções de cores no site'),
+    ('pink21_primer_hidro', 'Primer Hidratante Hidro 45ml (CS6372)', 'Pink 21', 'Maquiagem – Rosto', 1, 6.70, 12.90, 16.90, 'Estimado', 14.90, 'Comprar (kit Make Completa)', 'S', 5, ''),
+    ('amora_corretivo', 'Corretivo Líquido Amora', 'Pink 21', 'Maquiagem – Rosto', 24, 161.70, 12.90, 13.29, 'Estimado', 12.90, 'Opcional', 'N', 5, 'Referência: base Amora by Pink 21 R$ 13,29'),
+    ('amora_blush_bastao', 'Blush em Bastão Amora', 'Pink 21', 'Maquiagem – Rosto', 24, 138.99, 14.90, 18.50, 'Estimado', 14.90, 'Comprar', 'S', 5, 'Referência: blush em bastão Pink 21 R$ 18,50'),
+    ('pink21_candy_bear', 'Lip Gloss Candy Bear', 'Pink 21', 'Maquiagem – Lábios', 24, 191.20, 12.90, 14.90, 'Estimado', 14.90, 'Evitar (muitos gloss)', 'N', 5, ''),
+    ('wecandy_corretivo', 'Corretivo Quick Fix We Candy Box A', 'We Candy', 'Maquiagem – Rosto', 36, 224.90, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 5, 'Caixa com 36'),
+    ('vivai_fruits', 'Lip Gloss Fruits (3326.1.1)', 'Vivai', 'Maquiagem – Lábios', 36, 224.90, 2.08, 12.90, 'Confirmado', 11.90, 'Evitar (vendido barato)', 'N', 5, 'Box de 24 visto por R$ 49,90 na Amazon (~R$ 2,08/un.)'),
+    ('vivai_choko', 'Gloss Glitter Choko (3429.1.1)', 'Vivai', 'Maquiagem – Lábios', 36, 229.99, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (muitos gloss)', 'N', 5, 'Caixa com 36'),
+    ('pink21_corretivo_matte', 'Corretivo Líquido Acabamento Matte', 'Pink 21', 'Maquiagem – Rosto', 24, 158.80, 12.90, 12.90, 'Estimado', 12.90, 'Confirmar qtd', 'N', 5, 'Qtd na caixa cortada no print: considerei 24, confirmar'),
+    ('color_contour', 'Contorno em Bastão Color Contour', 'Pink 21', 'Maquiagem – Rosto', 48, 115.99, 6.76, 15.90, 'Confirmado', 12.90, 'Comprar', 'S', 5, 'Caixa com 48: custo muito baixo'),
+    ('honey_sobrancelha', 'Máscara Incolor para Sobrancelha Honey', 'Pink 21', 'Maquiagem – Sobrancelhas', 24, 158.80, 12.90, 12.90, 'Estimado', 12.90, 'Confirmar qtd', 'N', 5, 'Qtd na caixa cortada no print: considerei 24, confirmar'),
+    ('amora_gloss', 'Lip Gloss Amora (CS7043)', 'Pink 21', 'Maquiagem – Lábios', 24, 161.70, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (muitos gloss)', 'N', 5, ''),
+    ('the_pink_blush', 'Blush Líquido The Pink Multiuso', 'Pink 21', 'Maquiagem – Rosto', 24, 158.80, 19.90, 21.70, 'Confirmado', 17.90, 'Comprar', 'S', 5, 'Blush e batom; em alta'),
+    ('amora_delineador', 'Delineador Líquido Peel Off Amora', 'Pink 21', 'Maquiagem – Olhos', 24, 126.40, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 5, ''),
+    ('pink21_lip_balm', 'Lip Balm (CS7085)', 'Pink 21', 'Maquiagem – Lábios', 24, 148.80, 10.00, 12.90, 'Estimado', 11.90, 'Opcional', 'N', 5, ''),
+    ('iconic_paleta', 'Paleta de Sombras The Iconic Cor 01', 'Pink 21', 'Maquiagem – Olhos', 1, 6.80, 11.99, 45.90, 'Estimado', 19.90, 'Comprar', 'S', 5, '9 cores. Outras paletas Pink 21 de R$ 11,99 a R$ 45,90'),
 ]
 
 # (nome, componentes (chaves; repetir = mais de uma unidade), preço de venda)
@@ -87,6 +106,7 @@ KITS = [
     ('Lábios Suculentos', ['lip_oil_fruit', 'gloss_hudamoji', 'batom_melana'], 34.90),
     ('Perfumada (splash + creme)', ['splash_fem', 'body_cream_natuza'], 44.90),
     ('Presente Masculino (2 splash)', ['splash_men', 'splash_men'], 44.90),
+    ('Make Completa', ['iconic_paleta', 'the_pink_blush', 'color_contour', 'pink21_primer_hidro'], 59.90),
 ]
 
 FONT = 'Arial'
