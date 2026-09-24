@@ -30,7 +30,7 @@ async function getVipLineItem() {
 }
 
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.bwalphaia.com';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.tradeonia.com.br';
 
 // Com KIWIFY_CHECKOUT_URL configurada, o VIP é vendido pela Kiwify (o webhook libera o plano
 // pelo e-mail da compra, por isso o e-mail da conta já vai preenchido). Sem ela, usa o Stripe.
