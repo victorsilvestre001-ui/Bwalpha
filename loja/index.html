@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bella Box | Maquiagem, Skincare e Perfumes Importados</title>
+  <meta name="description" content="Maquiagem, skincare, cabelos e perfumes importados com até 50% OFF, 5% de desconto no Pix, 6x sem juros e frete grátis acima de R$ 199.">
+  <meta name="theme-color" content="#d6336c">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Barra de promoções rotativa -->
+  <div class="topbar" id="topbar">
+    <div class="topbar-track">
+      <span>🚚 <b>FRETE GRÁTIS</b> acima de R$ 199 para todo o Brasil</span>
+      <span>💸 <b>5% OFF</b> pagando no Pix</span>
+      <span>💳 Parcele em até <b>6x sem juros</b></span>
+      <span>🎁 Cupom <b>BEMVINDA10</b>: 10% OFF na 1ª compra</span>
+      <span>🔥 <b>LEVE 3 PAGUE 2</b> em produtos selecionados</span>
+    </div>
+  </div>
+
+  <header class="header">
+    <div class="container header-row">
+      <button class="icon-btn menu-toggle" id="menuToggle" aria-label="Abrir menu">☰</button>
+      <a href="#/" class="logo" aria-label="Bella Box — início">
+        <span class="logo-mark">B</span>
+        <span class="logo-text">Bella<b>Box</b><small>beleza importada</small></span>
+      </a>
+      <form class="search" id="searchForm" role="search">
+        <input id="searchInput" type="search" placeholder="O que você está procurando hoje?" autocomplete="off" aria-label="Buscar produtos">
+        <button type="submit" aria-label="Buscar">🔍</button>
+        <div class="search-suggest" id="searchSuggest"></div>
+      </form>
+      <nav class="header-actions">
+        <a href="#/conta" class="action"><span class="ico">👤</span><span class="lbl">Olá, entre<br><b>ou cadastre-se</b></span></a>
+        <a href="#/favoritos" class="action"><span class="ico">♡</span><span class="badge" id="favCount">0</span></a>
+        <button class="action cart-btn" id="cartBtn" aria-label="Abrir carrinho"><span class="ico">🛍️</span><span class="badge" id="cartCount">0</span></button>
+      </nav>
+    </div>
+    <nav class="catnav" id="catnav" aria-label="Categorias"></nav>
+  </header>
+
+  <main id="app" class="app" tabindex="-1"></main>
+
+  <!-- Faixa de benefícios -->
+  <section class="benefits">
+    <div class="container benefits-row">
+      <div><span>🚚</span><p><b>Frete grátis</b>acima de R$ 199</p></div>
+      <div><span>💸</span><p><b>5% OFF no Pix</b>desconto automático</p></div>
+      <div><span>💳</span><p><b>6x sem juros</b>em todos os cartões</p></div>
+      <div><span>🔒</span><p><b>Compra segura</b>site protegido SSL</p></div>
+      <div><span>✅</span><p><b>Produtos originais</b>garantia de procedência</p></div>
+    </div>
+  </section>
+
+  <section class="newsletter">
+    <div class="container newsletter-row">
+      <div>
+        <h3>Ganhe 10% OFF na primeira compra 💌</h3>
+        <p>Receba ofertas relâmpago, lançamentos e cupons exclusivos antes de todo mundo.</p>
+      </div>
+      <form id="newsForm" class="news-form">
+        <input type="email" required placeholder="Seu melhor e-mail" aria-label="E-mail">
+        <button class="btn btn-dark">Quero meu cupom</button>
+      </form>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="container footer-cols">
+      <div>
+        <a href="#/" class="logo logo-footer"><span class="logo-mark">B</span><span class="logo-text">Bella<b>Box</b></span></a>
+        <p>Maquiagem, skincare, cabelos e perfumes importados com preço justo e entrega para todo o Brasil.</p>
+        <div class="social"><a href="#" aria-label="Instagram">IG</a><a href="#" aria-label="TikTok">TT</a><a href="#" aria-label="Facebook">FB</a><a href="#" aria-label="YouTube">YT</a></div>
+      </div>
+      <div>
+        <h4>Institucional</h4>
+        <a href="#/info/sobre">Quem somos</a><a href="#/info/lojas">Nossas lojas</a><a href="#/info/revenda">Seja revendedora</a><a href="#/info/trabalhe">Trabalhe conosco</a>
+      </div>
+      <div>
+        <h4>Ajuda</h4>
+        <a href="#/info/entrega">Prazos e entregas</a><a href="#/info/trocas">Trocas e devoluções</a><a href="#/info/pagamento">Formas de pagamento</a><a href="#/info/privacidade">Política de privacidade</a><a href="#/info/faq">Dúvidas frequentes</a>
+      </div>
+      <div>
+        <h4>Atendimento</h4>
+        <p>Seg. a sex. das 9h às 18h<br>Sáb. das 9h às 13h</p>
+        <p>📱 WhatsApp: (11) 99999-9999<br>✉️ contato@bellabox.com.br</p>
+      </div>
+      <div>
+        <h4>Pagamento</h4>
+        <div class="pay-flags"><span>Pix</span><span>Visa</span><span>Master</span><span>Elo</span><span>Amex</span><span>Boleto</span></div>
+        <h4>Segurança</h4>
+        <div class="pay-flags"><span>🔒 SSL</span><span>✅ Site seguro</span></div>
+      </div>
+    </div>
+    <div class="container footer-bottom">
+      <p>© <span id="year"></span> Bella Box — CNPJ 00.000.000/0001-00 — Rua Exemplo, 100, São Paulo/SP. Preços e condições válidos somente para a loja online.</p>
+    </div>
+  </footer>
+
+  <!-- Carrinho lateral -->
+  <div class="overlay" id="overlay"></div>
+  <aside class="drawer" id="cartDrawer" aria-label="Carrinho" aria-hidden="true">
+    <div class="drawer-head"><h3>Minha sacola</h3><button class="icon-btn" id="closeCart" aria-label="Fechar carrinho">✕</button></div>
+    <div class="drawer-body" id="cartBody"></div>
+    <div class="drawer-foot" id="cartFoot"></div>
+  </aside>
+
+  <!-- Menu mobile -->
+  <aside class="drawer drawer-left" id="menuDrawer" aria-label="Menu" aria-hidden="true">
+    <div class="drawer-head"><h3>Categorias</h3><button class="icon-btn" id="closeMenu" aria-label="Fechar menu">✕</button></div>
+    <div class="drawer-body" id="menuBody"></div>
+  </aside>
+
+  <!-- Pop-up de cupom -->
+  <div class="modal" id="couponModal" role="dialog" aria-modal="true" aria-labelledby="couponTitle" hidden>
+    <div class="modal-card">
+      <button class="icon-btn modal-close" data-close aria-label="Fechar">✕</button>
+      <div class="modal-art">🎁</div>
+      <p class="eyebrow">Presente de boas-vindas</p>
+      <h2 id="couponTitle">10% OFF na sua primeira compra</h2>
+      <p>Use o cupom abaixo no carrinho. Acumula com o desconto do Pix!</p>
+      <div class="coupon-code" id="copyCoupon" title="Clique para copiar">BEMVINDA10 <small>copiar</small></div>
+      <button class="btn btn-primary btn-block" data-close>Aproveitar agora</button>
+    </div>
+  </div>
+
+  <a class="whatsapp" id="whatsapp" target="_blank" rel="noopener" aria-label="Fale conosco no WhatsApp">💬<span>Precisa de ajuda?</span></a>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="products.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
