@@ -39,7 +39,7 @@ PRODUTOS = [
     ('gloss_sweet', 'Lip Gloss Sweet', 'Miss Romantic', 'Maquiagem – Lábios', 24, 90.99, 10.00, 10.00, 'Estimado', 9.90, 'Limitar (muitos gloss)', 'N', 1, ''),
     ('liner_sweet', 'Lip Liner Sweet Linha dos Lábios', 'Miss Romantic', 'Maquiagem – Lábios', 24, 64.20, 5.00, 10.00, 'Estimado', 7.90, 'Só em kit', 'N', 1, ''),
     # Lote 2
-    ('mascara_cilios', 'Máscara para Cílios Natural Curling', 'Miss Romantic', 'Maquiagem – Olhos', 24, 160.40, 12.90, 12.90, 'Estimado', 12.90, 'Comprar (kit Olhar Poderoso)', 'S', 2, ''),
+    ('mascara_cilios', 'Máscara para Cílios Natural Curling', 'Miss Romantic', 'Maquiagem – Olhos', 24, 160.40, 12.90, 12.90, 'Estimado', 12.90, 'Trocada pela Super Poderes 36h', 'N', 2, ''),
     ('cilios_8d', 'Cílios Postiços 8D (F007/F011/F012/F019/F022)', 'Sabrina Sato', 'Maquiagem – Olhos', 10, 37.80, 4.06, 10.99, 'Confirmado', 9.90, 'Comprar', 'S', 2, '5 modelos, mesmo preço. Pedir nota fiscal e confirmar que são originais'),
     ('serum_ah', 'Sérum Facial Ácido Hialurônico Reflection 30ml', 'Safira', 'Skincare', 1, 6.30, 15.00, 20.00, 'Estimado', 16.90, 'Comprar (kit Pele de Vidro)', 'S', 2, ''),
     ('serum_clareador', 'Sérum Facial Clareador Reflection 30ml', 'Safira', 'Skincare', 1, 6.30, 15.00, 20.00, 'Estimado', 16.90, 'Comprar (kit Pele de Vidro)', 'S', 2, ''),
@@ -120,6 +120,20 @@ PRODUTOS = [
     ('love_rain_concealer', 'Corretivo Líquido Concealer (LR-4908)', 'Love Rain', 'Maquiagem – Rosto', 24, 160.40, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (tem corretivo melhor)', 'N', 7, ''),
     ('vivai_cherry', 'Batom Matte Cherry', 'Vivai', 'Maquiagem – Lábios', 24, None, None, None, 'Estimado', None, 'Confirmar preço', 'N', 7, 'Preço escondido no print'),
     ('vivai_viv', 'Batom Cintilante Viv', 'Vivai', 'Maquiagem – Lábios', 24, None, None, None, 'Estimado', None, 'Confirmar preço', 'N', 7, 'Preço escondido no print'),
+    # Lote 8
+    ('belle_banana', 'Pó Solto Banana (B101)', 'Belle Angel', 'Maquiagem – Rosto', 19, 119.90, 12.90, 14.90, 'Estimado', 13.90, 'Opcional', 'N', 8, 'Caixa com 19. O Pó de Tapioca Miss Rôse é mais barato'),
+    ('belle_blush', 'Blush (ME003)', 'Belle Angel', 'Maquiagem – Rosto', 24, 142.20, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 8, ''),
+    ('belle_you_me', 'Lip Cream You Me com Chaveiro', 'Belle Angel', 'Maquiagem – Lábios', 24, 129.30, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (muitos gloss)', 'N', 8, ''),
+    ('hello_kitty_oil', 'Lip Oil Jelly Hello Kitty', 'Yalanni', 'Maquiagem – Lábios', 24, 160.40, 14.90, 14.90, 'Estimado', 14.90, 'Evitar (personagem licenciado)', 'N', 8, 'Hello Kitty é marca registrada: sem licença comprovada, o anúncio pode ser removido'),
+    ('chocolip', 'Lip Gloss Chocolip', 'JummyJu', 'Maquiagem – Lábios', 24, 147.20, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (muitos gloss)', 'N', 8, ''),
+    ('velvet_fix_brow', 'Gel para Sobrancelha Velvet Fix Brow', 'JummyJu', 'Maquiagem – Sobrancelhas', 24, 135.90, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 8, 'Já tem o gel Wike Make'),
+    ('candy_balm', 'Candy Balm 10g (Biscoito Recheado, Creme de Avelã)', 'Super Poderes', 'Maquiagem – Lábios', 1, 5.70, 5.50, 9.09, 'Confirmado', 9.90, 'Só em kit', 'N', 8, 'Hidratante labial; 2 sabores'),
+    ('sp_mascara_alonga', 'Máscara para Cílios Alonga Olhar', 'Super Poderes', 'Maquiagem – Olhos', 24, 123.70, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 8, ''),
+    ('sp_mascara_36h', 'Máscara para Cílios 36h Curva e Volume', 'Super Poderes', 'Maquiagem – Olhos', 24, 123.70, 12.90, 12.90, 'Estimado', 12.90, 'Comprar (kit Olhar Poderoso)', 'S', 8, 'Mais barata que a Miss Romantic (R$ 5,15 x R$ 6,68)'),
+    ('super_bocao', 'Gloss Labial Super Bocão (N°06, N°08, N°09)', 'Super Poderes', 'Maquiagem – Lábios', 1, 5.20, 11.50, 11.50, 'Confirmado', 11.90, 'Opcional', 'N', 8, 'Gloss "aumenta boca", muito procurado'),
+    ('gelato_gloss', 'Lip Gloss Gelato', 'Wike Make', 'Maquiagem – Lábios', 24, 139.99, 7.52, 10.00, 'Estimado', 11.90, 'Evitar (muitos gloss)', 'N', 8, ''),
+    ('entregou_tudo', 'Pó Solto Facial Rosa Entregou Tudo', 'Wike Make', 'Maquiagem – Rosto', 15, 76.80, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 8, 'Caixa com 15'),
+    ('glow_line_cream', 'Body Cream 125ml (Glow Belle, Angelical, Paradoxo, Glowly, Royal Glow)', 'Glow Line', 'Corpo', 1, 6.80, 19.90, 24.90, 'Estimado', 22.90, 'Opcional', 'N', 8, '5 fragrâncias. A Natuza já cobre os body creams'),
 ]
 
 # (nome, componentes (chaves; repetir = mais de uma unidade), preço de venda)
@@ -127,7 +141,7 @@ KITS = [
     ('Pele de Vidro', ['serum_ah', 'serum_vitc', 'serum_clareador'], 49.90),
     ('Pele Perfeita', ['blush_velvet', 'contorno_velvet', 'ilum_velvet', 'tapioca'], 49.90),
     ('Rotina Skincare', ['micelar_pantenol', 'tonico_glicolico', 'adstringente'], 39.90),
-    ('Olhar Poderoso', ['cilios_8d', 'cilios_8d', 'cilios_8d', 'mascara_cilios', 'tatoo_brow'], 44.90),
+    ('Olhar Poderoso', ['cilios_8d', 'cilios_8d', 'cilios_8d', 'sp_mascara_36h', 'tatoo_brow'], 44.90),
     ('Sobrancelha Perfeita', ['tint_brow', 'gel_sobrancelha', 'tatoo_brow'], 34.90),
     ('Lábios Suculentos', ['lip_oil_fruit', 'gloss_hudamoji', 'batom_melana'], 34.90),
     ('Perfumada (splash + creme)', ['splash_fem', 'body_cream_natuza'], 44.90),
