@@ -5,8 +5,29 @@ let offsetMs = 0;
 let lastSync = 0;
 let pending = null;
 
+// Ajuste manual para o relógio da corretora (ms). Positivo = corretora adiantada.
+// Fica salvo neste aparelho; com ele, contagens e entradas seguem o relógio da corretora.
+export const MAX_BROKER_OFFSET_MS = 10_000;
+const BROKER_KEY = "tradeon_broker_offset";
+let brokerOffsetMs = 0;
+try {
+  const saved = typeof window !== "undefined" ? Number(window.localStorage.getItem(BROKER_KEY)) : 0;
+  if (Number.isFinite(saved)) brokerOffsetMs = Math.max(-MAX_BROKER_OFFSET_MS, Math.min(MAX_BROKER_OFFSET_MS, saved));
+} catch {}
+
+export function brokerOffset() {
+  return brokerOffsetMs;
+}
+
+export function setBrokerOffset(ms) {
+  brokerOffsetMs = Math.max(-MAX_BROKER_OFFSET_MS, Math.min(MAX_BROKER_OFFSET_MS, Math.round(ms)));
+  try { window.localStorage.setItem(BROKER_KEY, String(brokerOffsetMs)); } catch {}
+  return brokerOffsetMs;
+}
+
+// Horário da corretora: relógio do servidor + ajuste da corretora.
 export function now() {
-  return Date.now() + offsetMs;
+  return Date.now() + offsetMs + brokerOffsetMs;
 }
 
 export function clockOffset() {
