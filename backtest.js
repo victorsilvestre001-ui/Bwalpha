@@ -3,7 +3,7 @@
 // e escreve o resultado nos logs, porque a Twelve Data só é acessível de lá.
 const pool = require('./db');
 const {
-    computeTechnicalSignal, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, TIMEFRAME_MINUTES,
+    computeTechnicalSignal, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, TIMEFRAME_MINUTES, isMarketOpen,
 } = require('./marketRoutes');
 
 const WINDOW = 99; // o /signal usa 100 candles: 99 fechados + 1 em formação
@@ -92,6 +92,20 @@ const STRATEGIES = {
         const { bull, bear } = votes(sig);
         return bull - bear >= 2 ? 'COMPRA' : bear - bull >= 2 ? 'VENDA' : null;
     },
+    momentum_consenso: (ctx) => {
+        const a = STRATEGIES.ultimo_candle(ctx), b = STRATEGIES.chinesa(ctx), c = STRATEGIES.confluencia_forte(ctx);
+        return a && a === b && a === c ? a : null;
+    },
+    momentum_ultimo_e_chinesa: (ctx) => {
+        const a = STRATEGIES.ultimo_candle(ctx), b = STRATEGIES.chinesa(ctx);
+        return a && a === b ? a : null;
+    },
+    reversao_rsi_ou_banda: ({ sig, closed }) => {
+        const c = closed[closed.length - 1].close, b = sig.bwalpha || {};
+        if (sig.rsi != null && sig.rsi < 30 && b.bandaInferior != null && c < b.bandaInferior) return 'COMPRA';
+        if (sig.rsi != null && sig.rsi > 70 && b.bandaSuperior != null && c > b.bandaSuperior) return 'VENDA';
+        return null;
+    },
     banda_reversao: ({ sig, closed }) => {
         const c = closed[closed.length - 1].close;
         if (sig.bwalpha?.bandaInferior != null && c < sig.bwalpha.bandaInferior) return 'COMPRA';
@@ -123,6 +137,8 @@ function runOn(candles, timeframe) {
         const forming = candles[k], target = candles[k + 1];
         // Só conta sequências contínuas (sem buraco de fim de semana ou falha de dados).
         if (target.time - forming.time !== tf || forming.time - candles[k - WINDOW].time !== WINDOW * tf) continue;
+        // Fim de semana: a fonte gera candles artificiais com o mercado fechado; o /signal nem responde.
+        if (!isMarketOpen(new Date(target.time)) || !isMarketOpen(new Date(candles[k - WINDOW].time))) continue;
         const closed = candles.slice(k - WINDOW, k);
         // No momento do pedido o candle em formação só tem a abertura (o indicador usa só o open).
         const formingOpen = { time: forming.time, open: forming.open, high: forming.open, low: forming.open, close: forming.open };
