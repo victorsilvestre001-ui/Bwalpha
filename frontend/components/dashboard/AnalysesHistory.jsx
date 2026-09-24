@@ -88,13 +88,13 @@ export default function AnalysesHistory() {
 
         {data === null ? (
           <div className="flex justify-center py-16"><Loader2 className="animate-spin text-neon" /></div>
-        ) : data.items.length === 0 ? (
+        ) : !data.items.some((a) => RESULT[a.result]) ? (
           <p className="py-16 text-center text-sm text-mist-dim">
             {pending > 0 ? "Seu sinal está aguardando o candle fechar. O resultado aparece aqui em instantes." : "Nenhum sinal conferido ainda. Vá em Análise e clique em \"Analisar com IA\"."}
           </p>
         ) : (
           <ul className="mt-5 divide-y divide-void-line overflow-hidden rounded-xl border border-void-line">
-            {data.items.map((a) => {
+            {data.items.filter((a) => RESULT[a.result]).map((a) => {
               const buy = a.direction === "COMPRA";
               const res = RESULT[a.result];
               return (
