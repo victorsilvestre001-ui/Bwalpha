@@ -138,6 +138,27 @@ PRODUTOS = [
     ('sweet_lips', 'Balm Sweet Lips / Babalips com chaveiro (5 sabores)', 'Safira', 'Maquiagem – Lábios', 24, 130.99, 9.00, 10.00, 'Confirmado', 9.90, 'Opcional (bom como brinde)', 'N', 9, 'Tutti Frutti, Melancia, Glitter, Chocolate, Goma de Mascar'),
     ('sarahs_banana', 'Pó Translúcido Banana', "Sarah's Beauty", 'Maquiagem – Rosto', 24, 116.70, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 9, 'O Pó de Tapioca Miss Rôse é mais barato'),
     ('love_rain_vitamin', 'Brilho Labial Vitamin C / Vitamin B3', 'Love Rain', 'Maquiagem – Lábios', 24, 145.80, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (muitos gloss)', 'N', 9, '2 versões'),
+    # Lote 10
+    ('lip_kat', 'Hidratante Labial Lip Kat Doce de Leite 10g', 'Febella', 'Maquiagem – Lábios', 1, 6.30, 9.90, 9.90, 'Estimado', 9.90, 'Evitar (lucro baixo)', 'N', 10, ''),
+    ('febella_glaze', 'Lip Gloss Glaze 3D (LG40153)', 'Febella', 'Maquiagem – Lábios', 36, 198.60, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (muitos gloss)', 'N', 10, 'Caixa com 36'),
+    ('lush_lux_corretivo', 'Corretivo Líquido Matte', 'Lush Lux', 'Maquiagem – Rosto', 24, 145.50, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (tem corretivo melhor)', 'N', 10, ''),
+    ('twist_gloss', 'Lip Gloss Twist', 'Yasmim & Ju', 'Maquiagem – Lábios', 24, 147.20, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (muitos gloss)', 'N', 10, ''),
+    ('lip_bocao_safira', 'Lip Bocão', 'Safira', 'Maquiagem – Lábios', 1, 5.99, 11.50, 11.50, 'Estimado', 11.90, 'Opcional', 'N', 10, 'Parecido com o Super Bocão (R$ 5,20)'),
+    ('rubi_mascara', 'Máscara para Cílios Preto Absoluto', 'Rubi', 'Maquiagem – Olhos', 24, 137.50, 12.90, 12.90, 'Estimado', 12.90, 'Confirmar qtd', 'N', 10, 'Qtd na caixa não aparece no print: considerei 24'),
+    ('safira_lapis_olho', 'Lápis Delineador para Olhos Preto (c/12)', 'Safira', 'Maquiagem – Olhos', 12, 23.30, 4.99, 5.99, 'Confirmado', 5.90, 'Só em kit', 'N', 10, 'Pacote com 12: R$ 1,94 cada'),
+    ('safira_lapis_sobrancelha', 'Lápis para Sobrancelhas Marrom (c/12)', 'Safira', 'Maquiagem – Sobrancelhas', 12, 28.99, 4.99, 5.99, 'Estimado', 5.90, 'Só em kit', 'N', 10, 'Pacote com 12: R$ 2,42 cada'),
+    ('marshmallow_gloss', 'Lip Gloss Chaveiro Marshmallow', 'We Candy', 'Maquiagem – Lábios', 36, 204.99, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (muitos gloss)', 'N', 10, 'Caixa com 36'),
+    ('toque_blush_liquido', 'Blush Líquido', 'Toque Special', 'Maquiagem – Rosto', 24, 80.99, 12.90, 20.00, 'Estimado', 14.90, 'Opcional (alternativa ao Pink 21)', 'N', 10, 'O mais barato da lista (R$ 3,37); marca menos conhecida que a Pink 21'),
+    ('toque_delineador', 'Delineador Líquido', 'Toque Special', 'Maquiagem – Olhos', 24, 130.90, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 10, ''),
+    ('soham_stay_matte', 'Pó Facial Translúcido Stay Matte', 'Soham', 'Maquiagem – Rosto', 12, 48.50, 4.59, 12.90, 'Estimado', 11.90, 'Evitar (vendido barato)', 'N', 10, 'Visto a R$ 4,59 em outra loja'),
+    ('escova_chuveiro', 'Escova de Chuveiro Reconstrutor 3 Minutos 280ml', 'Bellafemme', 'Cabelos', 1, 10.80, 24.90, 34.90, 'Estimado', 29.90, 'Opcional (confirmar preço)', 'N', 10, 'Progressiva de chuveiro está em alta. Frasco pesado'),
+    ('angels_caneta_delineadora', 'Caneta Delineadora (BR1238)', '4Angels', 'Maquiagem – Olhos', 48, 168.90, 10.00, 12.90, 'Estimado', 11.90, 'Opcional', 'N', 10, 'Caixa com 48'),
+    ('angels_face_primer', 'Face Primer (BR1209)', '4Angels', 'Maquiagem – Rosto', 1, 5.50, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 10, 'Mais barato que o Primer Hidro Pink 21 (R$ 6,70)'),
+    ('piranha_hk_dourada', 'Kit Piranhas Hello Kitty Dourada (c/12)', '—', 'Cabelos', 12, 67.99, 14.90, 14.90, 'Estimado', 14.90, 'Evitar (personagem licenciado)', 'N', 10, 'Hello Kitty é marca registrada'),
+    ('piranha_hk_brilho', 'Kit Piranhas Hello Kitty com Brilho (c/12)', '—', 'Cabelos', 12, 77.80, 14.90, 14.90, 'Estimado', 14.90, 'Evitar (personagem licenciado)', 'N', 10, 'Hello Kitty é marca registrada'),
+    ('coelho_lip_oil', 'Lip Oil Hidratante Coelho Encantado', 'MiaTeen', 'Maquiagem – Lábios', 36, 194.70, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (muitos gloss)', 'N', 10, 'Caixa com 36'),
+    ('curl_up', 'Máscara para Cílios Curl Up', 'Pink 21', 'Maquiagem – Olhos', 24, 177.90, 12.90, 14.90, 'Estimado', 14.90, 'Opcional', 'N', 10, 'A Super Poderes 36h é mais barata'),
+    ('extra_gloss', 'Lip Gloss Extra Gloss', 'Pink 21', 'Maquiagem – Lábios', 24, 158.80, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (muitos gloss)', 'N', 10, ''),
 ]
 
 # (nome, componentes (chaves; repetir = mais de uma unidade), preço de venda)
