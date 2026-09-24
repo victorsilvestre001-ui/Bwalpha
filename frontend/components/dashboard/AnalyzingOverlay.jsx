@@ -2,12 +2,12 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 
-const STEPS = ["Coletando candles", "Calculando EMA 9/21", "Lendo RSI e MACD", "Detectando padrões", "Consolidando sinal"];
+const STEPS = ["Coletando candles", "Lendo o candle atual", "Medindo a força do corpo", "Consolidando sinal"];
 
 export default function AnalyzingOverlay() {
   const [step, setStep] = useState(0);
   useEffect(() => {
-    const id = setInterval(() => setStep((s) => Math.min(s + 1, STEPS.length - 1)), 420);
+    const id = setInterval(() => setStep((s) => Math.min(s + 1, STEPS.length - 1)), 250);
     return () => clearInterval(id);
   }, []);
 

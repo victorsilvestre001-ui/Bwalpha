@@ -1,6 +1,6 @@
 "use client";
 import { motion } from "framer-motion";
-import { ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, PauseCircle, RefreshCw } from "lucide-react";
 import CandleTimer from "./CandleTimer";
 
 const CONF_STYLE = {
@@ -9,7 +9,24 @@ const CONF_STYLE = {
   Baixa: "border-pulse/40 bg-pulse/10 text-pulse-soft"
 };
 
-export default function SignalResult({ result, timing }) {
+export default function SignalResult({ result, timing, onRetry }) {
+  if (result.noEntry) {
+    return (
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-void-line bg-void-deep/70 p-6">
+        <div className="font-mono text-xs uppercase tracking-widest text-mist-dim">{result.pair} · {result.timeframe}</div>
+        <div className="mt-2 flex items-center gap-2 font-display text-2xl font-bold text-mist">
+          <PauseCircle size={26} className="text-volt" /> Sem entrada agora
+        </div>
+        <p className="mt-2 text-sm text-mist-dim">{result.reason || "Sem um sinal confiável neste candle."}</p>
+        {onRetry && (
+          <button onClick={onRetry} className="btn-ghost mt-4 w-full !py-3">
+            <RefreshCw size={15} /> Analisar o próximo candle
+          </button>
+        )}
+      </motion.div>
+    );
+  }
+
   const buy = result.direction === "COMPRA";
 
   return (

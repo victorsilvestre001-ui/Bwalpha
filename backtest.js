@@ -3,7 +3,7 @@
 // e escreve o resultado nos logs, porque a Twelve Data só é acessível de lá.
 const pool = require('./db');
 const {
-    computeTechnicalSignal, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, TIMEFRAME_MINUTES, isMarketOpen,
+    computeTechnicalSignal, computeCandleFollowSignal, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, TIMEFRAME_MINUTES, isMarketOpen,
 } = require('./marketRoutes');
 
 const WINDOW = 99; // o /signal usa 100 candles: 99 fechados + 1 em formação
@@ -105,6 +105,12 @@ const STRATEGIES = {
         if (sig.rsi != null && sig.rsi < 30 && b.bandaInferior != null && c < b.bandaInferior) return 'COMPRA';
         if (sig.rsi != null && sig.rsi > 70 && b.bandaSuperior != null && c > b.bandaSuperior) return 'VENDA';
         return null;
+    },
+    // Regra que está em produção no M1 (mesma função da rota /signal).
+    producao_m1: ({ closed, formingNow }) => computeCandleFollowSignal(closed, formingNow).direction,
+    producao_m1_alta: ({ closed, formingNow }) => {
+        const r = computeCandleFollowSignal(closed, formingNow);
+        return r.confidence === 'Alta' ? r.direction : null;
     },
     formacao_corpo_30: ({ formingNow }) => {
         const r = formingNow.high - formingNow.low;

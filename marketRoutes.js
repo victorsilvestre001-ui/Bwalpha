@@ -637,6 +637,72 @@ function computeTechnicalSignal(candles, forming) {
     };
 }
 
+// ---- Sinal M1 "fim do candle" ----
+// O backtest (backtest.js) mostrou que, no M1, a melhor leitura é a do candle em formação
+// perto do fechamento: quando ele tem corpo forte, o candle seguinte tende a seguir a mesma
+// direção. Candle indeciso (doji, muito pavio) não gera entrada.
+const M1_MS = 60_000;
+const M1_RELEASE_BEFORE_CLOSE_MS = 13_000; // o app pede o sinal 13s antes do candle fechar
+const M1_MIN_ELAPSED_MS = 35_000;          // antes disso o candle atual ainda diz pouco
+const M1_MIN_ENTRY_LEAD_MS = 4_000;
+const M1_MIN_BODY_RATIO = 0.5;
+
+function computeCandleFollowSignal(closed, forming) {
+    const range = forming.high - forming.low;
+    const body = Math.abs(forming.close - forming.open);
+    if (!(range > 0) || body === 0) {
+        return { direction: null, reason: 'O candle atual está sem direção (doji). Melhor esperar o próximo.' };
+    }
+    const bodyRatio = body / range;
+    if (bodyRatio < M1_MIN_BODY_RATIO) {
+        return { direction: null, bodyRatio, reason: 'O candle atual está indeciso (corpo pequeno e muito pavio). Melhor esperar o próximo.' };
+    }
+    const recent = closed.slice(-20);
+    const avgBody = recent.reduce((a, c) => a + Math.abs(c.close - c.open), 0) / Math.max(recent.length, 1);
+    return {
+        direction: forming.close > forming.open ? 'COMPRA' : 'VENDA',
+        // Corpo acima da média dos últimos 20 candles foi o recorte mais assertivo no backtest.
+        confidence: body >= avgBody ? 'Alta' : 'Média',
+        bodyRatio,
+        bodyVsAvg: avgBody > 0 ? body / avgBody : null,
+    };
+}
+
+const m1Cache = {};
+
+async function getM1Signal(pairLabel, nowMs = Date.now()) {
+    const bucketStart = Math.floor(nowMs / M1_MS) * M1_MS;
+    const cached = m1Cache[pairLabel];
+    // Vários usuários pedem o sinal no mesmo instante do candle: reaproveita por 3s.
+    if (cached && cached.bucketStart === bucketStart && nowMs - cached.at < 3000) return cached.result;
+
+    const allCandles = await fetchIntradayCandles(pairLabel, 'M1');
+    if (!allCandles || allCandles.length < 40) return null;
+    const { closed, forming } = splitFormingCandle(allCandles, M1_MS, nowMs);
+    if (!forming || forming.time !== bucketStart) {
+        return {
+            pair: pairLabel, timeframe: 'M1', direction: null, noEntry: true,
+            reason: 'Os dados do candle atual ainda não chegaram. Tente no próximo candle.',
+        };
+    }
+    // Indicadores seguem calculados (inclusive o BwAlpha), mas a decisão do M1 é a leitura do candle atual.
+    const technical = computeTechnicalSignal(closed, forming);
+    const follow = computeCandleFollowSignal(closed, forming);
+    const result = {
+        ...technical,
+        pair: pairLabel,
+        timeframe: 'M1',
+        price: forming.close,
+        direction: follow.direction,
+        confidence: follow.confidence || null,
+        noEntry: !follow.direction,
+        reason: follow.reason || null,
+        candleAtual: { bodyRatio: follow.bodyRatio ?? null, bodyVsAvg: follow.bodyVsAvg ?? null },
+    };
+    m1Cache[pairLabel] = { bucketStart, at: nowMs, result };
+    return result;
+}
+
 const technicalCache = {};
 const TIMEFRAME_MINUTES = { M1: 1, M5: 5 };
 
@@ -716,12 +782,35 @@ router.post('/signal', authMiddleware, requireVip, async (req, res) => {
         return res.status(409).json({ error: 'Mercado fechado no momento. Os ativos abrem de domingo às 22h até sexta às 22h (horário UTC).', marketClosed: true });
     }
     try {
-        const result = await getTechnicalSignal(pair, timeframe);
+        const requestedAt = Date.now();
+        let result, entry, expiry;
+        if (timeframe === 'M1') {
+            const bucketStart = Math.floor(requestedAt / M1_MS) * M1_MS;
+            const elapsed = requestedAt - bucketStart;
+            if (elapsed < M1_MIN_ELAPSED_MS) {
+                return res.status(425).json({
+                    error: 'Ainda é cedo para ler este candle. O sinal sai perto do fechamento.',
+                    tooEarly: true,
+                    releaseAt: bucketStart + M1_MS - M1_RELEASE_BEFORE_CLOSE_MS,
+                });
+            }
+            result = await getM1Signal(pair, requestedAt);
+            entry = bucketStart + M1_MS;
+            expiry = entry + M1_MS;
+            if (result && !result.noEntry && entry - Date.now() < M1_MIN_ENTRY_LEAD_MS) {
+                result = { ...result, direction: null, noEntry: true, reason: 'Não deu tempo de entrar neste candle. Tente no próximo.' };
+            }
+        } else {
+            result = await getTechnicalSignal(pair, timeframe);
+            ({ entry, expiry } = computeEntry(timeframe, requestedAt));
+        }
         if (!result) {
             return res.status(502).json({ error: 'Não foi possível calcular o sinal agora. Tente novamente.' });
         }
-        const requestedAt = Date.now();
-        const { entry, expiry } = computeEntry(timeframe, requestedAt);
+        if (result.noEntry) {
+            // Sem entrada não vai para o histórico: não há operação para conferir.
+            return res.json({ ...result, requestedAt, entry: null, expiry: null, analysisId: null });
+        }
         let analysisId = null;
         try {
             const saved = await pool.query(
@@ -776,6 +865,6 @@ router.get('/history', authMiddleware, async (req, res) => {
 
 module.exports = {
     router, getQuotes, getIndicators, getEconomicSnapshot, getNews, getHistory, fetchIntradayCandles, TIMEFRAME_MINUTES,
-    computeTechnicalSignal, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, isMarketOpen,
+    computeTechnicalSignal, computeCandleFollowSignal, getM1Signal, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, isMarketOpen,
     emaSeries, rsiLast, macdHistogramLast, detectCandlePatterns, getChinesaStrategySignal, getBwalphaIndicator,
 };

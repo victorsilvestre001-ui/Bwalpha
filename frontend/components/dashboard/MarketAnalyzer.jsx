@@ -1,11 +1,12 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
-import { Sparkles, AlertTriangle, Lock, Crown, Loader2, Clock } from "lucide-react";
+import { Sparkles, AlertTriangle, Lock, Crown, Loader2, Clock, Info } from "lucide-react";
 import { api } from "@/lib/api";
 import { ASSETS, ASSET_LIST } from "@/lib/assets";
 import TradingViewWidget from "./TradingViewWidget";
 import AnalyzingOverlay from "./AnalyzingOverlay";
+import CandleWatch from "./CandleWatch";
 import SignalResult from "./SignalResult";
 import { computeEntry } from "./CandleTimer";
 import Dropdown from "./Dropdown";
@@ -17,6 +18,17 @@ const TIMEFRAME_OPTIONS = [
   { value: "M5", label: "M5", hint: "5 minutos" }
 ];
 const MIN_ANIMATION_MS = 2600;
+// M1: o sinal sai perto do fechamento do candle atual (validado no backtest).
+const M1_MS = 60_000;
+const M1_RELEASE_BEFORE_CLOSE_MS = 13_000;
+
+// Próximo instante de liberar o sinal M1: 13s antes do candle atual fechar,
+// ou do seguinte se esse ponto já passou.
+function nextM1Release(t) {
+  let release = Math.floor(t / M1_MS) * M1_MS + M1_MS - M1_RELEASE_BEFORE_CLOSE_MS;
+  if (t > release - 500) release += M1_MS;
+  return release;
+}
 
 export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
   const [pair, setPair] = useState("EURUSD");
@@ -27,36 +39,59 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
   const [error, setError] = useState("");
   const [marketOpen, setMarketOpen] = useState(null);
   const [offset, setOffset] = useState(null);
+  const [watching, setWatching] = useState(null); // { pair, timeframe, releaseAt, startedAt }
+  const runId = useRef(0);
 
   useEffect(() => {
     api.marketStatus().then((s) => setMarketOpen(!!s?.open)).catch(() => {});
     syncClock({ force: true }).then(setOffset);
   }, []);
 
+  function cancelWatch() {
+    runId.current += 1;
+    setWatching(null);
+  }
+
   async function analyze() {
-    setLoading(true);
+    const id = ++runId.current;
     setError("");
     setResult(null);
     setTiming(null);
-    // Garante o relógio sincronizado antes de marcar o horário do pedido.
+    // Garante o relógio sincronizado antes de marcar os horários.
     setOffset(await syncClock());
+    if (id !== runId.current) return;
+
+    if (timeframe === "M1") {
+      const startedAt = now();
+      const releaseAt = nextM1Release(startedAt);
+      setWatching({ pair, timeframe, releaseAt, startedAt });
+      while (now() < releaseAt) {
+        await new Promise((r) => setTimeout(r, Math.min(250, releaseAt - now())));
+        if (id !== runId.current) return;
+      }
+      setWatching(null);
+    }
+
+    setLoading(true);
     const started = now();
     try {
       const data = await api.signal(pair, timeframe);
-      const wait = MIN_ANIMATION_MS - (now() - started);
+      if (id !== runId.current) return;
+      // No M1 cada segundo conta para a entrada: sem animação mínima.
+      const wait = timeframe === "M1" ? 0 : MIN_ANIMATION_MS - (now() - started);
       if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      setResult(data);
+      if (data.noEntry) return;
       // Usa a entrada calculada e salva pelo servidor (a mesma que vai para o histórico).
       const local = computeEntry(timeframe, now());
       const entry = data.entry ?? local.entry;
       const expiry = data.expiry ?? local.expiry;
-      setResult(data);
       setTiming({ requestedAt: data.requestedAt ?? started, entry, expiry });
     } catch (err) {
       if (err.data?.marketClosed) setMarketOpen(false);
-      if (err.data?.vipRequired) { setError(err.message); return; }
       setError(err.message || "Não foi possível gerar o sinal agora.");
     } finally {
-      setLoading(false);
+      if (id === runId.current) setLoading(false);
     }
   }
 
@@ -86,12 +121,19 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
           )}
 
           <div className="mt-6 space-y-4">
-            <Dropdown label="Ativo" options={ASSET_OPTIONS} value={pair} onChange={(v) => { setPair(v); setResult(null); }} />
-            <Dropdown label="Timeframe" options={TIMEFRAME_OPTIONS} value={timeframe} onChange={(v) => { setTimeframe(v); setResult(null); }} />
+            <Dropdown label="Ativo" options={ASSET_OPTIONS} value={pair} onChange={(v) => { cancelWatch(); setPair(v); setResult(null); }} />
+            <Dropdown label="Timeframe" options={TIMEFRAME_OPTIONS} value={timeframe} onChange={(v) => { cancelWatch(); setTimeframe(v); setResult(null); }} />
           </div>
 
+          {timeframe === "M5" && (
+            <div className="mt-4 flex items-start gap-2 rounded-lg border border-volt/30 bg-volt/10 px-3 py-2 text-xs text-volt-soft">
+              <Info size={14} className="mt-0.5 shrink-0" />
+              <span>O M5 teve menor precisão nos nossos testes. Para sinais mais assertivos, use o M1.</span>
+            </div>
+          )}
+
           {isVip ? (
-            <button onClick={analyze} disabled={loading} className="btn-primary mt-6 w-full !py-4 text-base">
+            <button onClick={analyze} disabled={loading || !!watching} className="btn-primary mt-6 w-full !py-4 text-base">
               <Sparkles size={18} /> Analisar com IA
             </button>
           ) : (
@@ -113,7 +155,8 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
           )}
         </div>
 
-        {result && <SignalResult result={result} timing={timing} />}
+        {watching && <CandleWatch {...watching} onCancel={cancelWatch} />}
+        {result && <SignalResult result={result} timing={timing} onRetry={analyze} />}
 
       </div>
 
