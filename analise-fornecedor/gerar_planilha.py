@@ -261,8 +261,15 @@ premissas = [
     ('emb', 'Embalagem por pedido/unidade (R$)', 1.00, BRL, 'Estimativa: saquinho + etiqueta'),
     ('ml_com', 'Mercado Livre: comissão', 0.14, PCT, 'Aproximado (anúncio clássico, beleza: ~11–14%). Usei 14% para ficar do lado seguro. Confira a taxa atual'),
     ('ml_fixa', 'Mercado Livre: taxa fixa por venda abaixo de R$ 79 (R$)', 6.75, BRL, 'Aproximado (maior faixa abaixo de R$ 79). Confira a taxa atual'),
-    ('sh_com', 'Shopee: comissão + frete grátis', 0.20, PCT, 'Aproximado. Confira a taxa atual'),
-    ('sh_fixa', 'Shopee: taxa fixa por item (R$)', 4.00, BRL, 'Aproximado. Confira a taxa atual'),
+    ('sh_com', 'Shopee: comissão (já inclui frete grátis), itens de R$ 8 a R$ 79,99', 0.20, PCT, 'Tabela Shopee desde mar/2026. De R$ 80 a R$ 99,99 vira 14% + R$ 16: evite preços nessa faixa'),
+    ('sh_fixa', 'Shopee: taxa fixa por item (R$)', 4.00, BRL, 'Tabela Shopee desde mar/2026. Vendedor CPF paga + R$ 3 por item acima de certo volume: some aqui se for o seu caso'),
+    ('tt_com', 'TikTok Shop: comissão + frete grátis, itens abaixo de R$ 50', 0.16, PCT, '10% de comissão + 6% do programa de frete grátis (regra de 15/07/2026). Acima de R$ 50: 12% + R$ 6'),
+    ('tt_fixa', 'TikTok Shop: taxa fixa por item abaixo de R$ 50 (R$)', 4.00, BRL, 'Regra de 15/07/2026. Comissão de afiliado (se usar) é por fora'),
+    ('az_com', 'Amazon: comissão (beleza)', 0.15, PCT, 'Beleza fica entre 12% e 15%; usei 15%. Frete/logística da Amazon não incluído'),
+    ('az_fixa', 'Amazon: taxa por item, plano Individual (R$)', 2.00, BRL, 'No plano Profissional é R$ 19/mês em vez de R$ 2 por item'),
+    ('shein_com', 'Shein: comissão', 0.18, PCT, '18% na maioria das categorias, sem taxa fixa. Exige CNPJ; 90 dias sem comissão para novos'),
+    ('mg_com', 'Magalu: comissão (estimativa)', 0.16, PCT, 'Varia de 10% a 20% por categoria; novos vendedores têm 9,9% por 3 meses. Confira no portal Magalu'),
+    ('mg_fixa', 'Magalu: taxa fixa por item acima de R$ 10 (R$, estimativa)', 5.00, BRL, 'Valor definido por categoria: confira no portal Magalu'),
     ('meta', 'Meta de lucro por mês (R$)', 1000.00, BRL, 'Valor de exemplo: coloque a sua meta'),
     ('margem', 'Lucro mínimo sobre o preço de venda (aba Preços por Canal)', 0.15, PCT, 'Pedido do dono da loja: sair com pelo menos 15% de lucro'),
     ('mp_taxa', 'Mercado Pago: taxa no cartão, recebimento na hora (seu site)', 0.0499, PCT, 'Aproximado. No Pix a taxa é menor (~1%); usei o cartão para ficar do lado seguro'),
@@ -390,11 +397,13 @@ pc['A1'].font = Font(name=FONT, bold=True, size=13)
 pc['A2'] = ('Preço = (custo + embalagem + taxa fixa) ÷ (1 − comissão − margem), arredondado para cima terminando em ,90. '
             'Markup = quanto o preço está acima do custo. Só produtos marcados "S" e os kits.')
 pc['A2'].font = Font(name=FONT, italic=True, color='666666')
-grupos = [('Mercado Livre', REF['ml_com'], REF['ml_fixa']), ('Shopee', REF['sh_com'], REF['sh_fixa']),
-          ('Seu site (Mercado Pago, cartão)', REF['mp_taxa'], None)]
+grupos = [('Seu site (Mercado Pago)', REF['mp_taxa'], None), ('Shopee', REF['sh_com'], REF['sh_fixa']),
+          ('TikTok Shop', REF['tt_com'], REF['tt_fixa']), ('Shein', REF['shein_com'], None),
+          ('Amazon', REF['az_com'], REF['az_fixa']), ('Mercado Livre', REF['ml_com'], REF['ml_fixa']),
+          ('Magalu', REF['mg_com'], REF['mg_fixa'])]
 cab = ['Produto', 'Marca', 'Custo/un.', 'Internet: maior preço visto']
 for g, _, _ in grupos:
-    cab += [f'{g}: preço mínimo', 'Markup sobre o custo', 'Lucro R$', 'Margem']
+    cab += [f'{g}: preço mínimo', f'{g}: markup', f'{g}: lucro R$']
 cab += ['Aviso']
 pc.append([]); pc.append(cab)
 for c in pc[4]:
@@ -413,31 +422,34 @@ for nome_f, marca_f, custo_f, net_f in linhas_pc:
     if net_f:
         pc.cell(r, 4, net_f).number_format = BRL
     col = 5
+    precos = []
     for g, com, fixa in grupos:
-        P, M, L, G = (get_column_letter(col + k) for k in range(4))
+        P, M, L = (get_column_letter(col + k) for k in range(3))
         fx = f'+{fixa}' if fixa else ''
         pc[f'{P}{r}'] = f'=CEILING((C{r}+{REF["emb"]}{fx})/(1-{com}-{REF["margem"]})+0.1,1)-0.1'
         pc[f'{M}{r}'] = f'={P}{r}/C{r}-1'
         fx2 = f'-{fixa}' if fixa else ''
         pc[f'{L}{r}'] = f'={P}{r}*(1-{com}){fx2}-C{r}-{REF["emb"]}'
-        pc[f'{G}{r}'] = f'={L}{r}/{P}{r}'
-        pc[f'{P}{r}'].number_format = BRL; pc[f'{P}{r}'].font = NEGRITO
-        pc[f'{M}{r}'].number_format = '0%'; pc[f'{L}{r}'].number_format = BRL; pc[f'{G}{r}'].number_format = PCT
-        col += 4
-    pc.cell(r, col, f'=IF(AND(ISNUMBER(D{r}),E{r}>D{r}),"Mercado Livre acima do preço da internet: venda em kit","")')
+        pc[f'{M}{r}'].number_format = '0%'; pc[f'{L}{r}'].number_format = BRL
+        precos.append(P)
+        col += 3
+    mercados = ','.join(f'IF({P}{r}>D{r},"{g.split(" (")[0]}, ","")' for (g, _, _), P in list(zip(grupos, precos))[1:])
+    pc.cell(r, col, f'=IF(ISNUMBER(D{r}),IF(_xlfn.CONCAT({mercados})="","",'
+                    f'"Acima da internet em: "&LEFT(_xlfn.CONCAT({mercados}),LEN(_xlfn.CONCAT({mercados}))-2)&". Venda em kit nesses."),"")')
     for c in pc[r]:
         c.border = BORDA
-        if c.font != NEGRITO:
-            c.font = PRETO
-    pc[f'E{r}'].font = pc[f'I{r}'].font = pc[f'M{r}'].font = NEGRITO
+        c.font = PRETO
+    for P in precos:
+        pc[f'{P}{r}'].number_format = BRL; pc[f'{P}{r}'].font = NEGRITO
     r += 1
 pc.column_dimensions['A'].width = 44; pc.column_dimensions['B'].width = 14
 for k in range(3, col + 1):
     pc.column_dimensions[get_column_letter(k)].width = 12
-pc.column_dimensions[get_column_letter(col)].width = 46
+pc.column_dimensions[get_column_letter(col)].width = 60
 pc.freeze_panes = 'B5'
-for L0 in 'EIM':
-    pc.conditional_formatting.add(f'{L0}5:{L0}{r-1}', CellIsRule(operator='greaterThan', formula=['0'], fill=PatternFill('solid', start_color='FFF0F4')))
+for P in precos:
+    pc.conditional_formatting.add(f'{P}5:{P}{r-1}', CellIsRule(operator='greaterThan', formula=['0'], fill=PatternFill('solid', start_color='FFF0F4')))
+pc.row_dimensions[4].height = 58
 
 # ---------- Resumo ----------
 rs = wb.create_sheet('Resumo', 0)
