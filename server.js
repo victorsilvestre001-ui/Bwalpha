@@ -15,6 +15,7 @@ const { router: marketRoutes } = require('./marketRoutes');
 const { router: telegramRoutes, setupWebhook } = require('./telegramRoutes');
 const marketAnalysisRoutes = require('./marketAnalysisRoutes');
 const { router: analysesRoutes, resolvePendingAnalyses } = require('./analysesRoutes');
+const adminRoutes = require('./adminRoutes');
 
 const app = express();
 
@@ -59,6 +60,7 @@ app.use('/api/calendar', calendarRoutes);
 app.use('/api/checkout', checkoutRoutes);
 app.use('/api/market', marketRoutes);
 app.use('/api/analyses', analysesRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/telegram', telegramRoutes);
 app.use('/api/webhook/market', marketAnalysisRoutes);
 
@@ -166,6 +168,16 @@ CREATE TABLE IF NOT EXISTS analyses (
 );
 
 CREATE INDEX IF NOT EXISTS idx_analyses_user ON analyses(user_id, requested_at DESC);
+-- Visitas do site (sem cookies: visitor_hash é um código anônimo que muda todo dia).
+CREATE TABLE IF NOT EXISTS page_visits (
+    id BIGSERIAL PRIMARY KEY,
+    path VARCHAR(200) NOT NULL,
+    visitor_hash CHAR(64) NOT NULL,
+    source VARCHAR(100),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_page_visits_created ON page_visits(created_at);
+
 CREATE INDEX IF NOT EXISTS idx_analyses_pending ON analyses(expiry_time) WHERE result IS NULL;
 `;
 

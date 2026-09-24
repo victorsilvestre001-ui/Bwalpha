@@ -1,5 +1,6 @@
 import "./globals.css";
 import ConsentBanner from "@/components/ConsentBanner";
+import VisitTracker from "@/components/VisitTracker";
 
 export const metadata = {
   title: "TradeOn AI | Inteligência Artificial para Traders",
@@ -15,6 +16,7 @@ export default function RootLayout({ children }) {
       <body>
         {children}
         <ConsentBanner />
+        <VisitTracker />
       </body>
     </html>
   );

@@ -1,5 +1,6 @@
 "use client";
-import { LineChart, Bot, History, UserRound, LogOut, Crown } from "lucide-react";
+import Link from "next/link";
+import { LineChart, Bot, History, UserRound, LogOut, Crown, BarChart3 } from "lucide-react";
 import Logo from "@/components/Logo";
 
 export const TABS = [
@@ -49,6 +50,11 @@ export default function Sidebar({ user, tab, onChangeTab, onLogout }) {
               </button>
             );
           })}
+          {user?.plan === "owner" && (
+            <Link href="/admin" className="group mt-3 flex items-center gap-3 rounded-xl border border-void-line px-3.5 py-3 text-sm font-medium text-mist-dim transition-all hover:border-neon/40 hover:text-mist">
+              <BarChart3 size={18} className="text-mist-faint group-hover:text-neon" /> Painel do dono
+            </Link>
+          )}
         </nav>
 
         {!isPaid(user) && (
@@ -73,7 +79,12 @@ export default function Sidebar({ user, tab, onChangeTab, onLogout }) {
       {/* Mobile top bar */}
       <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-void-line bg-void/85 px-4 backdrop-blur-xl lg:hidden">
         <Logo href="/dashboard" size={28} />
-        <button onClick={onLogout} className="rounded-lg p-2 text-mist-dim" aria-label="Sair"><LogOut size={18} /></button>
+        <div className="flex items-center gap-1">
+          {user?.plan === "owner" && (
+            <Link href="/admin" className="rounded-lg p-2 text-mist-dim" aria-label="Painel do dono"><BarChart3 size={18} /></Link>
+          )}
+          <button onClick={onLogout} className="rounded-lg p-2 text-mist-dim" aria-label="Sair"><LogOut size={18} /></button>
+        </div>
       </header>
 
       {/* Mobile bottom nav */}
