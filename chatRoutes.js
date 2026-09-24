@@ -1,31 +1,51 @@
 const express = require('express');
 const pool = require('./db');
 const { authMiddleware, requirePaidPlan } = require('./authMiddleware');
+const Anthropic = require('@anthropic-ai/sdk');
 const { getQuotes, getIndicators, getEconomicSnapshot } = require('./marketRoutes');
+
+const anthropic = new Anthropic(); // usa ANTHROPIC_API_KEY
+const CHAT_MODEL = 'claude-sonnet-4-6';
+const HISTORY_MESSAGES = 8; // últimas mensagens enviadas como contexto da conversa
 
 const router = express.Router();
 
-const SYSTEM_PROMPT = `Você é o assistente de IA da TradeOn AI, especializado exclusivamente em trading.
+const SYSTEM_PROMPT = `Você é o assistente de IA da TradeOn AI: um professor de trading paciente e didático, que explica mercado financeiro para brasileiros de forma clara, bonita e fácil de entender.
 
-Você pode ajudar com:
-- Explicação de price action e estrutura de mercado
-- Gerenciamento de risco (position sizing, stop loss, R:R)
-- Análise de prints/gráficos enviados pelo usuário (tendência, suporte, resistência)
-- Explicação de indicadores técnicos
-- Dúvidas sobre os ativos EURUSD, EURJPY e XAUUSD (ouro)
+Seu escopo:
+- Price action e estrutura de mercado
+- Gerenciamento de risco (tamanho de posição, stop, risco/retorno, gestão de banca)
+- Análise de prints de gráficos enviados pelo usuário (tendência, suporte, resistência)
+- Indicadores técnicos e padrões de candle
+- Os ativos EURUSD, EURJPY e XAUUSD (ouro), e psicologia do trader
 
-Você recebe cotações reais e atualizadas em tempo real no início da conversa (formato "[Cotações atuais em tempo real: ...]"). Use esses valores exatos quando o usuário perguntar sobre preços atuais — nunca invente ou estime um preço se a cotação real estiver disponível.
+Dados de mercado: no início da mensagem você pode receber cotações reais e dados macro entre colchetes (ex.: "[Cotações atuais em tempo real: ...]"). Use esses valores exatos quando falar de preço atual; nunca invente ou estime um preço que não foi informado. Se não houver cotação, diga que não tem o preço no momento.
 
-Regras importantes:
-- Não responda perguntas fora do escopo de trading/mercados financeiros
-- Sempre inclua um lembrete de que isso não é aconselhamento financeiro e envolve risco
-- Seja direto e objetivo, sem enrolação
-- Se o usuário enviar uma imagem de gráfico, estruture a resposta como:
-  Tendência: [Alta/Baixa/Lateral]
-  Resistência: [valor]
-  Suporte: [valor]
-  Probabilidade de continuação: [Baixa/Média/Alta]
-  Observação: [alerta sobre notícias/eventos relevantes, se aplicável]`;
+Como escrever as respostas (em português do Brasil, formatadas em Markdown):
+- Comece com uma frase curta que responde direto à pergunta.
+- Depois explique em seções com títulos curtos (## ou ###), cada uma com parágrafos de 1 a 3 frases.
+- Use listas para passos e características, **negrito** para os termos-chave, e tabelas quando comparar coisas (ex.: compra x venda, M1 x M5).
+- Sempre que ajudar, inclua um **exemplo prático** com números (ex.: banca de R$ 100, entrada de 2%, payout de 85%).
+- Explique qualquer termo técnico na primeira vez que ele aparecer, como se o usuário estivesse começando.
+- Termine com uma seção "### 📌 Resumo" com 2 a 4 tópicos curtos.
+- Na última linha, um lembrete em itálico de uma frase: *Conteúdo educativo, não é recomendação de investimento. Operar envolve risco.*
+- Ajuste o tamanho à pergunta: saudação ou pergunta simples pedem resposta curta (sem seções); pergunta de "como funciona" ou "me explica" pede a estrutura completa. Evite enrolação e repetição.
+- Use no máximo 3 ou 4 emojis por resposta, só como marcadores de seção.
+
+Se o usuário enviar a imagem de um gráfico, responda nesta estrutura:
+## Leitura do gráfico
+| Item | Leitura |
+|---|---|
+| Tendência | Alta / Baixa / Lateral |
+| Resistência | valor |
+| Suporte | valor |
+| Probabilidade de continuação | Baixa / Média / Alta |
+Depois, em "### O que observar", explique em tópicos o porquê de cada leitura e cite notícias ou eventos relevantes, se houver.
+
+Limites:
+- Não responda perguntas fora de trading e mercado financeiro; diga com gentileza que só pode ajudar com esses temas.
+- Nunca prometa lucro, acerto garantido ou "sinal certeiro".
+- Use o histórico da conversa para entender perguntas de continuação (ex.: "e no ouro?").`;
 
 // Aplica de verdade o limite diário de mensagens do plano gratuito. Antes,
 // só existia um endpoint informativo (/limit) que calculava o restante mas
@@ -118,26 +138,37 @@ router.post('/', authMiddleware, async (req, res) => {
             });
         }
 
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': process.env.ANTHROPIC_API_KEY,
-                'anthropic-version': '2023-06-01'
-            },
-            body: JSON.stringify({
-                model: 'claude-sonnet-4-6',
-                max_tokens: 1000,
-                system: SYSTEM_PROMPT,
-                messages: [{ role: 'user', content: userContent }]
-            })
-        });
+        // Últimas mensagens da conversa, para a IA entender perguntas de continuação.
+        const historyResult = await pool.query(
+            `SELECT role, message FROM chat_history WHERE user_id = $1 ORDER BY created_at DESC, id DESC LIMIT $2`,
+            [userId, HISTORY_MESSAGES]
+        );
+        const history = historyResult.rows.reverse()
+            .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.message)
+            .map((m) => ({ role: m.role, content: m.message }));
+        while (history.length && history[0].role !== 'user') history.shift();
 
-        const data = await response.json();
-        if (!response.ok || !data.content) {
-            console.error('ERRO ANTHROPIC:', response.status, JSON.stringify(data));
+        let aiText;
+        try {
+            const response = await anthropic.messages.create({
+                model: CHAT_MODEL,
+                max_tokens: 8000,
+                system: SYSTEM_PROMPT,
+                messages: [...history, { role: 'user', content: userContent }],
+            });
+            aiText = response.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
+            if (response.stop_reason === 'max_tokens') aiText += '\n\n_(Resposta resumida por ser muito longa. Pergunte a parte que quiser aprofundar.)_';
+        } catch (err) {
+            if (err instanceof Anthropic.RateLimitError) {
+                return res.status(503).json({ error: 'A IA está com muitos pedidos agora. Tente de novo em alguns segundos.' });
+            }
+            if (err instanceof Anthropic.APIError) {
+                console.error('ERRO ANTHROPIC:', err.status, err.message);
+                return res.status(502).json({ error: 'A IA não conseguiu responder agora. Tente novamente.' });
+            }
+            throw err;
         }
-        const aiText = data.content?.find(c => c.type === 'text')?.text || 'Erro ao gerar resposta';
+        if (!aiText) aiText = 'Não consegui gerar uma resposta agora. Tente reformular a pergunta.';
 
         await pool.query(
             `INSERT INTO chat_history (user_id, role, message) VALUES ($1, 'user', $2)`,

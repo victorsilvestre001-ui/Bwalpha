@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Send, ImagePlus, X, Bot, Loader2, Crown } from "lucide-react";
 import { api } from "@/lib/api";
 import { fileToPngBase64 } from "@/lib/image";
+import ChatMarkdown from "./ChatMarkdown";
 
 const SUGGESTIONS = ["Como está o EURUSD hoje?", "Explique o que é RSI de forma simples", "Qual a melhor gestão de risco para M1?"];
 
@@ -85,15 +86,24 @@ export default function ChatAssistant({ onUpgrade }) {
         )}
         {messages.map((m, i) => (
           <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-relaxed ${m.role === "user" ? "rounded-br-md bg-gradient-to-br from-neon/90 to-volt/90 text-void" : "rounded-bl-md border border-void-line bg-void-deep/70 text-mist"}`}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              {m.image && <img src={m.image} alt="" className="mb-2 max-h-48 rounded-lg" />}
-              {m.text}
-            </div>
+            {m.role === "user" ? (
+              <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-gradient-to-br from-neon/90 to-volt/90 px-4 py-3 text-sm leading-relaxed text-void">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {m.image && <img src={m.image} alt="" className="mb-2 max-h-48 rounded-lg" />}
+                {m.text}
+              </div>
+            ) : (
+              <div className="flex max-w-[92%] gap-2.5">
+                <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-neon to-volt"><Bot size={14} className="text-void" /></div>
+                <div className="min-w-0 rounded-2xl rounded-tl-md border border-void-line bg-void-deep/70 px-4 py-3.5">
+                  <ChatMarkdown text={m.text} />
+                </div>
+              </div>
+            )}
           </div>
         ))}
         {sending && (
-          <div className="flex items-center gap-2 text-sm text-mist-faint"><Loader2 size={14} className="animate-spin text-neon" /> Analisando…</div>
+          <div className="flex items-center gap-2 text-sm text-mist-faint"><Loader2 size={14} className="animate-spin text-neon" /> Preparando uma explicação completa…</div>
         )}
         <div ref={endRef} />
       </div>
