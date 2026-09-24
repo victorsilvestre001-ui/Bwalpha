@@ -179,6 +179,10 @@ PRODUTOS = [
     ('bf_cronos', 'Batom Cronos (BF10149)', 'Bellafemme', 'Maquiagem – Lábios', 24, 126.40, 12.90, 14.90, 'Estimado', 12.90, 'Opcional', 'N', 11, ''),
     ('bf_po_tons_escuros', 'Pó Compacto 4 Tonalidades Tons Escuros', 'Bellafemme', 'Maquiagem – Rosto', 24, 129.60, 16.90, 20.00, 'Estimado', 16.90, 'Opcional (confirmar qtd)', 'N', 11, 'Qtd cortada no print: considerei 24 (outro atacado vende caixa de 32). Pó para pele negra tem pouca oferta: bom diferencial'),
     ('ursinho_gloss', 'Brilho Labial Ursinho', 'Maria Pink', 'Maquiagem – Lábios', 24, 165.30, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (muitos gloss)', 'N', 11, ''),
+    # Lote 12
+    ('borboleta_gloss', 'Gloss Borboleta Brilho Labial', 'Maria Pink', 'Maquiagem – Lábios', 24, 135.99, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (muitos gloss)', 'N', 12, ''),
+    ('romance_noir', 'Delineador Líquido Romance Noir', 'Bellafemme', 'Maquiagem – Olhos', 24, 116.70, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 12, 'Delineador mais barato da lista'),
+    ('alleva_fruity_juicy', 'Lip Oil Fruity & Juicy 5ml (6 sabores)', 'Alleva', 'Maquiagem – Lábios', 1, 6.80, 6.89, 6.89, 'Confirmado', 11.90, 'Evitar (vendido quase pelo custo)', 'N', 12, 'Pitaya, Blueberry, Pêssego, Melancia, Coco, Morango. Visto a R$ 6,89 a unidade em outra loja'),
 ]
 
 # (nome, componentes (chaves; repetir = mais de uma unidade), preço de venda)
