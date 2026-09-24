@@ -93,7 +93,15 @@ PRODUTOS = [
     ('the_pink_blush', 'Blush Líquido The Pink Multiuso', 'Pink 21', 'Maquiagem – Rosto', 24, 158.80, 19.90, 21.70, 'Confirmado', 17.90, 'Comprar', 'S', 5, 'Blush e batom; em alta'),
     ('amora_delineador', 'Delineador Líquido Peel Off Amora', 'Pink 21', 'Maquiagem – Olhos', 24, 126.40, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 5, ''),
     ('pink21_lip_balm', 'Lip Balm (CS7085)', 'Pink 21', 'Maquiagem – Lábios', 24, 148.80, 10.00, 12.90, 'Estimado', 11.90, 'Opcional', 'N', 5, ''),
-    ('iconic_paleta', 'Paleta de Sombras The Iconic Cor 01', 'Pink 21', 'Maquiagem – Olhos', 1, 6.80, 11.99, 45.90, 'Estimado', 19.90, 'Comprar', 'S', 5, '9 cores. Outras paletas Pink 21 de R$ 11,99 a R$ 45,90'),
+    ('iconic_paleta', 'Paleta de Sombras The Iconic (Cor 01 e Cor 03)', 'Pink 21', 'Maquiagem – Olhos', 1, 6.80, 11.99, 45.90, 'Estimado', 19.90, 'Comprar', 'S', 5, '9 cores. Cor 03 no lote 6, mesmo preço. Outras paletas Pink 21 de R$ 11,99 a R$ 45,90'),
+    # Lote 6
+    ('pink21_corretivo_cs5963', 'Corretivo Líquido (CS5963)', 'Pink 21', 'Maquiagem – Rosto', 24, 93.99, 12.90, 12.90, 'Estimado', 12.90, 'Comprar (único corretivo)', 'S', 6, 'Corretivo mais barato da lista'),
+    ('angels_mascara', 'Máscara para Cílios Volume e Define', '4Angels', 'Maquiagem – Olhos', 24, 142.90, 10.00, 12.90, 'Estimado', 11.90, 'Confirmar qtd', 'N', 6, 'Qtd na caixa cortada no print: considerei 24, confirmar'),
+    ('angels_batom', 'Batom Líquido (BR1262)', '4Angels', 'Maquiagem – Lábios', 24, 142.90, 10.00, 12.90, 'Estimado', 11.90, 'Evitar (já tem batom)', 'N', 6, ''),
+    ('angels_gloss_caramel', 'Lip Gloss Caramel (BR1260)', '4Angels', 'Maquiagem – Lábios', 24, 142.90, 10.00, 12.90, 'Estimado', 11.90, 'Evitar (muitos gloss)', 'N', 6, ''),
+    ('angels_lip_tint', 'Lip Tint (BR1255)', '4Angels', 'Maquiagem – Lábios', 24, 131.30, 10.00, 10.00, 'Confirmado', 11.90, 'Opcional', 'N', 6, 'Lip tint 4Angels visto por R$ 10'),
+    ('angels_delineador', 'Delineador Líquido (BR1250)', '4Angels', 'Maquiagem – Olhos', 24, 113.80, 10.00, 12.90, 'Estimado', 11.90, 'Opcional', 'N', 6, ''),
+    ('angels_paleta', 'Paleta de Sombras (BR1248)', '4Angels', 'Maquiagem – Olhos', 24, 113.60, 10.00, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 6, 'A The Iconic (Pink 21) dá mais lucro'),
 ]
 
 # (nome, componentes (chaves; repetir = mais de uma unidade), preço de venda)
