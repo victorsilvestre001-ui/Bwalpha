@@ -197,6 +197,24 @@ PRODUTOS = [
     ('lixa_banana', 'Lixa de Unha Banana (c/10)', 'Ruby Anjo', 'Unhas', 10, 18.90, 3.90, 4.90, 'Estimado', 4.90, 'Só em kit / brinde', 'N', 13, 'R$ 1,89 cada'),
     ('kit_esponjas_frasco', 'Kit de Esponjas e Frasco de Viagem', 'Ruby Anjo', 'Acessórios', 1, 6.50, 14.90, 19.90, 'Estimado', 16.90, 'Opcional', 'N', 13, ''),
     ('cilios_tufinho', 'Cílios Tufinho 20P 12mm', 'Ruby Anjo', 'Maquiagem – Olhos', 24, 102.60, 9.90, 14.90, 'Estimado', 12.90, 'Opcional', 'N', 13, 'Cílios em tufo estão em alta'),
+    # Lote 14
+    ('ruby_esponja_piranha', 'Kit de Esponjas e Piranha de Flor', 'Ruby Anjo', 'Acessórios', 1, 5.80, 12.90, 14.90, 'Estimado', 12.90, 'Opcional', 'N', 14, ''),
+    ('ruby_esponjas_6', 'Kit de Esponjas c/6 (RA668)', 'Ruby Anjo', 'Acessórios', 1, 6.50, 13.90, 19.90, 'Estimado', 16.90, 'Opcional', 'N', 14, '6 esponjas; o kit Mahav de 4 é marca mais conhecida'),
+    ('missrose_corretivo', 'Corretivo Líquido (c/30)', 'Miss Rôse', 'Maquiagem – Rosto', 30, 200.20, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (tem corretivo melhor)', 'N', 14, 'Caixa com 30'),
+    ('safira_magic_color', 'Gloss Labial Magic Color', 'Safira', 'Maquiagem – Lábios', 1, 6.25, 10.00, 12.90, 'Estimado', 11.90, 'Evitar (muitos gloss)', 'N', 14, ''),
+    ('wecandy_mascara_curve', 'Máscara para Cílios Curve', 'We Candy', 'Maquiagem – Olhos', 24, 164.99, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (Super Poderes é mais barata)', 'N', 14, 'Qtd na caixa cortada no print: considerei 24'),
+    ('vivai_core', 'Batom Matte Core (3412.1.1)', 'Vivai', 'Maquiagem – Lábios', 24, 129.99, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 14, ''),
+    ('frandy_blender', 'Esponja Beauty Blender', 'Miss Frandy', 'Acessórios', 1, 5.90, 9.90, 12.90, 'Estimado', 11.90, 'Opcional', 'N', 14, ''),
+    ('femme_mascara_incolor', 'Máscara para Sobrancelhas Incolor', 'Femme Paris', 'Maquiagem – Sobrancelhas', 24, 139.99, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 14, 'Qtd na caixa não aparece: considerei 24'),
+    ('femme_primer', 'Primer Pré-Maquiagem 20ml', 'Femme Paris', 'Maquiagem – Rosto', 1, 5.50, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 14, ''),
+    ('femme_lip_stick', 'Batom Lip Stick', 'Femme Paris', 'Maquiagem – Lábios', 24, 145.80, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 14, ''),
+    ('femme_po_solto', 'Pó Solto (FR193)', 'Femme Paris', 'Maquiagem – Rosto', 24, 160.40, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (Tapioca é mais barato)', 'N', 14, ''),
+    ('safira_delineador', 'Delineador Líquido Basic', 'Safira', 'Maquiagem – Olhos', 24, 101.80, 10.00, 12.90, 'Estimado', 11.90, 'Opcional', 'N', 14, 'Delineador mais barato da lista (R$ 4,24)'),
+    ('safira_gloss_chaveiro', 'Gloss Labial com Chaveiro (Maracujá, Cereja, Melancia, Morango)', 'Safira', 'Maquiagem – Lábios', 24, 151.20, 10.00, 12.90, 'Estimado', 11.90, 'Evitar (muitos gloss)', 'N', 14, '4 sabores'),
+    ('safira_iluminador_liquido', 'Iluminador Líquido', 'Safira', 'Maquiagem – Rosto', 24, 152.99, 12.90, 14.90, 'Estimado', 13.90, 'Opcional', 'N', 14, ''),
+    ('safira_lip_fizz', 'Gloss Labial Lip Fizz', 'Safira', 'Maquiagem – Lábios', 24, 145.50, 10.00, 12.90, 'Estimado', 11.90, 'Evitar (muitos gloss)', 'N', 14, ''),
+    ('safira_gloss_reflection', 'Gloss Reflection', 'Safira', 'Maquiagem – Lábios', 24, 154.30, 10.00, 12.90, 'Estimado', 11.90, 'Evitar (muitos gloss)', 'N', 14, ''),
+    ('safira_aura_balm', 'Balm Labial Ursinho Aura com Chaveiro', 'Safira', 'Maquiagem – Lábios', 24, 145.50, 9.00, 10.00, 'Estimado', 9.90, 'Evitar (lucro baixo)', 'N', 14, ''),
 ]
 
 # (nome, componentes (chaves; repetir = mais de uma unidade), preço de venda)
