@@ -1,7 +1,7 @@
 // Catálogo da loja. Troque nomes, preços e imagens pelos seus produtos reais.
 // `img` é opcional: sem ela, a loja desenha uma ilustração do produto (shape + cores).
 window.STORE = {
-  name: 'Bella Box',
+  name: 'Élan Beauté',
   tagline: 'Beleza importada',
   whatsapp: '5511999999999',
   freeShippingFrom: 199,
@@ -11,7 +11,7 @@ window.STORE = {
   flashSaleEnds: (() => { const d = new Date(); d.setHours(23, 59, 59, 0); return d; })(),
   coupons: {
     BEMVINDA10: { type: 'percent', value: 10, label: '10% OFF na primeira compra' },
-    BELLA20: { type: 'percent', value: 20, min: 299, label: '20% OFF acima de R$ 299' },
+    ELAN20: { type: 'percent', value: 20, min: 299, label: '20% OFF acima de R$ 299' },
     FRETEGRATIS: { type: 'shipping', label: 'Frete grátis' }
   }
 };

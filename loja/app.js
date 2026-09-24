@@ -18,8 +18,8 @@
   };
   const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   const store = {
-    get(k, d) { try { const v = localStorage.getItem('bellabox.' + k); return v ? JSON.parse(v) : d; } catch { return d; } },
-    set(k, v) { try { localStorage.setItem('bellabox.' + k, JSON.stringify(v)); } catch { /* sem storage */ } }
+    get(k, d) { try { const v = localStorage.getItem('elan.' + k); return v ? JSON.parse(v) : d; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem('elan.' + k, JSON.stringify(v)); } catch { /* sem storage */ } }
   };
   const stars = r => '★'.repeat(Math.round(r)) + '☆'.repeat(5 - Math.round(r));
 
@@ -215,7 +215,7 @@
       </section>
 
       <section class="section section-soft"><div class="container">
-        <div class="section-head"><div><h2>Lançamentos e importados ✈️</h2><p>Acabaram de chegar na Bella Box</p></div></div>
+        <div class="section-head"><div><h2>Lançamentos e importados ✈️</h2><p>Acabaram de chegar na Élan Beauté</p></div></div>
         ${rail(news)}
       </div></section>
 
@@ -402,7 +402,7 @@
     };
     if (cep) showShip();
     tick();
-    document.title = `${p.name} | Bella Box`;
+    document.title = `${p.name} | Élan Beauté`;
   }
 
   function maskCep(input) {
@@ -467,7 +467,7 @@
 
   function pageInfo(slug) {
     const pages = {
-      sobre: ['Quem somos', 'A Bella Box nasceu para trazer as melhores marcas de beleza importada com preço justo, entrega rápida e atendimento de verdade.'],
+      sobre: ['Quem somos', 'A Élan Beauté nasceu para trazer as melhores marcas de beleza importada com preço justo, entrega rápida e atendimento de verdade.'],
       entrega: ['Prazos e entregas', `Enviamos para todo o Brasil. Frete grátis nas compras acima de ${brl(S.freeShippingFrom)} (modalidade econômica). Pedidos pagos até 14h são postados no mesmo dia útil.`],
       trocas: ['Trocas e devoluções', 'Você tem até 7 dias corridos após o recebimento para desistir da compra, conforme o Código de Defesa do Consumidor. Produtos com defeito podem ser trocados em até 30 dias.'],
       pagamento: ['Formas de pagamento', `Pix com ${S.pixDiscount * 100}% de desconto, cartão de crédito em até ${S.maxInstallments}x sem juros e boleto bancário.`],
@@ -556,7 +556,7 @@
     clearInterval(slideTimer);
     closeDrawers();
     $('#searchSuggest').classList.remove('open');
-    document.title = 'Bella Box | Maquiagem, Skincare e Perfumes Importados';
+    document.title = 'Élan Beauté | Maquiagem, Skincare e Perfumes Importados';
     const hash = location.hash.slice(1) || '/';
     const [path, qs] = hash.split('?');
     const params = new URLSearchParams(qs || '');
@@ -647,7 +647,7 @@
     coupon = 'BEMVINDA10'; saveCart();
     e.target.innerHTML = '<p style="margin:0;font-weight:700">Prontinho! Seu cupom <u>BEMVINDA10</u> já está aplicado na sacola 💖</p>';
   };
-  $('#whatsapp').href = `https://wa.me/${S.whatsapp}?text=${encodeURIComponent('Olá! Vim pelo site da Bella Box e gostaria de ajuda.')}`;
+  $('#whatsapp').href = `https://wa.me/${S.whatsapp}?text=${encodeURIComponent('Olá! Vim pelo site da Élan Beauté e gostaria de ajuda.')}`;
   $('#year').textContent = new Date().getFullYear();
 
   renderNav();

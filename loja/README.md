@@ -1,4 +1,4 @@
-# Bella Box — loja de cosméticos importados
+# Élan Beauté — loja de cosméticos importados
 
 Loja virtual estática (HTML + CSS + JavaScript puro, sem build). Estrutura inspirada em e-commerces de beleza importada: barra de promoções, cabeçalho com busca, menu de categorias com submenus, vitrines, página de produto completa, sacola lateral e checkout.
 
@@ -27,7 +27,7 @@ Abra http://localhost:8080. Para publicar, suba a pasta `loja/` em qualquer hosp
 | Estoque baixo | Cards e produto | "Restam só N unidades" quando `stock <= 10` |
 | Outlet | Menu | Tag `outlet` ou estoque ≤ 5 |
 
-Cupons (em `products.js`): `BEMVINDA10` (10%), `BELLA20` (20% acima de R$ 299), `FRETEGRATIS`.
+Cupons (em `products.js`): `BEMVINDA10` (10%), `ELAN20` (20% acima de R$ 299), `FRETEGRATIS`.
 
 ## Como personalizar
 
