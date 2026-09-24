@@ -64,6 +64,17 @@ PRODUTOS = [
     ('gloss_chaveiro', 'Lip Gloss com Chaveiro', 'Wike Make', 'Maquiagem – Lábios', 24, 138.20, 7.52, 10.00, 'Confirmado', 11.90, 'Comprar (1 das 2 linhas de gloss)', 'S', 3, 'Bom para presente'),
     ('gloss_belle', 'Lip Gloss (ME005)', 'Belle Angel', 'Maquiagem – Lábios', 24, 166.30, 12.90, 12.90, 'Estimado', 12.90, 'Limitar (muitos gloss)', 'N', 3, ''),
     ('body_libertad', 'Hidratante Corporal Body Cream Libertad 150ml', 'Cap Life', 'Corpo', 1, 5.70, 14.90, 14.90, 'Estimado', 14.90, 'Comprar', 'S', 3, ''),
+    # Lote 4
+    ('betterme_hidratante', 'Super Hidratante Corporal e Facial Vitamina C 150g', 'Better Me', 'Corpo', 1, 6.20, 14.90, 19.90, 'Estimado', 16.90, 'Comprar', 'S', 4, 'Outras versões (pêssego, baunilha) à venda no ML/Shopee'),
+    ('betterme_esfoliante', 'Super Esfoliante Corporal e Facial Vitamina C 150g', 'Better Me', 'Corpo', 1, 6.50, 14.90, 19.90, 'Estimado', 16.90, 'Opcional', 'N', 4, ''),
+    ('pink21_matte_touch', 'Batom Líquido Matte Touch', 'Pink 21', 'Maquiagem – Lábios', 48, 252.80, 10.00, 24.99, 'Estimado', 14.90, 'Opcional', 'N', 4, 'Caixa com 48'),
+    ('pink21_beauty', 'Batom Líquido Beauty', 'Pink 21', 'Maquiagem – Lábios', 24, 158.80, 10.00, 24.99, 'Estimado', 14.90, 'Opcional', 'N', 4, ''),
+    ('pink21_all_day', 'Batom Líquido Efeito Matte All Day', 'Pink 21', 'Maquiagem – Lábios', 48, 271.60, 10.00, 24.99, 'Confirmado', 14.90, 'Comprar (1 linha de batom)', 'S', 4, 'Caixa com 48. Visto de R$ 10 a R$ 24,99'),
+    ('alleva_banana', 'Pó Solto Banana Soft Sheer', 'Alleva', 'Maquiagem – Rosto', 18, 89.60, 12.90, 14.90, 'Estimado', 13.90, 'Opcional', 'N', 4, 'Caixa com 18'),
+    ('alleva_translucido', 'Pó Solto Translúcido Soft Sheer', 'Alleva', 'Maquiagem – Rosto', 18, 89.60, 12.90, 14.90, 'Estimado', 13.90, 'Opcional', 'N', 4, 'Caixa com 18'),
+    ('splash_fem', 'Body Splash 120ml femininos (7 fragrâncias)', 'Natuza', 'Perfumaria', 1, 6.80, 19.90, 29.90, 'Estimado', 24.90, 'Comprar', 'S', 4, 'Obsession Pink, Libertad, Sahar Al Noor, Royal Rose, Golden Vip, Yara Zahra, Good Angel. Body splash árabe de 200ml de outras marcas sai por ~R$ 59,90'),
+    ('splash_men', 'Body Splash For Men 120ml (3 fragrâncias)', 'Natuza', 'Perfumaria', 1, 6.80, 19.90, 29.90, 'Estimado', 24.90, 'Comprar', 'S', 4, 'Asad Black, Royal Black, Hayat Al Gold'),
+    ('body_cream_natuza', 'Hidratante Body Cream 120ml (3 fragrâncias)', 'Natuza', 'Corpo', 1, 6.60, 19.90, 24.90, 'Estimado', 22.90, 'Comprar (kit Perfumada)', 'S', 4, 'Libertad, Obsession Pink, Good Angel'),
 ]
 
 # (nome, componentes (chaves; repetir = mais de uma unidade), preço de venda)
@@ -74,6 +85,8 @@ KITS = [
     ('Olhar Poderoso', ['cilios_8d', 'cilios_8d', 'cilios_8d', 'mascara_cilios', 'tatoo_brow'], 44.90),
     ('Sobrancelha Perfeita', ['tint_brow', 'gel_sobrancelha', 'tatoo_brow'], 34.90),
     ('Lábios Suculentos', ['lip_oil_fruit', 'gloss_hudamoji', 'batom_melana'], 34.90),
+    ('Perfumada (splash + creme)', ['splash_fem', 'body_cream_natuza'], 44.90),
+    ('Presente Masculino (2 splash)', ['splash_men', 'splash_men'], 44.90),
 ]
 
 FONT = 'Arial'
@@ -130,7 +143,7 @@ cab = ['ID', 'Produto', 'Marca', 'Categoria', 'Lote (print)', 'Qtd na caixa', 'P
        'Custo por unidade', 'Internet: menor preço', 'Internet: maior preço', 'Preço internet é',
        'Seu preço de venda', 'Lucro/un. seu site', 'Margem seu site', 'Lucro/un. Mercado Livre',
        'Lucro/un. Shopee', 'Lucro da caixa (seu site)', 'Unidades/mês p/ meta', 'Recomendação',
-       'Vou comprar? (S/N)', 'Observação', 'Faturamento da caixa (se comprar)', 'Lucro da caixa (se comprar)']
+       'Vou comprar? (S/N)', 'Observação', 'Faturamento (se comprar)', 'Lucro (se comprar)', 'Quantas caixas/unidades comprar', 'Investimento (se comprar)']
 ps.append(cab)
 for c in ps[1]:
     c.font, c.fill = CAB_FONT, CAB_FILL
@@ -158,9 +171,12 @@ for i, (k, nome, marca, cat, qtd, preco, imin, imax, fonte, venda, rec, comprar,
     ps[f'P{r}'] = f'=IFERROR(L{r}*(1-{REF["sh_com"]})-{REF["sh_fixa"]}-H{r}-{REF["emb"]},"")'
     ps[f'Q{r}'] = f'=IFERROR(M{r}*F{r},"")'
     ps[f'R{r}'] = f'=IFERROR(IF(M{r}>0,ROUNDUP({REF["meta"]}/M{r},0),"sem lucro"),"")'
-    ps[f'V{r}'] = f'=IF(AND(T{r}="S",ISNUMBER(L{r}),ISNUMBER(F{r})),L{r}*F{r},0)'
-    ps[f'W{r}'] = f'=IF(AND(T{r}="S",ISNUMBER(Q{r})),Q{r},0)'
-    for col in 'GHIJLMOPQVW':
+    q = ps.cell(r, 24, 1 if qtd > 1 else 12)
+    q.font, q.fill = AZUL, AMARELO
+    ps[f'V{r}'] = f'=IF(AND(T{r}="S",ISNUMBER(L{r}),ISNUMBER(F{r})),L{r}*F{r}*X{r},0)'
+    ps[f'W{r}'] = f'=IF(AND(T{r}="S",ISNUMBER(Q{r})),Q{r}*X{r},0)'
+    ps[f'Y{r}'] = f'=IF(AND(T{r}="S",ISNUMBER(G{r})),G{r}*X{r},0)'
+    for col in 'GHIJLMOPQVWY':
         ps[f'{col}{r}'].number_format = BRL
     ps[f'N{r}'].number_format = PCT
     ps[f'R{r}'].number_format = INT
@@ -171,11 +187,11 @@ for i, (k, nome, marca, cat, qtd, preco, imin, imax, fonte, venda, rec, comprar,
         ps[f'K{r}'].font = Font(name=FONT, color='B8860B')
 last = len(PRODUTOS) + 1
 
-widths = [6, 42, 16, 22, 8, 9, 13, 12, 12, 12, 12, 12, 12, 10, 13, 12, 14, 12, 26, 11, 44, 14, 14]
+widths = [6, 42, 16, 22, 8, 9, 13, 12, 12, 12, 12, 12, 12, 10, 13, 12, 14, 12, 26, 11, 44, 14, 14, 13, 14]
 for i, w in enumerate(widths, start=1):
     ps.column_dimensions[get_column_letter(i)].width = w
 ps.freeze_panes = 'C2'
-ps.auto_filter.ref = f'A1:W{last}'
+ps.auto_filter.ref = f'A1:Y{last}'
 dv = DataValidation(type='list', formula1='"S,N"', allow_blank=True)
 ps.add_data_validation(dv)
 dv.add(f'T2:T{last}')
@@ -184,6 +200,7 @@ for col in 'MOP':
 ps.conditional_formatting.add(f'M2:M{last}', ColorScaleRule(start_type='min', start_color='FFFFFF', end_type='max', end_color='63BE7B'))
 ps['G1'].comment = Comment('Preço mostrado no site do fornecedor (Bem Mulher, página Loja de R$10), lido dos prints enviados. Quando a qtd na caixa é maior que 1, é o preço da caixa inteira.', 'Claude')
 ps['I1'].comment = Comment('Preços encontrados em lojas online por busca na internet (set/2026). "Estimado" = produto exato não encontrado; valor baseado em produtos parecidos.', 'Claude')
+ps['X1'].comment = Comment('Caixas (quando o produto vem em caixa) ou unidades (produto avulso). Padrão: 1 caixa ou 12 unidades.', 'Claude')
 ps['M1'].comment = Comment('= Preço de venda − desconto Pix − taxa de pagamento − custo − embalagem (ver aba Premissas).', 'Claude')
 
 # ---------- Kits ----------
@@ -225,13 +242,13 @@ ks.conditional_formatting.add(f'{L(cc + 2)}2:{L(cc + 4)}{len(KITS) + 1}', ColorS
 rs = wb.create_sheet('Resumo', 0)
 rs['A1'] = 'Análise do fornecedor Bem Mulher (Loja de R$10)'
 rs['A1'].font = Font(name=FONT, bold=True, size=14)
-rs['A2'] = 'Atualizada a cada leva de prints. Produtos marcados com "S" em "Vou comprar?" (aba Produtos) entram nas contas abaixo.'
+rs['A2'] = 'Atualizada a cada leva de prints. Produtos com "S" em "Vou comprar?" entram nas contas abaixo, na quantidade da coluna "Quantas caixas/unidades comprar" (aba Produtos).'
 rs['A2'].font = Font(name=FONT, italic=True, color='666666')
 linhas = [
     ('Produtos analisados', f'=COUNTA(Produtos!A2:A{last})', INT),
     ('Produtos marcados para comprar', f'=COUNTIF(Produtos!T2:T{last},"S")', INT),
-    ('Investimento (1 caixa/unidade de cada marcado)', f'=SUMIF(Produtos!T2:T{last},"S",Produtos!G2:G{last})', BRL),
-    ('Unidades compradas', f'=SUMIF(Produtos!T2:T{last},"S",Produtos!F2:F{last})', INT),
+    ('Investimento no fornecedor', f'=SUM(Produtos!Y2:Y{last})', BRL),
+    ('Unidades compradas', f'=SUMPRODUCT((Produtos!T2:T{last}="S")*Produtos!F2:F{last}*Produtos!X2:X{last})', INT),
     ('Faturamento se vender tudo no seu site', f'=SUM(Produtos!V2:V{last})', BRL),
     ('Lucro se vender tudo no seu site', f'=SUM(Produtos!W2:W{last})', BRL),
     ('Retorno sobre o investimento', '=IFERROR(B10/B7,"")', PCT),
