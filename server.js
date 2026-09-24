@@ -176,5 +176,9 @@ runMigrations().then(() => {
         setInterval(syncEconomicCalendar, CALENDAR_SYNC_INTERVAL_MS);
         // Confere WIN/RED das análises cujo candle já fechou, mesmo sem ninguém abrir o histórico.
         setInterval(resolvePendingAnalyses, 60 * 1000);
+        // Backtest sob demanda: RUN_BACKTEST=1 escreve nos logs a taxa de acerto de cada estratégia.
+        if (process.env.RUN_BACKTEST === '1') {
+            require('./backtest').run().catch((err) => console.error('BACKTEST_ERR', err.message));
+        }
     });
 });

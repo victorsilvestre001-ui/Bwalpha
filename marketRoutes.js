@@ -557,23 +557,9 @@ function splitFormingCandle(candles, intervalMs, now = Date.now()) {
     return { closed: candles, forming: null };
 }
 
-const technicalCache = {};
-const TIMEFRAME_MINUTES = { M1: 1, M5: 5 };
-
-async function getTechnicalSignal(pairLabel, timeframeLabel) {
-    // Alinha o cache com o início da vela atual (candle), não com um tempo fixo.
-    // Assim cada vela nova (M1 = a cada 1 min, M5 = a cada 5 min) gera um cálculo
-    // fresco de verdade, e cliques dentro da mesma vela reaproveitam o resultado.
-    const intervalMs = TIMEFRAME_MINUTES[timeframeLabel] * 60 * 1000;
-    const candleBucket = Math.floor(Date.now() / intervalMs);
-    const cacheKey = `${pairLabel}_${timeframeLabel}_${candleBucket}`;
-
-    const cached = technicalCache[cacheKey];
-    if (cached) return cached;
-
-    const allCandles = await fetchIntradayCandles(pairLabel, timeframeLabel);
-    if (!allCandles || allCandles.length < 40) return null;
-    const { closed: candles, forming } = splitFormingCandle(allCandles, intervalMs);
+// Cálculo do sinal a partir dos candles fechados (+ o candle em formação, se houver).
+// Função pura: usada pela rota de sinal e pelo backtest, para que os dois nunca divirjam.
+function computeTechnicalSignal(candles, forming) {
     const closes = candles.map((c) => c.close);
 
     const ema9Series = emaSeries(closes, 9);
@@ -629,9 +615,7 @@ async function getTechnicalSignal(pairLabel, timeframeLabel) {
         confidence = confluenceConfidence;
     }
 
-    const result = {
-        pair: pairLabel,
-        timeframe: timeframeLabel,
+    return {
         price: (forming || candles[candles.length - 1]).close,
         ema9,
         ema21,
@@ -651,6 +635,26 @@ async function getTechnicalSignal(pairLabel, timeframeLabel) {
         direction,
         confidence,
     };
+}
+
+const technicalCache = {};
+const TIMEFRAME_MINUTES = { M1: 1, M5: 5 };
+
+async function getTechnicalSignal(pairLabel, timeframeLabel) {
+    // Alinha o cache com o início da vela atual (candle), não com um tempo fixo.
+    // Assim cada vela nova (M1 = a cada 1 min, M5 = a cada 5 min) gera um cálculo
+    // fresco de verdade, e cliques dentro da mesma vela reaproveitam o resultado.
+    const intervalMs = TIMEFRAME_MINUTES[timeframeLabel] * 60 * 1000;
+    const candleBucket = Math.floor(Date.now() / intervalMs);
+    const cacheKey = `${pairLabel}_${timeframeLabel}_${candleBucket}`;
+
+    const cached = technicalCache[cacheKey];
+    if (cached) return cached;
+
+    const allCandles = await fetchIntradayCandles(pairLabel, timeframeLabel);
+    if (!allCandles || allCandles.length < 40) return null;
+    const { closed: candles, forming } = splitFormingCandle(allCandles, intervalMs);
+    const result = { pair: pairLabel, timeframe: timeframeLabel, ...computeTechnicalSignal(candles, forming) };
 
     technicalCache[cacheKey] = result;
 
@@ -770,4 +774,8 @@ router.get('/history', authMiddleware, async (req, res) => {
     }
 });
 
-module.exports = { router, getQuotes, getIndicators, getEconomicSnapshot, getNews, getHistory, fetchIntradayCandles, TIMEFRAME_MINUTES };
+module.exports = {
+    router, getQuotes, getIndicators, getEconomicSnapshot, getNews, getHistory, fetchIntradayCandles, TIMEFRAME_MINUTES,
+    computeTechnicalSignal, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS,
+    emaSeries, rsiLast, macdHistogramLast, detectCandlePatterns, getChinesaStrategySignal, getBwalphaIndicator,
+};
