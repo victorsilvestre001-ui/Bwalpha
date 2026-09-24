@@ -112,6 +112,28 @@ const STRATEGIES = {
         const r = computeCandleFollowSignal(closed, formingNow);
         return r.confidence === 'Alta' ? r.direction : null;
     },
+    // Candle atual fraco (o que a regra de produção não aceita): qual lado acerta mais?
+    fraco_segue: ({ closed, formingNow }) => {
+        const r = computeCandleFollowSignal(closed, formingNow);
+        return r.direction ? null : color(formingNow);
+    },
+    fraco_contra: ({ closed, formingNow }) => {
+        const r = computeCandleFollowSignal(closed, formingNow);
+        return r.direction ? null : opp(color(formingNow));
+    },
+    fraco_pavio: ({ closed, formingNow }) => {
+        // Segue o lado com mais pavio rejeitado: pavio de cima maior -> VENDA.
+        const r = computeCandleFollowSignal(closed, formingNow);
+        if (r.direction) return null;
+        const up = formingNow.high - Math.max(formingNow.open, formingNow.close);
+        const dn = Math.min(formingNow.open, formingNow.close) - formingNow.low;
+        return up > dn ? 'VENDA' : dn > up ? 'COMPRA' : null;
+    },
+    fraco_chinesa: (ctx) => (computeCandleFollowSignal(ctx.closed, ctx.formingNow).direction ? null : STRATEGIES.chinesa(ctx)),
+    fraco_tecnico: ({ closed, formingNow }) => {
+        if (computeCandleFollowSignal(closed, formingNow).direction) return null;
+        return computeTechnicalSignal(closed, formingNow).direction;
+    },
     formacao_corpo_30: ({ formingNow }) => {
         const r = formingNow.high - formingNow.low;
         return r > 0 && Math.abs(formingNow.close - formingNow.open) / r >= 0.3 ? color(formingNow) : null;
@@ -229,6 +251,7 @@ async function run() {
                 const { evaluated, out } = runOn(candles, tf);
                 console.log(`BACKTEST_RESULT ${pair} ${tf} candles=${candles.length} de=${first} ate=${last} avaliados=${evaluated}`);
                 for (const [name, r] of Object.entries(out)) {
+                    if (!/^(producao|fraco|candle_em_formacao|atual$)/.test(name)) continue;
                     console.log(`BACKTEST_ROW ${pair} ${tf} ${name} ${JSON.stringify(r)}`);
                 }
             } catch (err) {
