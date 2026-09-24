@@ -1,6 +1,7 @@
 // Rastreamento de anúncios (Meta Pixel e Google Ads). Nada é carregado antes de a
 // pessoa aceitar os cookies de marketing, e nada roda se os IDs não estiverem configurados.
-const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID || "";
+// ID público do Pixel da Meta (conjunto de dados "TradeOn AI Site"); pode ser trocado pela variável de ambiente.
+const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID || "1655342249490146";
 const GOOGLE_ADS_ID = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID || ""; // formato AW-XXXXXXXXX
 const GADS_LABELS = {
   CompleteRegistration: process.env.NEXT_PUBLIC_GADS_SIGNUP_LABEL || "",
