@@ -31,7 +31,7 @@ button { font: inherit; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .topbar-track { animation: none; padding-left: 16px; } }
 
 /* Header */
-.header { position: sticky; top: 0; z-index: 40; background: #fff; box-shadow: 0 1px 0 var(--line); }
+.header { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 40; background: #fff; box-shadow: 0 1px 0 var(--line); }
 .header-row { display: flex; align-items: center; gap: 24px; padding-top: 14px; padding-bottom: 14px; }
 .logo { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .logo-mark { width: 42px; height: 42px; border-radius: 12px; background: linear-gradient(135deg, var(--primary), #f783ac); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 22px; }
@@ -360,3 +360,4 @@ select { font: inherit; padding: 8px 12px; border: 1px solid var(--line); border
 }
 @media (min-width: 861px) { .filters-toggle { display: none; } }
 .main-img .tags { position: absolute; top: 12px; left: 12px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.demo-note { background: var(--accent); color: var(--dark); font-size: 12px; font-weight: 600; text-align: center; padding: 6px 16px; }

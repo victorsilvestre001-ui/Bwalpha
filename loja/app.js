@@ -225,7 +225,7 @@
       </section>
 
       <section class="section section-soft"><div class="container">
-        <div class="section-head"><div><h2>Quem compra, aprova 💖</h2><p>Avaliações de clientes</p></div></div>
+        <div class="section-head"><div><h2>Quem compra, aprova 💖</h2><p>Depoimentos de exemplo: substitua pelas avaliações reais das suas clientes</p></div></div>
         <div class="reviews-row">
           <div class="review"><div class="stars">★★★★★</div><p>“Chegou super rápido e muito bem embalado. O pó solto é maravilhoso, a pele fica aveludada o dia todo!”</p><small>Cliente de São Paulo/SP</small></div>
           <div class="review"><div class="stars">★★★★★</div><p>“Preço muito melhor que em outros sites e ainda ganhei 5% no Pix. Já virei cliente fiel.”</p><small>Cliente de Belo Horizonte/MG</small></div>
@@ -637,7 +637,7 @@
   modal.addEventListener('click', e => { if (e.target === modal || e.target.closest('[data-close]')) { modal.hidden = true; store.set('popupSeen', true); } });
   $('#copyCoupon').onclick = () => {
     coupon = 'BEMVINDA10'; saveCart();
-    try { navigator.clipboard.writeText('BEMVINDA10'); } catch { /* clipboard indisponível */ }
+    try { navigator.clipboard.writeText('BEMVINDA10').catch(() => {}); } catch { /* clipboard indisponível */ }
     toast('Cupom BEMVINDA10 copiado e aplicado na sacola!');
   };
   if (!store.get('popupSeen', false)) setTimeout(() => { if (!location.hash.startsWith('#/checkout')) modal.hidden = false; }, 7000);
