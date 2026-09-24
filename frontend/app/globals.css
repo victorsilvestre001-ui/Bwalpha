@@ -45,3 +45,7 @@ html, body { margin: 0; padding: 0; background: #05070F; color: #E7ECF7; font-fa
     radial-gradient(35% 45% at 85% 0%, rgba(61,139,255,0.22), transparent 70%),
     radial-gradient(30% 40% at 60% 60%, rgba(155,92,255,0.10), transparent 70%);
 }
+
+.legal h2 { font-family: var(--font-display); font-weight: 600; font-size: 1.15rem; color: #E7ECF7; margin-top: 2rem; }
+.legal ul { list-style: disc; padding-left: 1.25rem; display: grid; gap: .35rem; }
+.legal strong { color: #E7ECF7; font-weight: 600; }

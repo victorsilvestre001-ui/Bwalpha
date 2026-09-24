@@ -10,6 +10,7 @@ import ChatAssistant from "@/components/dashboard/ChatAssistant";
 import AnalysesHistory from "@/components/dashboard/AnalysesHistory";
 import Profile from "@/components/dashboard/Profile";
 import { api, getSessionUser, clearSession } from "@/lib/api";
+import { track } from "@/lib/track";
 
 const TITLES = {
   analise: ["Análise de mercado", "Escolha o ativo e o timeframe e deixe a IA ler o gráfico."],
@@ -37,7 +38,12 @@ function Dashboard() {
 
   useEffect(() => {
     const vip = params.get("vip");
-    if (vip === "success") setBanner({ ok: true, text: "Assinatura VIP ativada! Faça login novamente se o plano ainda não aparecer." });
+    if (vip === "success") {
+      setBanner({ ok: true, text: "Assinatura VIP ativada! Faça login novamente se o plano ainda não aparecer." });
+      // Conta a compra uma vez só e tira o parâmetro da URL para um recarregamento não contar de novo.
+      track("Purchase", { currency: "BRL" });
+      router.replace("/dashboard");
+    }
     if (vip === "cancelled") setBanner({ ok: false, text: "Checkout cancelado. Você pode assinar quando quiser." });
     if (params.get("upgrade") === "1") setTab("perfil");
   }, [params]);
@@ -46,6 +52,7 @@ function Dashboard() {
 
   async function handleUpgrade() {
     setUpgrading(true);
+    track("InitiateCheckout");
     try { const { url } = await api.createCheckoutSession(); window.location.href = url; }
     catch (err) {
       setUpgrading(false);

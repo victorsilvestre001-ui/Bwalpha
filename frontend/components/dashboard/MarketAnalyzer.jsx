@@ -7,7 +7,6 @@ import { ASSETS, ASSET_LIST } from "@/lib/assets";
 import TradingViewWidget from "./TradingViewWidget";
 import AnalyzingOverlay from "./AnalyzingOverlay";
 import SignalResult from "./SignalResult";
-import BrokerCard from "./BrokerCard";
 import { computeEntry } from "./CandleTimer";
 import Dropdown from "./Dropdown";
 import { now, syncClock } from "@/lib/clock";
@@ -116,7 +115,6 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
 
         {result && <SignalResult result={result} timing={timing} />}
 
-        <BrokerCard />
       </div>
 
       <div className="panel h-[460px] overflow-hidden p-1 md:h-[620px] xl:h-auto xl:min-h-[640px]">

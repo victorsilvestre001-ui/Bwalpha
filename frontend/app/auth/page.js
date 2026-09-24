@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Mail, Lock, User, Eye, EyeOff, ArrowRight, ArrowLeft, Loader2 } from "lucide-react";
 import Logo from "@/components/Logo";
 import { api, setSession } from "@/lib/api";
+import { track } from "@/lib/track";
 
 function Field({ icon: Icon, children }) {
   return (
@@ -47,6 +48,7 @@ function AuthForm() {
     try {
       const data = mode === "login" ? await api.login(email, password) : await api.register(name, email, password);
       setSession(data.token, data.user);
+      if (mode === "register") track("CompleteRegistration");
       router.push(wantsVip ? "/dashboard?upgrade=1" : "/dashboard");
     } catch (err) {
       setError(err.message || "Não foi possível conectar ao servidor.");
@@ -113,7 +115,7 @@ function AuthForm() {
       </form>
 
       <p className="mt-6 text-center text-xs text-mist-faint">
-        Ao continuar você concorda que as análises são ferramentas de apoio e não garantem resultado.
+        Ao continuar você concorda com os <Link href="/termos" className="text-mist-dim underline-offset-2 hover:underline">Termos de uso</Link>, a <Link href="/privacidade" className="text-mist-dim underline-offset-2 hover:underline">Política de privacidade</Link> e o <Link href="/risco" className="text-mist-dim underline-offset-2 hover:underline">Aviso de risco</Link>.
       </p>
     </div>
   );

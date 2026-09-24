@@ -1,4 +1,5 @@
 import Logo from "@/components/Logo";
+import { CompanyLine } from "@/components/legal/LegalPage";
 
 export default function Footer() {
   return (
@@ -11,13 +12,16 @@ export default function Footer() {
             <a href="#planos" className="hover:text-mist">Planos</a>
             <a href="#faq" className="hover:text-mist">FAQ</a>
             <a href="/auth" className="hover:text-mist">Entrar</a>
+            <a href="/termos" className="hover:text-mist">Termos</a>
+            <a href="/privacidade" className="hover:text-mist">Privacidade</a>
+            <a href="/risco" className="hover:text-mist">Aviso de risco</a>
           </div>
         </div>
         <p className="mt-10 max-w-4xl text-xs leading-relaxed text-mist-faint">
           Aviso de risco: operar no mercado financeiro envolve risco elevado e pode resultar na perda do capital investido.
-          As análises da TradeOn AI são ferramentas de apoio e não constituem recomendação de investimento nem garantia de resultado.
+          A TradeOn AI é uma ferramenta de análise e educação, não é corretora e não constitui recomendação de investimento nem garantia de resultado.
         </p>
-        <p className="mt-4 text-xs text-mist-faint">© {new Date().getFullYear()} TradeOn AI. Todos os direitos reservados.</p>
+        <p className="mt-4 text-xs text-mist-faint">© {new Date().getFullYear()} TradeOn AI. Todos os direitos reservados. <CompanyLine /></p>
       </div>
     </footer>
   );
