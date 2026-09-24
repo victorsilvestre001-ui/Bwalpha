@@ -102,6 +102,24 @@ PRODUTOS = [
     ('angels_lip_tint', 'Lip Tint (BR1255)', '4Angels', 'Maquiagem – Lábios', 24, 131.30, 10.00, 10.00, 'Confirmado', 11.90, 'Opcional', 'N', 6, 'Lip tint 4Angels visto por R$ 10'),
     ('angels_delineador', 'Delineador Líquido (BR1250)', '4Angels', 'Maquiagem – Olhos', 24, 113.80, 10.00, 12.90, 'Estimado', 11.90, 'Opcional', 'N', 6, ''),
     ('angels_paleta', 'Paleta de Sombras (BR1248)', '4Angels', 'Maquiagem – Olhos', 24, 113.60, 10.00, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 6, 'A The Iconic (Pink 21) dá mais lucro'),
+    # Lote 7
+    ('angels_corretivo', 'Corretivo Líquido Camuflagem Matte', '4Angels', 'Maquiagem – Rosto', 24, 142.90, 10.00, 12.90, 'Estimado', 11.90, 'Evitar (tem corretivo melhor)', 'N', 7, 'Qtd na caixa cortada no print: considerei 24, confirmar'),
+    ('angels_lip_oil_heart', 'Lip Oil Heart Charm (BR1228)', '4Angels', 'Maquiagem – Lábios', 24, 150.20, 10.00, 12.90, 'Estimado', 11.90, 'Evitar (muitos gloss)', 'N', 7, ''),
+    ('angels_lip_oil', 'Lip Oil (BR1226)', '4Angels', 'Maquiagem – Lábios', 24, 142.90, 10.00, 12.90, 'Estimado', 11.90, 'Evitar (muitos gloss)', 'N', 7, ''),
+    ('angels_gloss', 'Lip Gloss (BR1225)', '4Angels', 'Maquiagem – Lábios', 24, 142.90, 10.00, 12.90, 'Estimado', 11.90, 'Evitar (muitos gloss)', 'N', 7, ''),
+    ('plump_cat', 'Brilho Labial Plump Cat Omg', 'Love Rain', 'Maquiagem – Lábios', 1, 6.00, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 7, ''),
+    ('lenco_demaquilante', 'Lenço Demaquilante 30 un. (Vit. C, Niacinamida, Retinol, Ác. Hialurônico)', 'Super Poderes', 'Skincare', 1, 5.20, 7.99, 10.00, 'Confirmado', 9.90, 'Opcional (bom para kit)', 'N', 7, '4 versões, mesmo preço'),
+    ('sp_corretivo_bastao', 'Corretivo em Bastão', 'Super Poderes', 'Maquiagem – Rosto', 24, 164.50, 12.90, 15.00, 'Estimado', 12.90, 'Evitar (Color Cover é mais barato)', 'N', 7, ''),
+    ('melana_mascara', 'Máscara para Cílios (E-CZ223)', 'Melana', 'Maquiagem – Olhos', 24, 132.20, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 7, ''),
+    ('boom_eyes', 'Delineador Líquido Boom Eyes', 'Pink 21', 'Maquiagem – Olhos', 24, 158.80, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 7, ''),
+    ('color_cover', 'Corretivo em Bastão Color Cover', 'Pink 21', 'Maquiagem – Rosto', 48, 116.70, 13.80, 15.90, 'Confirmado', 12.90, 'Comprar', 'S', 7, 'Caixa com 48: custo muito baixo. Outros corretivos Pink 21 R$ 13,80–15,90'),
+    ('honey_gloss', 'Lip Gloss Honey (CS6661)', 'Pink 21', 'Maquiagem – Lábios', 24, 129.60, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (muitos gloss)', 'N', 7, ''),
+    ('lapis_labial', 'Lápis Labial Multiuso (c/12)', 'Pink 21', 'Maquiagem – Lábios', 12, 16.70, 3.96, 7.69, 'Confirmado', 5.90, 'Só em kit', 'N', 7, 'Pacote com 12: R$ 1,39 cada'),
+    ('blush_multifuncional', 'Blush Líquido Multifuncional', 'Pink 21', 'Maquiagem – Rosto', 24, 93.99, 19.90, 21.70, 'Estimado', 15.90, 'Comprar', 'S', 7, 'Mais barato que o The Pink (R$ 3,92 x R$ 6,62). Referência: blush líquido multiuso Pink 21'),
+    ('saarah_splash', 'Body Splash Saarah 130ml', 'Cap Life', 'Perfumaria', 1, 6.99, 14.90, 19.90, 'Estimado', 19.90, 'Opcional', 'N', 7, 'Visto a R$ 6,40–6,99 em atacadistas; preço de varejo não achado'),
+    ('love_rain_concealer', 'Corretivo Líquido Concealer (LR-4908)', 'Love Rain', 'Maquiagem – Rosto', 24, 160.40, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (tem corretivo melhor)', 'N', 7, ''),
+    ('vivai_cherry', 'Batom Matte Cherry', 'Vivai', 'Maquiagem – Lábios', 24, None, None, None, 'Estimado', None, 'Confirmar preço', 'N', 7, 'Preço escondido no print'),
+    ('vivai_viv', 'Batom Cintilante Viv', 'Vivai', 'Maquiagem – Lábios', 24, None, None, None, 'Estimado', None, 'Confirmar preço', 'N', 7, 'Preço escondido no print'),
 ]
 
 # (nome, componentes (chaves; repetir = mais de uma unidade), preço de venda)
@@ -115,6 +133,7 @@ KITS = [
     ('Perfumada (splash + creme)', ['splash_fem', 'body_cream_natuza'], 44.90),
     ('Presente Masculino (2 splash)', ['splash_men', 'splash_men'], 44.90),
     ('Make Completa', ['iconic_paleta', 'the_pink_blush', 'color_contour', 'pink21_primer_hidro'], 59.90),
+    ('Pele Pink 21', ['color_cover', 'color_contour', 'blush_multifuncional', 'pink21_primer_hidro'], 49.90),
 ]
 
 FONT = 'Arial'
