@@ -10,7 +10,8 @@
   // ---------- Utils ----------
   const brl = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const pct = p => Math.round((1 - p.price / p.oldPrice) * 100);
+  const ref = p => p.oldPrice || p.separados || 0;
+  const pct = p => ref(p) > p.price ? Math.round((1 - p.price / ref(p)) * 100) : 0;
   const pix = v => Math.round(v * (1 - S.pixDiscount) * 100) / 100;
   const installment = v => {
     const n = Math.max(1, Math.min(S.maxInstallments, Math.floor(v / 20)));
@@ -133,8 +134,8 @@
 
   // ---------- Componentes ----------
   function tagsHTML(p) {
-    const t = [`<span class="tag tag-off">-${pct(p)}%</span>`];
-    if (p.tags.includes('relampago')) t.push('<span class="tag tag-flash">⚡ Relâmpago</span>');
+    const t = pct(p) ? [`<span class="tag tag-off">-${pct(p)}%</span>`] : [];
+    if (p.tags.includes('relampago')) t.push('<span class="tag tag-flash">⚡ Oferta da semana</span>');
     if (p.tags.includes('leve3pague2')) t.push('<span class="tag tag-l3">Leve 3 pague 2</span>');
     if (p.tags.includes('novo')) t.push('<span class="tag tag-new">Lançamento</span>');
     if (p.tags.includes('importado')) t.push('<span class="tag tag-imp">Importado</span>');
@@ -147,9 +148,9 @@
       <a href="#/p/${p.id}" class="media">${art(p)}</a>
       <div class="brand">${esc(p.brand)}</div>
       <a href="#/p/${p.id}" class="name">${esc(p.name)}</a>
-      <div class="stars">${stars(p.rating)} <small>(${p.reviews})</small></div>
+      ${p.reviews ? `<div class="stars">${stars(p.rating)} <small>(${p.reviews})</small></div>` : ''}
       <div class="price-block">
-        <div class="price-old">${brl(p.oldPrice)}</div>
+        ${ref(p) > p.price ? `<div class="price-old">${p.separados ? 'Separados: ' : ''}${brl(ref(p))}</div>` : ''}
         <div class="price">${brl(p.price)}</div>
         <div class="price-pix">${brl(pix(p.price))} no Pix</div>
         <div class="installments">ou ${installment(p.price)}</div>
@@ -166,16 +167,16 @@
 
   // ---------- Páginas ----------
   const slides = [
-    { bg: 'linear-gradient(120deg,#ffe3ec,#ffc9dc)', eyebrow: '⚡ Oferta relâmpago', title: 'Até 50% OFF em maquiagem importada', text: 'Os queridinhos das blogueiras com preço de outlet. Só até meia-noite!', cta: 'Aproveitar ofertas', href: '#/ofertas', img: 'img/banner-maquiagem.jpg', fade: '#fdb2bd', alt: 'Mulher negra aplicando sombra com pincel', ids: ['paleta-sunset', 'po-solto-cherry', 'spray-fixador'] },
-    { bg: 'linear-gradient(120deg,#f3f0ff,#d0bfff)', eyebrow: '🔥 Leve 3 pague 2', title: 'Monte seu kit e pague só 2', text: 'Batons, glosses, esmaltes, esponjas e muito mais. O desconto entra sozinho no carrinho.', cta: 'Montar meu kit', href: '#/promo/leve3pague2', img: 'img/banner-batom.jpg', fade: '#a794c5', alt: 'Mulher branca passando batom líquido', ids: ['batom-matte-rose', 'esmalte-gel', 'gloss-cristal'] },
-    { bg: 'linear-gradient(120deg,#fff4e0,#ffd8a8)', eyebrow: '✨ Skincare', title: 'Pele de vidro com Vitamina C', text: 'Rotina completa com até 40% OFF e frete grátis acima de R$ 199.', cta: 'Ver skincare', href: '#/c/skincare', img: 'img/banner-skincare.jpg', fade: '#c98159', alt: 'Mulher negra aplicando sérum de vitamina C', ids: ['hidratante-gel', 'serum-vitc', 'protetor-50'] }
+    { bg: 'linear-gradient(120deg,#ffe3ec,#ffc9dc)', eyebrow: '💄 Maquiagem', title: 'Maquiagem a partir de R$ 9,90', text: 'Blush, contorno, paletas e cílios com 5% OFF no Pix e frete grátis acima de R$ 199.', cta: 'Ver ofertas', href: '#/ofertas', img: 'img/banner-maquiagem.jpg', fade: '#fdb2bd', alt: 'Mulher negra aplicando sombra com pincel', ids: ['iconic-paleta', 'tapioca', 'blush-multifuncional'] },
+    { bg: 'linear-gradient(120deg,#f3f0ff,#d0bfff)', eyebrow: '🔥 Leve 3 pague 2', title: 'Monte seu kit e pague só 2', text: 'Corretivos, contornos, pó de tapioca, sobrancelha e skincare. O desconto entra sozinho no carrinho.', cta: 'Montar meu kit', href: '#/promo/leve3pague2', img: 'img/banner-batom.jpg', fade: '#a794c5', alt: 'Mulher branca passando batom líquido', ids: ['color-contour', 'gloss-peeloff', 'tint-brow'] },
+    { bg: 'linear-gradient(120deg,#fff4e0,#ffd8a8)', eyebrow: '✨ Skincare', title: 'Pele de vidro com Vitamina C', text: 'Kit Pele de Vidro com 3 séruns por R$ 49,90. Frete grátis acima de R$ 199.', cta: 'Ver skincare', href: '#/c/skincare', img: 'img/banner-skincare.jpg', fade: '#c98159', alt: 'Mulher negra aplicando sérum de vitamina C', ids: ['serum-vitc', 'serum-ah', 'tonico-glicolico'] }
   ];
   let slideTimer;
 
   function pageHome() {
     const best = byTag('mais-vendido');
     const flash = byTag('relampago');
-    const news = byTag('novo').concat(byTag('importado')).filter((p, i, a) => a.indexOf(p) === i);
+    const news = byTag('novo');
     const brands = [...new Set(PRODUCTS.map(p => p.brand))];
     app.innerHTML = `
       <section class="hero">
@@ -196,7 +197,7 @@
 
       <section class="section container">
         <div class="flash">
-          <div class="section-head"><div><h2>⚡ Ofertas Relâmpago</h2><p>Preços que acabam à meia-noite. Estoque limitado!</p></div>${countdownHTML()}</div>
+          <div class="section-head"><div><h2>⚡ Ofertas da semana</h2><p>Seleção com os melhores preços da loja</p></div></div>
           ${rail(flash)}
         </div>
       </section>
@@ -204,34 +205,25 @@
       <section class="section container">
         <div class="promo-banners">
           <a class="promo-banner" href="#/promo/leve3pague2" style="background:#e5dbff"><div><p class="eyebrow">Promoção</p><h3>Leve 3,<br>pague 2</h3><p>Em produtos selecionados</p></div><span class="btn btn-dark">Aproveitar</span><span class="big">3x2</span></a>
-          <a class="promo-banner" href="#/c/kits" style="background:#ffe3ec"><div><p class="eyebrow">Kits exclusivos</p><h3>Até 35% OFF<br>em kits</h3><p>Perfeitos para presentear</p></div><span class="btn btn-dark">Ver kits</span><span class="big">🎁</span></a>
-          <a class="promo-banner" href="#/outlet" style="background:#fff3bf"><div><p class="eyebrow">Outlet</p><h3>Últimas<br>unidades</h3><p>Quando acabar, acabou!</p></div><span class="btn btn-dark">Ver outlet</span><span class="big">%</span></a>
+          <a class="promo-banner" href="#/c/kits" style="background:#ffe3ec"><div><p class="eyebrow">Kits exclusivos</p><h3>Kits mais<br>baratos</h3><p>Pague menos que comprando separado</p></div><span class="btn btn-dark">Ver kits</span><span class="big">🎁</span></a>
+          <a class="promo-banner" href="#/c/perfumes" style="background:#fff3bf"><div><p class="eyebrow">Perfumaria</p><h3>Body splash<br>R$ 24,90</h3><p>10 fragrâncias</p></div><span class="btn btn-dark">Ver fragrâncias</span><span class="big">✨</span></a>
         </div>
       </section>
 
       <section class="section container">
-        <div class="section-head"><div><h2>Mais vendidos 🏆</h2><p>Os favoritos das nossas clientes</p></div><a class="link" href="#/ofertas">Ver todos →</a></div>
+        <div class="section-head"><div><h2>Destaques 🏆</h2><p>Os produtos que escolhemos para você</p></div><a class="link" href="#/ofertas">Ver todos →</a></div>
         ${rail(best)}
       </section>
 
       <section class="section section-soft"><div class="container">
-        <div class="section-head"><div><h2>Lançamentos e importados ✈️</h2><p>Acabaram de chegar na Élan Beauté</p></div></div>
+        <div class="section-head"><div><h2>Lançamentos ✨</h2><p>Acabaram de chegar na Élan Beauté</p></div></div>
         ${rail(news)}
       </div></section>
 
       <section class="section container">
         <div class="section-head"><div><h2>Compre por marca</h2></div></div>
         <div class="brands">${brands.map(b => `<a href="#/marca/${encodeURIComponent(b)}">${esc(b)}</a>`).join('')}</div>
-      </section>
-
-      <section class="section section-soft"><div class="container">
-        <div class="section-head"><div><h2>Quem compra, aprova 💖</h2><p>Depoimentos de exemplo: substitua pelas avaliações reais das suas clientes</p></div></div>
-        <div class="reviews-row">
-          <div class="review"><div class="stars">★★★★★</div><p>“Chegou super rápido e muito bem embalado. O pó solto é maravilhoso, a pele fica aveludada o dia todo!”</p><small>Cliente de São Paulo/SP</small></div>
-          <div class="review"><div class="stars">★★★★★</div><p>“Preço muito melhor que em outros sites e ainda ganhei 5% no Pix. Já virei cliente fiel.”</p><small>Cliente de Belo Horizonte/MG</small></div>
-          <div class="review"><div class="stars">★★★★★</div><p>“Montei meu kit no leve 3 pague 2 e o desconto entrou sozinho no carrinho. Amei!”</p><small>Cliente de Recife/PE</small></div>
-        </div>
-      </div></section>`;
+      </section>`;
     startSlider();
   }
 
@@ -258,9 +250,8 @@
           ${sub ? `<h4>Subcategorias</h4>${sub.map(s => `<label><input type="checkbox" name="sub" value="${esc(s)}"> ${esc(s)}</label>`).join('')}` : ''}
           <h4>Marcas</h4>${brands.map(b => `<label><input type="checkbox" name="brand" value="${esc(b)}"> ${esc(b)}</label>`).join('')}
           <h4>Promoções</h4>
-          <label><input type="checkbox" name="tag" value="relampago"> ⚡ Relâmpago</label>
+          <label><input type="checkbox" name="tag" value="relampago"> ⚡ Oferta da semana</label>
           <label><input type="checkbox" name="tag" value="leve3pague2"> Leve 3 pague 2</label>
-          <label><input type="checkbox" name="tag" value="importado"> Importados</label>
           <h4>Preço até <span id="priceVal">${brl(maxPrice)}</span></h4>
           <input type="range" id="priceRange" min="10" max="${maxPrice}" step="10" value="${maxPrice}">
         </aside>
@@ -285,7 +276,7 @@
       $('#priceVal').textContent = brl(max);
       let r = list.filter(p => (!subs.length || subs.includes(p.sub)) && (!bs.length || bs.includes(p.brand)) && tags.every(t => p.tags.includes(t)) && p.price <= max);
       const sort = $('#sort').value;
-      const sorters = { sold: (a, b) => b.reviews - a.reviews, off: (a, b) => pct(b) - pct(a), low: (a, b) => a.price - b.price, high: (a, b) => b.price - a.price };
+      const sorters = { sold: (a, b) => (b.reviews || 0) - (a.reviews || 0), off: (a, b) => pct(b) - pct(a), low: (a, b) => a.price - b.price, high: (a, b) => b.price - a.price };
       if (sorters[sort]) r = [...r].sort(sorters[sort]);
       $('#results').innerHTML = `<p class="installments">${r.length} produto(s)</p>` + grid(r);
     };
@@ -312,15 +303,14 @@
         <div>
           <a class="brand-link" href="#/marca/${encodeURIComponent(p.brand)}">${esc(p.brand)}</a>
           <h1>${esc(p.name)}</h1>
-          <div class="stars">${stars(p.rating)} <small>${p.rating.toFixed(1)} · ${p.reviews} avaliações</small></div>
+          ${p.reviews ? `<div class="stars">${stars(p.rating)} <small>${p.rating.toFixed(1)} · ${p.reviews} avaliações</small></div>` : ''}
           <div class="sku">Cód.: ${p.id.toUpperCase()}</div>
 
           <div class="pdp-price">
-            <div><span class="price-old">De ${brl(p.oldPrice)}</span> <span class="save">Economize ${brl(p.oldPrice - p.price)} (-${pct(p)}%)</span></div>
+            ${pct(p) ? `<div><span class="price-old">${p.separados ? 'Comprando separado' : 'De'} ${brl(ref(p))}</span> <span class="save">Economize ${brl(ref(p) - p.price)} (-${pct(p)}%)</span></div>` : ''}
             <div class="price">${brl(p.price)}</div>
             <div class="installments">ou ${installment(p.price)}</div>
             <div class="pix-line"><span class="pix-badge">PIX</span><b style="color:var(--pix)">${brl(pix(p.price))}</b> com ${S.pixDiscount * 100}% de desconto</div>
-            ${p.tags.includes('relampago') ? `<div class="pdp-flash"><b>⚡ Oferta relâmpago termina em</b>${countdownHTML()}</div>` : ''}
           </div>
 
           ${p.tags.includes('leve3pague2') ? `<div class="promo-note">🎁 LEVE 3 PAGUE 2 — combine com outros produtos da promoção e o de menor valor sai grátis. <a class="link" href="#/promo/leve3pague2">Ver produtos</a></div>` : ''}
@@ -344,7 +334,7 @@
           </div>
 
           <div class="trust">
-            <div><span>✅</span>Produto original</div>
+            <div><span>💸</span>5% OFF no Pix</div>
             <div><span>🔄</span>7 dias para troca</div>
             <div><span>🔒</span>Compra 100% segura</div>
           </div>
@@ -363,7 +353,7 @@
 
       <section class="container tabs">
         <div class="tab-btns" role="tablist">
-          <button class="on" data-tab="desc">Descrição</button><button data-tab="how">Modo de uso</button><button data-tab="ing">Composição</button><button data-tab="rev">Avaliações (${p.reviews})</button>
+          <button class="on" data-tab="desc">Descrição</button><button data-tab="how">Modo de uso</button><button data-tab="ing">Composição</button><button data-tab="rev">Avaliações (${p.reviews || 0})</button>
         </div>
         <div class="tab-panel" id="tabPanel"></div>
       </section>
@@ -371,10 +361,10 @@
       ${related.length ? `<section class="section container"><div class="section-head"><div><h2>Você também vai amar</h2></div></div>${rail(related)}</section>` : ''}`;
 
     const panels = {
-      desc: `<p>${esc(p.desc || `${p.name} da ${p.brand}: qualidade profissional com preço de importadora. Produto original, lacrado e com garantia de procedência.`)}</p><ul><li>Marca: ${esc(p.brand)}</li><li>Categoria: ${catName(p.cat)} › ${esc(p.sub)}</li><li>Produto original e lacrado</li></ul>`,
+      desc: `<p>${esc(p.desc || `${p.name} da ${p.brand}: beleza com preço justo.`)}</p><ul><li>Marca: ${esc(p.brand)}</li><li>Categoria: ${catName(p.cat)} › ${esc(p.sub)}</li></ul>`,
       how: `<p>${esc(p.howto || 'Aplique conforme a necessidade. Uso externo. Em caso de irritação, suspenda o uso.')}</p>`,
       ing: `<p>${esc(p.ingredients || 'Consulte a embalagem do produto para a composição completa.')}</p>`,
-      rev: `<p class="stars" style="font-size:22px">${stars(p.rating)} <b style="color:var(--text)">${p.rating.toFixed(1)}</b> <small>de 5 · ${p.reviews} avaliações</small></p><p>Comprou este produto? Conte para outras clientes o que achou!</p><button class="btn btn-outline" onclick="this.textContent='Obrigada! Enviaremos um link por e-mail 💌'">Avaliar produto</button>`
+      rev: `${p.reviews ? `<p class="stars" style="font-size:22px">${stars(p.rating)} <b style="color:var(--text)">${p.rating.toFixed(1)}</b> <small>de 5 · ${p.reviews} avaliações</small></p>` : '<p>Este produto ainda não tem avaliações.</p>'}<p>Comprou este produto? Conte para outras clientes o que achou!</p><button class="btn btn-outline" onclick="this.textContent='Obrigada! Enviaremos um link por e-mail 💌'">Avaliar produto</button>`
     };
     const setTab = t => { $$('.tab-btns button').forEach(b => b.classList.toggle('on', b.dataset.tab === t)); $('#tabPanel').innerHTML = panels[t]; };
     $$('.tab-btns button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
@@ -467,7 +457,7 @@
 
   function pageInfo(slug) {
     const pages = {
-      sobre: ['Quem somos', 'A Élan Beauté nasceu para trazer as melhores marcas de beleza importada com preço justo, entrega rápida e atendimento de verdade.'],
+      sobre: ['Quem somos', 'A Élan Beauté nasceu para trazer maquiagem, skincare e perfumaria com preço justo, entrega rápida e atendimento de verdade.'],
       entrega: ['Prazos e entregas', `Enviamos para todo o Brasil. Frete grátis nas compras acima de ${brl(S.freeShippingFrom)} (modalidade econômica). Pedidos pagos até 14h são postados no mesmo dia útil.`],
       trocas: ['Trocas e devoluções', 'Você tem até 7 dias corridos após o recebimento para desistir da compra, conforme o Código de Defesa do Consumidor. Produtos com defeito podem ser trocados em até 30 dias.'],
       pagamento: ['Formas de pagamento', `Pix com ${S.pixDiscount * 100}% de desconto, cartão de crédito em até ${S.maxInstallments}x sem juros e boleto bancário.`],
@@ -548,15 +538,15 @@
 
   // ---------- Navegação ----------
   function renderNav() {
-    $('#catnav').innerHTML = `<ul>${CATS.map(c => `<li data-cat="${c.id}"><a href="#/c/${c.id}">${c.name}</a><div class="dropdown">${c.subs.map(s => `<a href="#/c/${c.id}?sub=${encodeURIComponent(s)}">${esc(s)}</a>`).join('')}<a href="#/c/${c.id}"><b>Ver tudo</b></a></div></li>`).join('')}<li class="hot"><a href="#/ofertas">Ofertas</a></li><li class="hot"><a href="#/outlet">Outlet</a></li></ul>`;
-    $('#menuBody').innerHTML = `<div class="mcat"><a href="#/ofertas" style="color:var(--primary)">🔥 Ofertas do dia</a></div><div class="mcat"><a href="#/promo/leve3pague2" style="color:var(--primary)">🎁 Leve 3 pague 2</a></div>` + CATS.map(c => `<div class="mcat"><a href="#/c/${c.id}">${c.name}</a><div class="subs">${c.subs.map(s => `<a href="#/c/${c.id}?sub=${encodeURIComponent(s)}">${esc(s)}</a>`).join('')}</div></div>`).join('') + `<div class="mcat"><a href="#/outlet">Outlet</a></div>`;
+    $('#catnav').innerHTML = `<ul>${CATS.map(c => `<li data-cat="${c.id}"><a href="#/c/${c.id}">${c.name}</a><div class="dropdown">${c.subs.map(s => `<a href="#/c/${c.id}?sub=${encodeURIComponent(s)}">${esc(s)}</a>`).join('')}<a href="#/c/${c.id}"><b>Ver tudo</b></a></div></li>`).join('')}<li class="hot"><a href="#/ofertas">Ofertas</a></li></ul>`;
+    $('#menuBody').innerHTML = `<div class="mcat"><a href="#/ofertas" style="color:var(--primary)">🔥 Ofertas do dia</a></div><div class="mcat"><a href="#/promo/leve3pague2" style="color:var(--primary)">🎁 Leve 3 pague 2</a></div>` + CATS.map(c => `<div class="mcat"><a href="#/c/${c.id}">${c.name}</a><div class="subs">${c.subs.map(s => `<a href="#/c/${c.id}?sub=${encodeURIComponent(s)}">${esc(s)}</a>`).join('')}</div></div>`).join('') ;
   }
 
   function route() {
     clearInterval(slideTimer);
     closeDrawers();
     $('#searchSuggest').classList.remove('open');
-    document.title = 'Élan Beauté | Maquiagem, Skincare e Perfumes Importados';
+    document.title = 'Élan Beauté | Maquiagem, Skincare e Perfumaria';
     const hash = location.hash.slice(1) || '/';
     const [path, qs] = hash.split('?');
     const params = new URLSearchParams(qs || '');
@@ -573,7 +563,7 @@
       if (sub) { const box = $$('#filters input[name=sub]').find(i => i.value === sub); if (box) { box.checked = true; box.dispatchEvent(new Event('input', { bubbles: true })); } }
     }
     else if (kind === 'p') pageProduct(arg);
-    else if (kind === 'ofertas') pageListing({ title: 'Ofertas do dia 🔥', subtitle: 'Os maiores descontos da loja', list: [...PRODUCTS].sort((a, b) => pct(b) - pct(a)), crumb: [['Ofertas']] });
+    else if (kind === 'ofertas') pageListing({ title: 'Ofertas 🔥', subtitle: 'Ofertas da semana, kits e leve 3 pague 2', list: PRODUCTS.filter(p => p.tags.includes('relampago') || p.tags.includes('leve3pague2') || p.cat === 'kits'), crumb: [['Ofertas']] });
     else if (kind === 'outlet') pageListing({ title: 'Outlet — últimas unidades', subtitle: 'Quando acabar, acabou!', list: PRODUCTS.filter(p => p.tags.includes('outlet') || p.stock <= 5), crumb: [['Outlet']] });
     else if (kind === 'promo' && arg === 'leve3pague2') pageListing({ title: 'Leve 3, pague 2 🎁', subtitle: 'Escolha 3 produtos e o de menor valor sai grátis', list: byTag('leve3pague2'), crumb: [['Leve 3 pague 2']] });
     else if (kind === 'marca') { const b = decodeURIComponent(arg || ''); pageListing({ title: b, list: PRODUCTS.filter(p => p.brand === b), crumb: [['Marcas'], [b]] }); }

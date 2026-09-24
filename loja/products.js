@@ -2,7 +2,7 @@
 // `img` é opcional: sem ela, a loja desenha uma ilustração do produto (shape + cores).
 window.STORE = {
   name: 'Élan Beauté',
-  tagline: 'Beleza importada',
+  tagline: 'Maquiagem e skincare',
   whatsapp: '5511999999999',
   freeShippingFrom: 199,
   pixDiscount: 0.05,
@@ -17,48 +17,980 @@ window.STORE = {
 };
 
 window.CATEGORIES = [
-  { id: 'maquiagem', name: 'Maquiagem', subs: ['Rosto', 'Olhos', 'Lábios', 'Pó e Fixação', 'Primer'] },
-  { id: 'skincare', name: 'Skincare', subs: ['Limpeza', 'Hidratantes', 'Séruns', 'Protetor Solar', 'Máscaras'] },
-  { id: 'cabelos', name: 'Cabelos', subs: ['Shampoo', 'Condicionador', 'Finalizadores', 'Tratamento'] },
-  { id: 'corpo', name: 'Corpo & Banho', subs: ['Hidratante Corporal', 'Body Splash', 'Sabonetes', 'Esfoliantes'] },
-  { id: 'perfumes', name: 'Perfumes', subs: ['Femininos', 'Masculinos', 'Body Mist', 'Miniaturas'] },
-  { id: 'unhas', name: 'Unhas', subs: ['Esmaltes', 'Tratamentos', 'Acessórios'] },
-  { id: 'acessorios', name: 'Acessórios', subs: ['Pincéis', 'Esponjas', 'Nécessaires', 'Espelhos'] },
-  { id: 'kits', name: 'Kits', subs: ['Kits Maquiagem', 'Kits Skincare', 'Presentes'] }
+  {
+    "id": "maquiagem",
+    "name": "Maquiagem",
+    "subs": [
+      "Rosto",
+      "Olhos",
+      "Lábios",
+      "Sobrancelhas"
+    ]
+  },
+  {
+    "id": "skincare",
+    "name": "Skincare",
+    "subs": [
+      "Limpeza e Tônicos",
+      "Séruns"
+    ]
+  },
+  {
+    "id": "corpo",
+    "name": "Corpo & Banho",
+    "subs": [
+      "Hidratantes"
+    ]
+  },
+  {
+    "id": "perfumes",
+    "name": "Perfumes",
+    "subs": [
+      "Body Splash"
+    ]
+  },
+  {
+    "id": "cabelos",
+    "name": "Cabelos",
+    "subs": [
+      "Acessórios de Cabelo"
+    ]
+  },
+  {
+    "id": "acessorios",
+    "name": "Acessórios",
+    "subs": [
+      "Esponjas",
+      "Pinças"
+    ]
+  },
+  {
+    "id": "kits",
+    "name": "Kits",
+    "subs": [
+      "Kits Maquiagem",
+      "Kits Skincare",
+      "Kits Corpo e Perfume"
+    ]
+  }
 ];
 
+// Gerado por analise-fornecedor/gerar_produtos_loja.py a partir da planilha. Edite a planilha e rode de novo.
 window.PRODUCTS = [
-  { id: 'po-solto-cherry', name: 'Pó Solto Bake & Set Cherry Blossom 20g', brand: 'Velvet Lab', cat: 'maquiagem', sub: 'Pó e Fixação', price: 89.9, oldPrice: 129.9, rating: 4.9, reviews: 1284, stock: 7, shape: 'jar', colors: ['#f7c6d0', '#e88fa6'], tags: ['mais-vendido', 'relampago'], shades: ['Cherry Blossom', 'Translucent', 'Banana', 'Sand'],
-    desc: 'Pó solto ultrafino para selar e "assar" a maquiagem. Tom rosado que ilumina a pele, controla a oleosidade e deixa acabamento aveludado por até 16 horas.',
-    howto: 'Aplique com esponja úmida sobre o corretivo, deixe agir por 3 a 5 minutos e retire o excesso com pincel macio.',
-    ingredients: 'Talc, Silica, Mica, Dimethicone, Caprylyl Glycol, Iron Oxides.' },
-  { id: 'base-skin-glow', name: 'Base Líquida Skin Glow FPS 20 30ml', brand: 'Velvet Lab', cat: 'maquiagem', sub: 'Rosto', price: 119.9, oldPrice: 159.9, rating: 4.8, reviews: 842, stock: 22, shape: 'bottle', colors: ['#e9c8a8', '#b98a63'], tags: ['mais-vendido'], shades: ['01 Claro', '02 Médio', '03 Bege', '04 Canela', '05 Café'] },
-  { id: 'paleta-sunset', name: 'Paleta de Sombras Sunset Dreams 18 cores', brand: 'Aurora Beauty', cat: 'maquiagem', sub: 'Olhos', price: 139.9, oldPrice: 219.9, rating: 4.9, reviews: 2311, stock: 4, shape: 'palette', colors: ['#f29e6d', '#9c3d54'], tags: ['relampago', 'importado'] },
-  { id: 'batom-matte-rose', name: 'Batom Líquido Matte Velvet Rose', brand: 'Aurora Beauty', cat: 'maquiagem', sub: 'Lábios', price: 49.9, oldPrice: 69.9, rating: 4.7, reviews: 530, stock: 40, shape: 'lipstick', colors: ['#c44569', '#7d1f3a'], tags: ['leve3pague2'], shades: ['Rose', 'Nude', 'Red Kiss', 'Berry'] },
-  { id: 'gloss-cristal', name: 'Lip Gloss Cristal Plump', brand: 'Kiss & Co', cat: 'maquiagem', sub: 'Lábios', price: 39.9, oldPrice: 54.9, rating: 4.6, reviews: 318, stock: 55, shape: 'tube', colors: ['#ffb3c6', '#ff6b9a'], tags: ['leve3pague2'] },
-  { id: 'primer-pore', name: 'Primer Pore Blur Minimizador 30ml', brand: 'Velvet Lab', cat: 'maquiagem', sub: 'Primer', price: 79.9, oldPrice: 99.9, rating: 4.7, reviews: 611, stock: 18, shape: 'tube', colors: ['#dcd3f5', '#9a86d6'], tags: ['novo'] },
-  { id: 'mascara-volume', name: 'Máscara de Cílios Mega Volume à Prova d\'Água', brand: 'Kiss & Co', cat: 'maquiagem', sub: 'Olhos', price: 59.9, oldPrice: 79.9, rating: 4.8, reviews: 977, stock: 30, shape: 'lipstick', colors: ['#2b2b2b', '#111'], tags: ['mais-vendido', 'leve3pague2'] },
-  { id: 'spray-fixador', name: 'Spray Fixador Setting Mist 100ml', brand: 'Velvet Lab', cat: 'maquiagem', sub: 'Pó e Fixação', price: 69.9, oldPrice: 99.9, rating: 4.8, reviews: 1450, stock: 12, shape: 'spray', colors: ['#bfe3f2', '#6fb1cf'], tags: ['relampago'] },
-  { id: 'serum-vitc', name: 'Sérum Vitamina C 15% Glow Booster 30ml', brand: 'Pure Derm', cat: 'skincare', sub: 'Séruns', price: 99.9, oldPrice: 149.9, rating: 4.9, reviews: 1893, stock: 9, shape: 'dropper', colors: ['#ffd27a', '#f39c12'], tags: ['mais-vendido', 'relampago'] },
-  { id: 'hidratante-gel', name: 'Hidratante Facial Gel Ácido Hialurônico 50g', brand: 'Pure Derm', cat: 'skincare', sub: 'Hidratantes', price: 84.9, oldPrice: 109.9, rating: 4.8, reviews: 740, stock: 25, shape: 'jar', colors: ['#cdeffd', '#5bb8e0'], tags: ['novo'] },
-  { id: 'protetor-50', name: 'Protetor Solar Facial Toque Seco FPS 50', brand: 'Pure Derm', cat: 'skincare', sub: 'Protetor Solar', price: 69.9, oldPrice: 89.9, rating: 4.7, reviews: 1204, stock: 60, shape: 'tube', colors: ['#fff1c1', '#f5b841'], tags: [] },
-  { id: 'gel-limpeza', name: 'Gel de Limpeza Facial Suave 150ml', brand: 'Pure Derm', cat: 'skincare', sub: 'Limpeza', price: 49.9, oldPrice: 64.9, rating: 4.6, reviews: 402, stock: 70, shape: 'bottle', colors: ['#d9f5e6', '#4cbb85'], tags: ['leve3pague2'] },
-  { id: 'mascara-argila', name: 'Máscara Facial Argila Rosa Detox 100g', brand: 'Pure Derm', cat: 'skincare', sub: 'Máscaras', price: 54.9, oldPrice: 74.9, rating: 4.5, reviews: 211, stock: 3, shape: 'jar', colors: ['#f8cdd3', '#d97a8a'], tags: ['outlet'] },
-  { id: 'shampoo-repair', name: 'Shampoo Bond Repair Profissional 300ml', brand: 'Hair Studio', cat: 'cabelos', sub: 'Shampoo', price: 89.9, oldPrice: 119.9, rating: 4.8, reviews: 655, stock: 20, shape: 'bottle', colors: ['#e6d5f7', '#8e5cc9'], tags: ['importado'] },
-  { id: 'oleo-argan', name: 'Óleo Finalizador Argan Gold 60ml', brand: 'Hair Studio', cat: 'cabelos', sub: 'Finalizadores', price: 64.9, oldPrice: 94.9, rating: 4.9, reviews: 1022, stock: 14, shape: 'dropper', colors: ['#f7d774', '#c99a2e'], tags: ['mais-vendido'] },
-  { id: 'mascara-cabelo', name: 'Máscara Capilar Nutrição Intensa 250g', brand: 'Hair Studio', cat: 'cabelos', sub: 'Tratamento', price: 74.9, oldPrice: 99.9, rating: 4.7, reviews: 388, stock: 33, shape: 'jar', colors: ['#fde2c8', '#e59a5b'], tags: ['leve3pague2'] },
-  { id: 'body-splash-vanilla', name: 'Body Splash Vanilla Dream 250ml', brand: 'Sweet Garden', cat: 'corpo', sub: 'Body Splash', price: 59.9, oldPrice: 89.9, rating: 4.9, reviews: 2750, stock: 11, shape: 'spray', colors: ['#fbe3c3', '#e0a96d'], tags: ['mais-vendido', 'relampago', 'importado'] },
-  { id: 'hidratante-corpo', name: 'Hidratante Corporal Cherry Almond 236ml', brand: 'Sweet Garden', cat: 'corpo', sub: 'Hidratante Corporal', price: 54.9, oldPrice: 74.9, rating: 4.8, reviews: 980, stock: 45, shape: 'bottle', colors: ['#ffc2d1', '#e05780'], tags: ['leve3pague2', 'importado'] },
-  { id: 'esfoliante-acucar', name: 'Esfoliante Corporal Açúcar & Coco 200g', brand: 'Sweet Garden', cat: 'corpo', sub: 'Esfoliantes', price: 44.9, oldPrice: 64.9, rating: 4.6, reviews: 276, stock: 2, shape: 'jar', colors: ['#fff6e0', '#d4a373'], tags: ['outlet'] },
-  { id: 'perfume-bloom', name: 'Perfume Bloom Eau de Parfum 100ml', brand: 'Maison Lune', cat: 'perfumes', sub: 'Femininos', price: 249.9, oldPrice: 389.9, rating: 4.9, reviews: 690, stock: 6, shape: 'perfume', colors: ['#f6c1d9', '#c2185b'], tags: ['importado', 'relampago'] },
-  { id: 'perfume-noir', name: 'Perfume Noir Intense Eau de Parfum 100ml', brand: 'Maison Lune', cat: 'perfumes', sub: 'Masculinos', price: 269.9, oldPrice: 399.9, rating: 4.8, reviews: 433, stock: 8, shape: 'perfume', colors: ['#5a5a6e', '#1f1f2e'], tags: ['importado'] },
-  { id: 'mini-perfumes', name: 'Kit Miniaturas de Perfume 4x10ml', brand: 'Maison Lune', cat: 'perfumes', sub: 'Miniaturas', price: 129.9, oldPrice: 189.9, rating: 4.7, reviews: 301, stock: 15, shape: 'perfume', colors: ['#d7c4f2', '#7e57c2'], tags: ['novo'] },
-  { id: 'esmalte-gel', name: 'Esmalte Efeito Gel Pink Candy 10ml', brand: 'Nail Pop', cat: 'unhas', sub: 'Esmaltes', price: 19.9, oldPrice: 29.9, rating: 4.6, reviews: 512, stock: 90, shape: 'nail', colors: ['#ff8fab', '#fb6f92'], tags: ['leve3pague2'] },
-  { id: 'base-fortalecedora', name: 'Base Fortalecedora de Unhas 10ml', brand: 'Nail Pop', cat: 'unhas', sub: 'Tratamentos', price: 24.9, oldPrice: 34.9, rating: 4.5, reviews: 190, stock: 80, shape: 'nail', colors: ['#f1f1f1', '#cfcfcf'], tags: ['leve3pague2'] },
-  { id: 'kit-pinceis', name: 'Kit 12 Pincéis Profissionais + Estojo', brand: 'Pro Tools', cat: 'acessorios', sub: 'Pincéis', price: 99.9, oldPrice: 159.9, rating: 4.8, reviews: 1120, stock: 13, shape: 'brush', colors: ['#f3d1dc', '#b5838d'], tags: ['mais-vendido'] },
-  { id: 'esponja-gota', name: 'Esponja de Maquiagem Gota Soft (2 un.)', brand: 'Pro Tools', cat: 'acessorios', sub: 'Esponjas', price: 29.9, oldPrice: 44.9, rating: 4.7, reviews: 845, stock: 120, shape: 'sponge', colors: ['#ff9eb5', '#e75480'], tags: ['leve3pague2'] },
-  { id: 'necessaire', name: 'Nécessaire Transparente Glam', brand: 'Pro Tools', cat: 'acessorios', sub: 'Nécessaires', price: 39.9, oldPrice: 59.9, rating: 4.5, reviews: 150, stock: 5, shape: 'bag', colors: ['#fce4ec', '#f06292'], tags: ['outlet'] },
-  { id: 'kit-glow', name: 'Kit Glow Completo: Base + Pó + Fixador', brand: 'Velvet Lab', cat: 'kits', sub: 'Kits Maquiagem', price: 229.9, oldPrice: 339.7, rating: 4.9, reviews: 402, stock: 10, shape: 'kit', colors: ['#f7c6d0', '#e88fa6'], tags: ['relampago', 'mais-vendido'] },
-  { id: 'kit-skincare', name: 'Kit Rotina Skincare 4 Passos', brand: 'Pure Derm', cat: 'kits', sub: 'Kits Skincare', price: 249.9, oldPrice: 364.6, rating: 4.8, reviews: 288, stock: 9, shape: 'kit', colors: ['#cdeffd', '#5bb8e0'], tags: ['novo'] },
-  { id: 'kit-presente', name: 'Box Presente Sweet Garden Vanilla', brand: 'Sweet Garden', cat: 'kits', sub: 'Presentes', price: 139.9, oldPrice: 199.8, rating: 4.9, reviews: 517, stock: 16, shape: 'kit', colors: ['#fbe3c3', '#e0a96d'], tags: ['importado'] }
+  {
+    "id": "choco-fun",
+    "name": "Pó Compacto Choco Fun",
+    "brand": "Fenzza",
+    "cat": "maquiagem",
+    "sub": "Rosto",
+    "price": 14.9,
+    "stock": 24,
+    "shape": "jar",
+    "colors": [
+      "#f3d1c1",
+      "#c98a6b"
+    ],
+    "tags": [],
+    "desc": "Pó Compacto Choco Fun da Fenzza. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+  },
+  {
+    "id": "blush-velvet",
+    "name": "Blush Matte Velvet Cheeks",
+    "brand": "Dapop",
+    "cat": "maquiagem",
+    "sub": "Rosto",
+    "price": 14.9,
+    "stock": 24,
+    "shape": "jar",
+    "colors": [
+      "#f3d1c1",
+      "#c98a6b"
+    ],
+    "tags": [],
+    "desc": "Blush Matte Velvet Cheeks da Dapop. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+  },
+  {
+    "id": "contorno-velvet",
+    "name": "Contorno Velvet",
+    "brand": "Dapop",
+    "cat": "maquiagem",
+    "sub": "Rosto",
+    "price": 14.9,
+    "stock": 24,
+    "shape": "jar",
+    "colors": [
+      "#f3d1c1",
+      "#c98a6b"
+    ],
+    "tags": [],
+    "desc": "Contorno Velvet (DP2471) da Dapop. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+  },
+  {
+    "id": "ilum-velvet",
+    "name": "Iluminador Velvet Glow",
+    "brand": "Dapop",
+    "cat": "maquiagem",
+    "sub": "Rosto",
+    "price": 14.9,
+    "stock": 24,
+    "shape": "jar",
+    "colors": [
+      "#f3d1c1",
+      "#c98a6b"
+    ],
+    "tags": [],
+    "desc": "Iluminador Velvet Glow da Dapop. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+  },
+  {
+    "id": "micelar-pantenol",
+    "name": "Água Micelar Pantenol e Ác. Hialurônico 200ml",
+    "brand": "Dapop",
+    "cat": "skincare",
+    "sub": "Limpeza e Tônicos",
+    "price": 12.9,
+    "stock": 12,
+    "shape": "bottle",
+    "colors": [
+      "#d9f2ff",
+      "#5aaed6"
+    ],
+    "tags": [
+      "leve3pague2"
+    ],
+    "desc": "Água Micelar Pantenol e Ác. Hialurônico 200ml da Dapop. Para a rotina de limpeza e preparo da pele, de manhã e à noite."
+  },
+  {
+    "id": "tonico-glicolico",
+    "name": "Tônico Facial Ácido Glicólico 200ml",
+    "brand": "Dapop",
+    "cat": "skincare",
+    "sub": "Limpeza e Tônicos",
+    "price": 14.9,
+    "stock": 12,
+    "shape": "bottle",
+    "colors": [
+      "#d9f2ff",
+      "#5aaed6"
+    ],
+    "tags": [
+      "leve3pague2"
+    ],
+    "desc": "Tônico Facial Ácido Glicólico 200ml da Dapop. Para a rotina de limpeza e preparo da pele, de manhã e à noite."
+  },
+  {
+    "id": "adstringente",
+    "name": "Loção Adstringente Chá Verde 200ml",
+    "brand": "Dapop",
+    "cat": "skincare",
+    "sub": "Limpeza e Tônicos",
+    "price": 12.9,
+    "stock": 12,
+    "shape": "bottle",
+    "colors": [
+      "#d9f2ff",
+      "#5aaed6"
+    ],
+    "tags": [
+      "leve3pague2"
+    ],
+    "desc": "Loção Adstringente Chá Verde 200ml da Dapop. Para a rotina de limpeza e preparo da pele, de manhã e à noite."
+  },
+  {
+    "id": "kit4-esponjas",
+    "name": "Kit Esponjas Makeup Blender Puff c/4",
+    "brand": "Mahav",
+    "cat": "acessorios",
+    "sub": "Esponjas",
+    "price": 16.9,
+    "stock": 12,
+    "shape": "sponge",
+    "colors": [
+      "#ff9eb5",
+      "#e75480"
+    ],
+    "tags": [
+      "mais-vendido"
+    ],
+    "desc": "Kit Esponjas Makeup Blender Puff c/4 da Mahav. Acessório prático para a sua rotina de beleza."
+  },
+  {
+    "id": "cilios-8d",
+    "name": "Cílios Postiços 8D (F007/F011/F012/F015/F019/F020/F022)",
+    "brand": "Sabrina Sato",
+    "cat": "maquiagem",
+    "sub": "Olhos",
+    "price": 9.9,
+    "stock": 10,
+    "shape": "palette",
+    "colors": [
+      "#3a3340",
+      "#15121a"
+    ],
+    "tags": [
+      "mais-vendido"
+    ],
+    "desc": "Cílios Postiços 8D (F007/F011/F012/F015/F019/F020/F022) da Sabrina Sato. Para valorizar o olhar, da maquiagem leve do dia à produção da noite.",
+    "shades": [
+      "F007",
+      "F011",
+      "F012",
+      "F015",
+      "F019",
+      "F020",
+      "F022"
+    ]
+  },
+  {
+    "id": "serum-ah",
+    "name": "Sérum Facial Ácido Hialurônico Reflection 30ml",
+    "brand": "Safira",
+    "cat": "skincare",
+    "sub": "Séruns",
+    "price": 16.9,
+    "stock": 12,
+    "shape": "dropper",
+    "colors": [
+      "#ffd27a",
+      "#e59a2f"
+    ],
+    "tags": [
+      "relampago"
+    ],
+    "desc": "Sérum Facial Ácido Hialurônico Reflection 30ml da Safira. Sérum facial de absorção rápida para usar antes do hidratante."
+  },
+  {
+    "id": "serum-clareador",
+    "name": "Sérum Facial Clareador Reflection 30ml",
+    "brand": "Safira",
+    "cat": "skincare",
+    "sub": "Séruns",
+    "price": 16.9,
+    "stock": 12,
+    "shape": "dropper",
+    "colors": [
+      "#ffd27a",
+      "#e59a2f"
+    ],
+    "tags": [],
+    "desc": "Sérum Facial Clareador Reflection 30ml da Safira. Sérum facial de absorção rápida para usar antes do hidratante."
+  },
+  {
+    "id": "serum-vitc",
+    "name": "Sérum Facial Vitamina C Reflection 30ml",
+    "brand": "Safira",
+    "cat": "skincare",
+    "sub": "Séruns",
+    "price": 16.9,
+    "stock": 12,
+    "shape": "dropper",
+    "colors": [
+      "#ffd27a",
+      "#e59a2f"
+    ],
+    "tags": [
+      "mais-vendido"
+    ],
+    "desc": "Sérum Facial Vitamina C Reflection 30ml da Safira. Sérum facial de absorção rápida para usar antes do hidratante."
+  },
+  {
+    "id": "ureia",
+    "name": "Creme Hidratante Ureia 3% 200g",
+    "brand": "Safira",
+    "cat": "corpo",
+    "sub": "Hidratantes",
+    "price": 19.9,
+    "stock": 12,
+    "shape": "jar",
+    "colors": [
+      "#fbe3c3",
+      "#e0a96d"
+    ],
+    "tags": [
+      "relampago"
+    ],
+    "desc": "Creme Hidratante Ureia 3% 200g da Safira. Hidratação para o corpo com fragrância gostosa."
+  },
+  {
+    "id": "tatoo-brow",
+    "name": "Máscara para Sobrancelhas Tatoo Brow",
+    "brand": "Femme Paris",
+    "cat": "maquiagem",
+    "sub": "Sobrancelhas",
+    "price": 12.9,
+    "stock": 24,
+    "shape": "lipstick",
+    "colors": [
+      "#8a5a3b",
+      "#4a2e1c"
+    ],
+    "tags": [
+      "leve3pague2"
+    ],
+    "desc": "Máscara para Sobrancelhas Tatoo Brow da Femme Paris. Para sobrancelhas alinhadas e definidas o dia todo."
+  },
+  {
+    "id": "contorno-stick",
+    "name": "Contorno Stick",
+    "brand": "Femme Paris",
+    "cat": "maquiagem",
+    "sub": "Rosto",
+    "price": 15.9,
+    "stock": 24,
+    "shape": "lipstick",
+    "colors": [
+      "#f3d1c1",
+      "#c98a6b"
+    ],
+    "tags": [
+      "relampago"
+    ],
+    "desc": "Contorno Stick da Femme Paris. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+  },
+  {
+    "id": "gloss-peeloff",
+    "name": "Lip Gloss Peel-Off",
+    "brand": "Femme Paris",
+    "cat": "maquiagem",
+    "sub": "Lábios",
+    "price": 12.9,
+    "stock": 24,
+    "shape": "tube",
+    "colors": [
+      "#f06a8f",
+      "#b0244d"
+    ],
+    "tags": [
+      "leve3pague2"
+    ],
+    "desc": "Lip Gloss Peel-Off da Femme Paris. Cor e brilho para os lábios, prático para levar na bolsa."
+  },
+  {
+    "id": "pentes",
+    "name": "Conjunto de Pentes e Acessórios c/9 peças",
+    "brand": "—",
+    "cat": "cabelos",
+    "sub": "Acessórios de Cabelo",
+    "price": 16.9,
+    "stock": 12,
+    "shape": "brush",
+    "colors": [
+      "#f3d1dc",
+      "#b5838d"
+    ],
+    "tags": [],
+    "desc": "Conjunto de Pentes e Acessórios c/9 peças da —. Acessório prático para a sua rotina de beleza."
+  },
+  {
+    "id": "tapioca",
+    "name": "Pó de Tapioca Lilás Selva Neon",
+    "brand": "Miss Rôse",
+    "cat": "maquiagem",
+    "sub": "Rosto",
+    "price": 11.9,
+    "stock": 15,
+    "shape": "jar",
+    "colors": [
+      "#f3d1c1",
+      "#c98a6b"
+    ],
+    "tags": [
+      "mais-vendido",
+      "leve3pague2"
+    ],
+    "desc": "Pó de Tapioca Lilás Selva Neon da Miss Rôse. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+  },
+  {
+    "id": "tint-brow",
+    "name": "Tint Brow Preenche Sobrancelha",
+    "brand": "Wike Make",
+    "cat": "maquiagem",
+    "sub": "Sobrancelhas",
+    "price": 12.9,
+    "stock": 24,
+    "shape": "lipstick",
+    "colors": [
+      "#8a5a3b",
+      "#4a2e1c"
+    ],
+    "tags": [
+      "leve3pague2"
+    ],
+    "desc": "Tint Brow Preenche Sobrancelha da Wike Make. Para sobrancelhas alinhadas e definidas o dia todo."
+  },
+  {
+    "id": "gel-sobrancelha",
+    "name": "Gel Fixador de Sobrancelhas com Pente",
+    "brand": "Wike Make",
+    "cat": "maquiagem",
+    "sub": "Sobrancelhas",
+    "price": 12.9,
+    "stock": 24,
+    "shape": "brush",
+    "colors": [
+      "#8a5a3b",
+      "#4a2e1c"
+    ],
+    "tags": [
+      "leve3pague2"
+    ],
+    "desc": "Gel Fixador de Sobrancelhas com Pente da Wike Make. Para sobrancelhas alinhadas e definidas o dia todo."
+  },
+  {
+    "id": "gloss-chaveiro",
+    "name": "Lip Gloss com Chaveiro",
+    "brand": "Wike Make",
+    "cat": "maquiagem",
+    "sub": "Lábios",
+    "price": 11.9,
+    "stock": 24,
+    "shape": "tube",
+    "colors": [
+      "#f06a8f",
+      "#b0244d"
+    ],
+    "tags": [
+      "leve3pague2"
+    ],
+    "desc": "Lip Gloss com Chaveiro da Wike Make. Cor e brilho para os lábios, prático para levar na bolsa."
+  },
+  {
+    "id": "body-libertad",
+    "name": "Hidratante Corporal Body Cream Libertad 150ml",
+    "brand": "Cap Life",
+    "cat": "corpo",
+    "sub": "Hidratantes",
+    "price": 14.9,
+    "stock": 12,
+    "shape": "bottle",
+    "colors": [
+      "#fbe3c3",
+      "#e0a96d"
+    ],
+    "tags": [],
+    "desc": "Hidratante Corporal Body Cream Libertad 150ml da Cap Life. Hidratação para o corpo com fragrância gostosa."
+  },
+  {
+    "id": "betterme-hidratante",
+    "name": "Super Hidratante Corporal e Facial Vitamina C 150g",
+    "brand": "Better Me",
+    "cat": "corpo",
+    "sub": "Hidratantes",
+    "price": 16.9,
+    "stock": 12,
+    "shape": "bottle",
+    "colors": [
+      "#fbe3c3",
+      "#e0a96d"
+    ],
+    "tags": [],
+    "desc": "Super Hidratante Corporal e Facial Vitamina C 150g da Better Me. Hidratação para o corpo com fragrância gostosa."
+  },
+  {
+    "id": "pink21-all-day",
+    "name": "Batom Líquido Efeito Matte All Day",
+    "brand": "Pink 21",
+    "cat": "maquiagem",
+    "sub": "Lábios",
+    "price": 14.9,
+    "stock": 48,
+    "shape": "lipstick",
+    "colors": [
+      "#f06a8f",
+      "#b0244d"
+    ],
+    "tags": [],
+    "desc": "Batom Líquido Efeito Matte All Day da Pink 21. Cor e brilho para os lábios, prático para levar na bolsa."
+  },
+  {
+    "id": "splash-fem",
+    "name": "Body Splash 120ml femininos (7 fragrâncias)",
+    "brand": "Natuza",
+    "cat": "perfumes",
+    "sub": "Body Splash",
+    "price": 24.9,
+    "stock": 12,
+    "shape": "spray",
+    "colors": [
+      "#f6c1d9",
+      "#b4235f"
+    ],
+    "tags": [
+      "mais-vendido"
+    ],
+    "desc": "Body Splash 120ml femininos (7 fragrâncias) da Natuza. Fragrância leve para usar no corpo e renovar ao longo do dia.",
+    "shades": [
+      "Obsession Pink",
+      "Libertad",
+      "Sahar Al Noor",
+      "Royal Rose",
+      "Golden Vip",
+      "Yara Zahra",
+      "Good Angel"
+    ]
+  },
+  {
+    "id": "splash-men",
+    "name": "Body Splash For Men 120ml (3 fragrâncias)",
+    "brand": "Natuza",
+    "cat": "perfumes",
+    "sub": "Body Splash",
+    "price": 24.9,
+    "stock": 12,
+    "shape": "spray",
+    "colors": [
+      "#f6c1d9",
+      "#b4235f"
+    ],
+    "tags": [
+      "novo"
+    ],
+    "desc": "Body Splash For Men 120ml (3 fragrâncias) da Natuza. Fragrância leve para usar no corpo e renovar ao longo do dia.",
+    "shades": [
+      "Asad Black",
+      "Royal Black",
+      "Hayat Al Gold"
+    ]
+  },
+  {
+    "id": "body-cream-natuza",
+    "name": "Hidratante Body Cream 120ml (4 fragrâncias)",
+    "brand": "Natuza",
+    "cat": "corpo",
+    "sub": "Hidratantes",
+    "price": 22.9,
+    "stock": 12,
+    "shape": "bottle",
+    "colors": [
+      "#fbe3c3",
+      "#e0a96d"
+    ],
+    "tags": [
+      "relampago"
+    ],
+    "desc": "Hidratante Body Cream 120ml (4 fragrâncias) da Natuza. Hidratação para o corpo com fragrância gostosa.",
+    "shades": [
+      "Libertad",
+      "Obsession Pink",
+      "Good Angel",
+      "Golden Vip"
+    ]
+  },
+  {
+    "id": "pink21-primer-hidro",
+    "name": "Primer Hidratante Hidro 45ml",
+    "brand": "Pink 21",
+    "cat": "maquiagem",
+    "sub": "Rosto",
+    "price": 14.9,
+    "stock": 12,
+    "shape": "tube",
+    "colors": [
+      "#f3d1c1",
+      "#c98a6b"
+    ],
+    "tags": [],
+    "desc": "Primer Hidratante Hidro 45ml (CS6372) da Pink 21. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+  },
+  {
+    "id": "amora-blush-bastao",
+    "name": "Blush em Bastão Amora",
+    "brand": "Pink 21",
+    "cat": "maquiagem",
+    "sub": "Rosto",
+    "price": 14.9,
+    "stock": 24,
+    "shape": "lipstick",
+    "colors": [
+      "#f3d1c1",
+      "#c98a6b"
+    ],
+    "tags": [],
+    "desc": "Blush em Bastão Amora da Pink 21. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+  },
+  {
+    "id": "color-contour",
+    "name": "Contorno em Bastão Color Contour",
+    "brand": "Pink 21",
+    "cat": "maquiagem",
+    "sub": "Rosto",
+    "price": 12.9,
+    "stock": 48,
+    "shape": "lipstick",
+    "colors": [
+      "#f3d1c1",
+      "#c98a6b"
+    ],
+    "tags": [
+      "mais-vendido",
+      "leve3pague2"
+    ],
+    "desc": "Contorno em Bastão Color Contour da Pink 21. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+  },
+  {
+    "id": "the-pink-blush",
+    "name": "Blush Líquido The Pink Multiuso",
+    "brand": "Pink 21",
+    "cat": "maquiagem",
+    "sub": "Rosto",
+    "price": 17.9,
+    "stock": 24,
+    "shape": "dropper",
+    "colors": [
+      "#f3d1c1",
+      "#c98a6b"
+    ],
+    "tags": [
+      "relampago"
+    ],
+    "desc": "Blush Líquido The Pink Multiuso da Pink 21. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+  },
+  {
+    "id": "iconic-paleta",
+    "name": "Paleta de Sombras The Iconic (Cor 01 e Cor 03)",
+    "brand": "Pink 21",
+    "cat": "maquiagem",
+    "sub": "Olhos",
+    "price": 19.9,
+    "stock": 12,
+    "shape": "palette",
+    "colors": [
+      "#3a3340",
+      "#15121a"
+    ],
+    "tags": [
+      "mais-vendido"
+    ],
+    "desc": "Paleta de Sombras The Iconic (Cor 01 e Cor 03) da Pink 21. Para valorizar o olhar, da maquiagem leve do dia à produção da noite.",
+    "shades": [
+      "Cor 01",
+      "Cor 03"
+    ]
+  },
+  {
+    "id": "pink21-corretivo-cs5963",
+    "name": "Corretivo Líquido",
+    "brand": "Pink 21",
+    "cat": "maquiagem",
+    "sub": "Rosto",
+    "price": 12.9,
+    "stock": 24,
+    "shape": "tube",
+    "colors": [
+      "#f3d1c1",
+      "#c98a6b"
+    ],
+    "tags": [
+      "leve3pague2"
+    ],
+    "desc": "Corretivo Líquido (CS5963) da Pink 21. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+  },
+  {
+    "id": "color-cover",
+    "name": "Corretivo em Bastão Color Cover",
+    "brand": "Pink 21",
+    "cat": "maquiagem",
+    "sub": "Rosto",
+    "price": 12.9,
+    "stock": 48,
+    "shape": "lipstick",
+    "colors": [
+      "#f3d1c1",
+      "#c98a6b"
+    ],
+    "tags": [
+      "relampago",
+      "leve3pague2"
+    ],
+    "desc": "Corretivo em Bastão Color Cover da Pink 21. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+  },
+  {
+    "id": "blush-multifuncional",
+    "name": "Blush Líquido Multifuncional",
+    "brand": "Pink 21",
+    "cat": "maquiagem",
+    "sub": "Rosto",
+    "price": 15.9,
+    "stock": 24,
+    "shape": "dropper",
+    "colors": [
+      "#f3d1c1",
+      "#c98a6b"
+    ],
+    "tags": [
+      "mais-vendido"
+    ],
+    "desc": "Blush Líquido Multifuncional da Pink 21. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+  },
+  {
+    "id": "sp-mascara-36h",
+    "name": "Máscara para Cílios 36h Curva e Volume",
+    "brand": "Super Poderes",
+    "cat": "maquiagem",
+    "sub": "Olhos",
+    "price": 12.9,
+    "stock": 24,
+    "shape": "lipstick",
+    "colors": [
+      "#3a3340",
+      "#15121a"
+    ],
+    "tags": [
+      "novo"
+    ],
+    "desc": "Máscara para Cílios 36h Curva e Volume da Super Poderes. Para valorizar o olhar, da maquiagem leve do dia à produção da noite."
+  },
+  {
+    "id": "bf-iluminador-stick",
+    "name": "Iluminador Stick Multifuncional",
+    "brand": "Bellafemme",
+    "cat": "maquiagem",
+    "sub": "Rosto",
+    "price": 19.9,
+    "stock": 24,
+    "shape": "lipstick",
+    "colors": [
+      "#f3d1c1",
+      "#c98a6b"
+    ],
+    "tags": [
+      "novo"
+    ],
+    "desc": "Iluminador Stick Multifuncional da Bellafemme. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+  },
+  {
+    "id": "bf-corretivo-stick",
+    "name": "Corretivo Stick Multifuncional",
+    "brand": "Bellafemme",
+    "cat": "maquiagem",
+    "sub": "Rosto",
+    "price": 19.9,
+    "stock": 24,
+    "shape": "lipstick",
+    "colors": [
+      "#f3d1c1",
+      "#c98a6b"
+    ],
+    "tags": [
+      "novo"
+    ],
+    "desc": "Corretivo Stick Multifuncional da Bellafemme. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+  },
+  {
+    "id": "bf-blush-stick",
+    "name": "Blush Stick Multifuncional",
+    "brand": "Bellafemme",
+    "cat": "maquiagem",
+    "sub": "Rosto",
+    "price": 19.9,
+    "stock": 24,
+    "shape": "lipstick",
+    "colors": [
+      "#f3d1c1",
+      "#c98a6b"
+    ],
+    "tags": [
+      "mais-vendido",
+      "novo"
+    ],
+    "desc": "Blush Stick Multifuncional (BF10197) da Bellafemme. Para uma pele bonita no dia a dia, com textura fácil de aplicar e espalhar."
+  },
+  {
+    "id": "kit-pincas",
+    "name": "Kit de Pinças para Sobrancelha (4 pinças)",
+    "brand": "Ruby Anjo",
+    "cat": "acessorios",
+    "sub": "Pinças",
+    "price": 19.9,
+    "stock": 12,
+    "shape": "brush",
+    "colors": [
+      "#d9d9e0",
+      "#7a7a8c"
+    ],
+    "tags": [
+      "mais-vendido",
+      "novo"
+    ],
+    "desc": "Kit de Pinças para Sobrancelha (4 pinças) da Ruby Anjo. Acessório prático para a sua rotina de beleza."
+  },
+  {
+    "id": "kit-pele-de-vidro",
+    "name": "Kit Pele de Vidro",
+    "brand": "Élan Beauté",
+    "cat": "kits",
+    "sub": "Kits Skincare",
+    "price": 49.9,
+    "separados": 50.7,
+    "stock": 12,
+    "shape": "kit",
+    "colors": [
+      "#ffc2d6",
+      "#d9265f"
+    ],
+    "tags": [
+      "mais-vendido"
+    ],
+    "desc": "Kit com: Sérum Facial Ácido Hialurônico Reflection 30ml + Sérum Facial Vitamina C Reflection 30ml + Sérum Facial Clareador Reflection 30ml, Comprando separado sai R$ 50,70."
+  },
+  {
+    "id": "kit-pele-perfeita",
+    "name": "Kit Pele Perfeita",
+    "brand": "Élan Beauté",
+    "cat": "kits",
+    "sub": "Kits Maquiagem",
+    "price": 49.9,
+    "separados": 56.6,
+    "stock": 15,
+    "shape": "kit",
+    "colors": [
+      "#ffc2d6",
+      "#d9265f"
+    ],
+    "tags": [
+      "mais-vendido"
+    ],
+    "desc": "Kit com: Blush Matte Velvet Cheeks + Contorno Velvet + Iluminador Velvet Glow + Pó de Tapioca Lilás Selva Neon, Comprando separado sai R$ 56,60."
+  },
+  {
+    "id": "kit-rotina-skincare",
+    "name": "Kit Rotina Skincare",
+    "brand": "Élan Beauté",
+    "cat": "kits",
+    "sub": "Kits Skincare",
+    "price": 39.9,
+    "separados": 40.7,
+    "stock": 12,
+    "shape": "kit",
+    "colors": [
+      "#ffc2d6",
+      "#d9265f"
+    ],
+    "tags": [],
+    "desc": "Kit com: Água Micelar Pantenol e Ác. Hialurônico 200ml + Tônico Facial Ácido Glicólico 200ml + Loção Adstringente Chá Verde 200ml, Comprando separado sai R$ 40,70."
+  },
+  {
+    "id": "kit-olhar-poderoso",
+    "name": "Kit Olhar Poderoso",
+    "brand": "Élan Beauté",
+    "cat": "kits",
+    "sub": "Kits Maquiagem",
+    "price": 44.9,
+    "separados": 55.5,
+    "stock": 3,
+    "shape": "kit",
+    "colors": [
+      "#ffc2d6",
+      "#d9265f"
+    ],
+    "tags": [],
+    "desc": "Kit com: 3x Cílios Postiços 8D (F007/F011/F012/F015/F019/F020/F022) + Máscara para Cílios 36h Curva e Volume + Máscara para Sobrancelhas Tatoo Brow, Comprando separado sai R$ 55,50."
+  },
+  {
+    "id": "kit-sobrancelha-perfeita",
+    "name": "Kit Sobrancelha Perfeita",
+    "brand": "Élan Beauté",
+    "cat": "kits",
+    "sub": "Kits Maquiagem",
+    "price": 44.9,
+    "separados": 58.6,
+    "stock": 12,
+    "shape": "kit",
+    "colors": [
+      "#ffc2d6",
+      "#d9265f"
+    ],
+    "tags": [],
+    "desc": "Kit com: Tint Brow Preenche Sobrancelha + Gel Fixador de Sobrancelhas com Pente + Máscara para Sobrancelhas Tatoo Brow + Kit de Pinças para Sobrancelha (4 pinças), Comprando separado sai R$ 58,60."
+  },
+  {
+    "id": "kit-perfumada-splash-creme",
+    "name": "Kit Perfumada",
+    "brand": "Élan Beauté",
+    "cat": "kits",
+    "sub": "Kits Corpo e Perfume",
+    "price": 44.9,
+    "separados": 47.8,
+    "stock": 12,
+    "shape": "kit",
+    "colors": [
+      "#ffc2d6",
+      "#d9265f"
+    ],
+    "tags": [],
+    "desc": "Kit com: Body Splash 120ml femininos (7 fragrâncias) + Hidratante Body Cream 120ml (4 fragrâncias), Comprando separado sai R$ 47,80."
+  },
+  {
+    "id": "kit-presente-masculino-2-splash",
+    "name": "Kit Presente Masculino",
+    "brand": "Élan Beauté",
+    "cat": "kits",
+    "sub": "Kits Corpo e Perfume",
+    "price": 44.9,
+    "separados": 49.8,
+    "stock": 6,
+    "shape": "kit",
+    "colors": [
+      "#ffc2d6",
+      "#d9265f"
+    ],
+    "tags": [],
+    "desc": "Kit com: 2x Body Splash For Men 120ml (3 fragrâncias), Comprando separado sai R$ 49,80."
+  },
+  {
+    "id": "kit-make-completa",
+    "name": "Kit Make Completa",
+    "brand": "Élan Beauté",
+    "cat": "kits",
+    "sub": "Kits Maquiagem",
+    "price": 59.9,
+    "separados": 65.6,
+    "stock": 12,
+    "shape": "kit",
+    "colors": [
+      "#ffc2d6",
+      "#d9265f"
+    ],
+    "tags": [
+      "mais-vendido"
+    ],
+    "desc": "Kit com: Paleta de Sombras The Iconic (Cor 01 e Cor 03) + Blush Líquido The Pink Multiuso + Contorno em Bastão Color Contour + Primer Hidratante Hidro 45ml, Comprando separado sai R$ 65,60."
+  },
+  {
+    "id": "kit-pele-pink-21",
+    "name": "Kit Pele Pink 21",
+    "brand": "Élan Beauté",
+    "cat": "kits",
+    "sub": "Kits Maquiagem",
+    "price": 49.9,
+    "separados": 56.6,
+    "stock": 12,
+    "shape": "kit",
+    "colors": [
+      "#ffc2d6",
+      "#d9265f"
+    ],
+    "tags": [
+      "mais-vendido"
+    ],
+    "desc": "Kit com: Corretivo em Bastão Color Cover + Contorno em Bastão Color Contour + Blush Líquido Multifuncional + Primer Hidratante Hidro 45ml, Comprando separado sai R$ 56,60."
+  },
+  {
+    "id": "kit-trio-stick-bellafemme",
+    "name": "Kit Trio Stick Bellafemme",
+    "brand": "Élan Beauté",
+    "cat": "kits",
+    "sub": "Kits Maquiagem",
+    "price": 54.9,
+    "separados": 59.7,
+    "stock": 24,
+    "shape": "kit",
+    "colors": [
+      "#ffc2d6",
+      "#d9265f"
+    ],
+    "tags": [
+      "mais-vendido"
+    ],
+    "desc": "Kit com: Blush Stick Multifuncional + Iluminador Stick Multifuncional + Corretivo Stick Multifuncional, Comprando separado sai R$ 59,70."
+  }
 ];
