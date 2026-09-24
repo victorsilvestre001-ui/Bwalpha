@@ -40,7 +40,7 @@ PRODUTOS = [
     ('liner_sweet', 'Lip Liner Sweet Linha dos Lábios', 'Miss Romantic', 'Maquiagem – Lábios', 24, 64.20, 5.00, 10.00, 'Estimado', 7.90, 'Só em kit', 'N', 1, ''),
     # Lote 2
     ('mascara_cilios', 'Máscara para Cílios Natural Curling', 'Miss Romantic', 'Maquiagem – Olhos', 24, 160.40, 12.90, 12.90, 'Estimado', 12.90, 'Trocada pela Super Poderes 36h', 'N', 2, ''),
-    ('cilios_8d', 'Cílios Postiços 8D (F007/F011/F012/F019/F022)', 'Sabrina Sato', 'Maquiagem – Olhos', 10, 37.80, 4.06, 10.99, 'Confirmado', 9.90, 'Comprar', 'S', 2, '5 modelos, mesmo preço. Pedir nota fiscal e confirmar que são originais'),
+    ('cilios_8d', 'Cílios Postiços 8D (F007/F011/F012/F015/F019/F020/F022)', 'Sabrina Sato', 'Maquiagem – Olhos', 10, 37.80, 4.06, 10.99, 'Confirmado', 9.90, 'Comprar', 'S', 2, '7 modelos (F015 e F020 no lote 13), mesmo preço. Pedir nota fiscal e confirmar que são originais'),
     ('serum_ah', 'Sérum Facial Ácido Hialurônico Reflection 30ml', 'Safira', 'Skincare', 1, 6.30, 15.00, 20.00, 'Estimado', 16.90, 'Comprar (kit Pele de Vidro)', 'S', 2, ''),
     ('serum_clareador', 'Sérum Facial Clareador Reflection 30ml', 'Safira', 'Skincare', 1, 6.30, 15.00, 20.00, 'Estimado', 16.90, 'Comprar (kit Pele de Vidro)', 'S', 2, ''),
     ('serum_vitc', 'Sérum Facial Vitamina C Reflection 30ml', 'Safira', 'Skincare', 1, 6.30, 15.00, 20.00, 'Estimado', 16.90, 'Comprar (kit Pele de Vidro)', 'S', 2, ''),
@@ -107,7 +107,7 @@ PRODUTOS = [
     ('angels_lip_oil_heart', 'Lip Oil Heart Charm (BR1228)', '4Angels', 'Maquiagem – Lábios', 24, 150.20, 10.00, 12.90, 'Estimado', 11.90, 'Evitar (muitos gloss)', 'N', 7, ''),
     ('angels_lip_oil', 'Lip Oil (BR1226)', '4Angels', 'Maquiagem – Lábios', 24, 142.90, 10.00, 12.90, 'Estimado', 11.90, 'Evitar (muitos gloss)', 'N', 7, ''),
     ('angels_gloss', 'Lip Gloss (BR1225)', '4Angels', 'Maquiagem – Lábios', 24, 142.90, 10.00, 12.90, 'Estimado', 11.90, 'Evitar (muitos gloss)', 'N', 7, ''),
-    ('plump_cat', 'Brilho Labial Plump Cat Omg', 'Love Rain', 'Maquiagem – Lábios', 1, 6.00, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 7, ''),
+    ('plump_cat', 'Brilho Labial Plump Cat Omg', 'Love Rain', 'Maquiagem – Lábios', 1, 6.00, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 7, 'Também vendido em caixa c/24 por R$ 145,80 (R$ 6,08/un., lote 13)'),
     ('lenco_demaquilante', 'Lenço Demaquilante 30 un. (Vit. C, Niacinamida, Retinol, Ác. Hialurônico)', 'Super Poderes', 'Skincare', 1, 5.20, 7.99, 10.00, 'Confirmado', 9.90, 'Opcional (bom para kit)', 'N', 7, '4 versões, mesmo preço'),
     ('sp_corretivo_bastao', 'Corretivo em Bastão', 'Super Poderes', 'Maquiagem – Rosto', 24, 164.50, 12.90, 15.00, 'Estimado', 12.90, 'Evitar (Color Cover é mais barato)', 'N', 7, ''),
     ('melana_mascara', 'Máscara para Cílios (E-CZ223)', 'Melana', 'Maquiagem – Olhos', 24, 132.20, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 7, ''),
@@ -183,6 +183,20 @@ PRODUTOS = [
     ('borboleta_gloss', 'Gloss Borboleta Brilho Labial', 'Maria Pink', 'Maquiagem – Lábios', 24, 135.99, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (muitos gloss)', 'N', 12, ''),
     ('romance_noir', 'Delineador Líquido Romance Noir', 'Bellafemme', 'Maquiagem – Olhos', 24, 116.70, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 12, 'Delineador mais barato da lista'),
     ('alleva_fruity_juicy', 'Lip Oil Fruity & Juicy 5ml (6 sabores)', 'Alleva', 'Maquiagem – Lábios', 1, 6.80, 6.89, 6.89, 'Confirmado', 11.90, 'Evitar (vendido quase pelo custo)', 'N', 12, 'Pitaya, Blueberry, Pêssego, Melancia, Coco, Morango. Visto a R$ 6,89 a unidade em outra loja'),
+    # Lote 13
+    ('alleva_glam', 'Lip Gloss Glam (Petal, Frost, Pinkly)', 'Alleva', 'Maquiagem – Lábios', 1, 6.99, 6.89, 12.90, 'Estimado', 11.90, 'Evitar (muitos gloss)', 'N', 13, '3 cores'),
+    ('toque_lip_oil_choc', 'Lip Oil Chocolate', 'Toque Special', 'Maquiagem – Lábios', 24, 115.90, 10.00, 12.90, 'Estimado', 11.90, 'Evitar (muitos gloss)', 'N', 13, ''),
+    ('toque_super_labio', 'Lip Gloss Super Lábio Glow Chocolate (TS07108)', 'Toque Special', 'Maquiagem – Lábios', 24, 115.70, 10.00, 12.90, 'Estimado', 11.90, 'Evitar (muitos gloss)', 'N', 13, ''),
+    ('face_beautiful_splash', 'Body Splash 100ml (caixas A e B)', 'Face Beautiful', 'Perfumaria', 12, 77.20, 9.50, 13.14, 'Confirmado', 11.90, 'Evitar (vendido barato)', 'N', 13, 'Caixa com 12. Vendido a ~R$ 10–11,90 em outras lojas; a Natuza dá mais lucro'),
+    ('ss_pincel_esfumar', 'Pincel para Esfumar (SP007, SP017)', 'Sabrina Sato', 'Acessórios', 1, 3.99, 4.05, 5.99, 'Confirmado', 7.90, 'Evitar (vendido barato)', 'N', 13, 'Visto a R$ 4,05–5,99'),
+    ('cat_omg_delineador', 'Delineador Líquido Cat Omg', 'Love Rain', 'Maquiagem – Olhos', 24, 131.30, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 13, ''),
+    ('femme_blush_fr195', 'Blush (FR195)', 'Femme Paris', 'Maquiagem – Rosto', 24, 139.99, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 13, ''),
+    ('oh_yeah_gloss', 'Lip Gloss Oh Yeah (LG40112)', 'Febella', 'Maquiagem – Lábios', 36, 249.40, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (muitos gloss)', 'N', 13, 'Caixa com 36'),
+    ('belle_caneta', 'Caneta Delineadora Preta', 'Belle Angel', 'Maquiagem – Olhos', 1, 4.99, 10.00, 12.90, 'Estimado', 11.90, 'Opcional', 'N', 13, ''),
+    ('kit_pincas', 'Kit de Pinças para Sobrancelha (4 pinças)', 'Ruby Anjo', 'Acessórios', 1, 4.99, 21.97, 49.90, 'Confirmado', 19.90, 'Comprar', 'S', 13, 'Kits de 4 pinças vendidos de R$ 21,97 a R$ 49,90'),
+    ('lixa_banana', 'Lixa de Unha Banana (c/10)', 'Ruby Anjo', 'Unhas', 10, 18.90, 3.90, 4.90, 'Estimado', 4.90, 'Só em kit / brinde', 'N', 13, 'R$ 1,89 cada'),
+    ('kit_esponjas_frasco', 'Kit de Esponjas e Frasco de Viagem', 'Ruby Anjo', 'Acessórios', 1, 6.50, 14.90, 19.90, 'Estimado', 16.90, 'Opcional', 'N', 13, ''),
+    ('cilios_tufinho', 'Cílios Tufinho 20P 12mm', 'Ruby Anjo', 'Maquiagem – Olhos', 24, 102.60, 9.90, 14.90, 'Estimado', 12.90, 'Opcional', 'N', 13, 'Cílios em tufo estão em alta'),
 ]
 
 # (nome, componentes (chaves; repetir = mais de uma unidade), preço de venda)
@@ -191,7 +205,7 @@ KITS = [
     ('Pele Perfeita', ['blush_velvet', 'contorno_velvet', 'ilum_velvet', 'tapioca'], 49.90),
     ('Rotina Skincare', ['micelar_pantenol', 'tonico_glicolico', 'adstringente'], 39.90),
     ('Olhar Poderoso', ['cilios_8d', 'cilios_8d', 'cilios_8d', 'sp_mascara_36h', 'tatoo_brow'], 44.90),
-    ('Sobrancelha Perfeita', ['tint_brow', 'gel_sobrancelha', 'tatoo_brow'], 34.90),
+    ('Sobrancelha Perfeita', ['tint_brow', 'gel_sobrancelha', 'tatoo_brow', 'kit_pincas'], 44.90),
     ('Lábios Suculentos', ['lip_oil_fruit', 'gloss_hudamoji', 'batom_melana'], 34.90),
     ('Perfumada (splash + creme)', ['splash_fem', 'body_cream_natuza'], 44.90),
     ('Presente Masculino (2 splash)', ['splash_men', 'splash_men'], 44.90),
