@@ -106,6 +106,30 @@ const STRATEGIES = {
         if (sig.rsi != null && sig.rsi > 70 && b.bandaSuperior != null && c > b.bandaSuperior) return 'VENDA';
         return null;
     },
+    formacao_corpo_30: ({ formingNow }) => {
+        const r = formingNow.high - formingNow.low;
+        return r > 0 && Math.abs(formingNow.close - formingNow.open) / r >= 0.3 ? color(formingNow) : null;
+    },
+    formacao_corpo_50: ({ formingNow }) => {
+        const r = formingNow.high - formingNow.low;
+        return r > 0 && Math.abs(formingNow.close - formingNow.open) / r >= 0.5 ? color(formingNow) : null;
+    },
+    formacao_corpo_maior_media: ({ formingNow, closed }) => {
+        const avg = closed.slice(-20).reduce((a, c) => a + Math.abs(c.close - c.open), 0) / 20;
+        return Math.abs(formingNow.close - formingNow.open) >= avg ? color(formingNow) : null;
+    },
+    formacao_e_chinesa: (ctx) => {
+        const a = color(ctx.formingNow), b = STRATEGIES.chinesa(ctx);
+        return a && a === b ? a : null;
+    },
+    formacao_e_ultimo: (ctx) => {
+        const a = color(ctx.formingNow), b = STRATEGIES.ultimo_candle(ctx);
+        return a && a === b ? a : null;
+    },
+    formacao_contra_ultimo: (ctx) => {
+        const a = color(ctx.formingNow), b = STRATEGIES.ultimo_candle(ctx);
+        return a && b && a !== b ? a : null;
+    },
     banda_reversao: ({ sig, closed }) => {
         const c = closed[closed.length - 1].close;
         if (sig.bwalpha?.bandaInferior != null && c < sig.bwalpha.bandaInferior) return 'COMPRA';
