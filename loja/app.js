@@ -204,9 +204,9 @@
 
       <section class="section container">
         <div class="promo-banners">
-          <a class="promo-banner" href="#/promo/leve3pague2" style="background:#e5dbff"><div><p class="eyebrow">Promoção</p><h3>Leve 3,<br>pague 2</h3><p>Em produtos selecionados</p></div><span class="btn btn-dark">Aproveitar</span><span class="big">3x2</span></a>
-          <a class="promo-banner" href="#/c/kits" style="background:#ffe3ec"><div><p class="eyebrow">Kits exclusivos</p><h3>Kits mais<br>baratos</h3><p>Pague menos que comprando separado</p></div><span class="btn btn-dark">Ver kits</span><span class="big">🎁</span></a>
-          <a class="promo-banner" href="#/c/perfumes" style="background:#fff3bf"><div><p class="eyebrow">Perfumaria</p><h3>Body splash<br>R$ 24,90</h3><p>10 fragrâncias</p></div><span class="btn btn-dark">Ver fragrâncias</span><span class="big">✨</span></a>
+          <a class="promo-banner" href="#/promo/leve3pague2" style="background:#e5dbff"><div><p class="eyebrow">Promoção</p><h3>Leve 3,<br>pague 2</h3><p>Em produtos selecionados</p></div><span class="btn btn-dark">Aproveitar</span><img class="promo-img" src="img/promo-leve3.png" alt="" loading="lazy"></a>
+          <a class="promo-banner" href="#/c/kits" style="background:#ffe3ec"><div><p class="eyebrow">Kits exclusivos</p><h3>Kits mais<br>baratos</h3><p>Pague menos que comprando separado</p></div><span class="btn btn-dark">Ver kits</span><img class="promo-img" src="img/promo-kits.png" alt="" loading="lazy"></a>
+          <a class="promo-banner" href="#/c/perfumes" style="background:#fff3bf"><div><p class="eyebrow">Perfumaria</p><h3>Body splash<br>R$ 24,90</h3><p>10 fragrâncias</p></div><span class="btn btn-dark">Ver fragrâncias</span><img class="promo-img" src="img/promo-splash.png" alt="" loading="lazy"></a>
         </div>
       </section>
 
