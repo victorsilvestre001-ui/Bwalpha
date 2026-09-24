@@ -669,6 +669,19 @@ function computeCandleFollowSignal(closed, forming) {
     };
 }
 
+// Versão "sempre COMPRA ou VENDA": candle forte -> segue; candle fraco -> contra
+// (no backtest, seguir o candle fraco acertou só 20-39%, e ir contra acertou 61-80%);
+// doji -> usa a leitura técnica, com confiança baixa.
+function computeM1Signal(closed, forming, technical) {
+    const follow = computeCandleFollowSignal(closed, forming);
+    if (follow.direction) return { ...follow, leitura: 'forte' };
+    const body = forming.close - forming.open;
+    if (body !== 0) {
+        return { direction: body > 0 ? 'VENDA' : 'COMPRA', confidence: 'Média', bodyRatio: follow.bodyRatio ?? null, leitura: 'fraco' };
+    }
+    return { direction: technical.direction, confidence: 'Baixa', leitura: 'doji' };
+}
+
 const m1Cache = {};
 
 async function getM1Signal(pairLabel, nowMs = Date.now()) {
@@ -681,24 +694,24 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
     if (!allCandles || allCandles.length < 40) return null;
     const { closed, forming } = splitFormingCandle(allCandles, M1_MS, nowMs);
     if (!forming || forming.time !== bucketStart) {
-        return {
-            pair: pairLabel, timeframe: 'M1', direction: null, noEntry: true,
-            reason: 'Os dados do candle atual ainda não chegaram. Tente no próximo candle.',
-        };
+        // Candle atual ainda não chegou da fonte: usa a leitura técnica dos candles fechados.
+        const technical = computeTechnicalSignal(closed, null);
+        const result = { ...technical, pair: pairLabel, timeframe: 'M1', confidence: 'Baixa', leitura: 'sem_candle_atual' };
+        m1Cache[pairLabel] = { bucketStart, at: nowMs, result };
+        return result;
     }
     // Indicadores seguem calculados (inclusive o BwAlpha), mas a decisão do M1 é a leitura do candle atual.
     const technical = computeTechnicalSignal(closed, forming);
-    const follow = computeCandleFollowSignal(closed, forming);
+    const m1 = computeM1Signal(closed, forming, technical);
     const result = {
         ...technical,
         pair: pairLabel,
         timeframe: 'M1',
         price: forming.close,
-        direction: follow.direction,
-        confidence: follow.confidence || null,
-        noEntry: !follow.direction,
-        reason: follow.reason || null,
-        candleAtual: { bodyRatio: follow.bodyRatio ?? null, bodyVsAvg: follow.bodyVsAvg ?? null },
+        direction: m1.direction,
+        confidence: m1.confidence,
+        leitura: m1.leitura,
+        candleAtual: { bodyRatio: m1.bodyRatio ?? null, bodyVsAvg: m1.bodyVsAvg ?? null },
     };
     m1Cache[pairLabel] = { bucketStart, at: nowMs, result };
     return result;
@@ -801,8 +814,11 @@ router.post('/signal', authMiddleware, requireVip, async (req, res) => {
             entry = bucketStart + M1_MS;
             expiry = entry + M1_MS;
             // O prazo para entrar conta no relógio da corretora.
-            if (result && !result.noEntry && entry - (Date.now() + brokerOffset) < M1_MIN_ENTRY_LEAD_MS) {
-                result = { ...result, direction: null, noEntry: true, reason: 'Não deu tempo de entrar neste candle. Tente no próximo.' };
+            if (result && entry - (Date.now() + brokerOffset) < M1_MIN_ENTRY_LEAD_MS) {
+                // Não dá tempo de entrar neste candle: a entrada vai para o seguinte, com confiança baixa.
+                entry += M1_MS;
+                expiry += M1_MS;
+                result = { ...result, confidence: 'Baixa' };
             }
         } else {
             result = await getTechnicalSignal(pair, timeframe);
@@ -869,6 +885,6 @@ router.get('/history', authMiddleware, async (req, res) => {
 
 module.exports = {
     router, getQuotes, getIndicators, getEconomicSnapshot, getNews, getHistory, fetchIntradayCandles, TIMEFRAME_MINUTES,
-    computeTechnicalSignal, computeCandleFollowSignal, getM1Signal, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, isMarketOpen,
+    computeTechnicalSignal, computeCandleFollowSignal, computeM1Signal, getM1Signal, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, isMarketOpen,
     emaSeries, rsiLast, macdHistogramLast, detectCandlePatterns, getChinesaStrategySignal, getBwalphaIndicator,
 };

@@ -3,7 +3,7 @@
 // e escreve o resultado nos logs, porque a Twelve Data só é acessível de lá.
 const pool = require('./db');
 const {
-    computeTechnicalSignal, computeCandleFollowSignal, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, TIMEFRAME_MINUTES, isMarketOpen,
+    computeTechnicalSignal, computeCandleFollowSignal, computeM1Signal, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, TIMEFRAME_MINUTES, isMarketOpen,
 } = require('./marketRoutes');
 
 const WINDOW = 99; // o /signal usa 100 candles: 99 fechados + 1 em formação
@@ -108,6 +108,7 @@ const STRATEGIES = {
     },
     // Regra que está em produção no M1 (mesma função da rota /signal).
     producao_m1: ({ closed, formingNow }) => computeCandleFollowSignal(closed, formingNow).direction,
+    producao_m1_sempre: ({ sig, closed, formingNow }) => computeM1Signal(closed, formingNow, sig).direction,
     producao_m1_alta: ({ closed, formingNow }) => {
         const r = computeCandleFollowSignal(closed, formingNow);
         return r.confidence === 'Alta' ? r.direction : null;
@@ -251,7 +252,7 @@ async function run() {
                 const { evaluated, out } = runOn(candles, tf);
                 console.log(`BACKTEST_RESULT ${pair} ${tf} candles=${candles.length} de=${first} ate=${last} avaliados=${evaluated}`);
                 for (const [name, r] of Object.entries(out)) {
-                    if (!/^(producao|fraco|candle_em_formacao|atual$)/.test(name)) continue;
+                    if (!/^(producao|atual$)/.test(name)) continue;
                     console.log(`BACKTEST_ROW ${pair} ${tf} ${name} ${JSON.stringify(r)}`);
                 }
             } catch (err) {
