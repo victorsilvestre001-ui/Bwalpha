@@ -74,7 +74,7 @@ export default function Hero() {
             transition={{ duration: 0.8, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
             className="mt-6 max-w-xl text-base leading-relaxed text-mist-dim md:text-lg"
           >
-            A TradeOn AI lê o mercado em segundos — médias, RSI, MACD, padrões de candle e a leitura dos últimos 5 candles —
+            A TradeOn AI lê o mercado em segundos — médias, RSI, MACD e padrões de candle —
             e entrega uma direção clara para EURUSD, EURJPY e Ouro (XAUUSD) em M1 e M5.
           </motion.p>
 

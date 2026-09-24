@@ -1,9 +1,9 @@
-import { Brain, CandlestickChart, History, MessageSquareText, Gauge, ShieldCheck } from "lucide-react";
+import { Brain, Timer, History, MessageSquareText, Gauge, ShieldCheck } from "lucide-react";
 import Reveal from "@/components/Reveal";
 
 const FEATURES = [
   { icon: Brain, title: "Motor de confluência", text: "EMA 9/21, RSI 14, MACD e padrões de candle votam juntos para chegar a uma direção objetiva.", accent: "text-neon" },
-  { icon: CandlestickChart, title: "Leitura dos 5 candles", text: "A estratégia de 5 candles identifica o padrão recente e ajusta a confiança conforme os indicadores concordam.", accent: "text-volt" },
+  { icon: Timer, title: "Horário de entrada", text: "Cada sinal vem com o horário de entrada no próximo candle e uma contagem sincronizada com o servidor.", accent: "text-volt" },
   { icon: Gauge, title: "Nível de confiança", text: "Cada sinal vem classificado como Alta, Média ou Baixa confiança, para você decidir com clareza.", accent: "text-pulse-soft" },
   { icon: MessageSquareText, title: "Assistente de IA", text: "Tire dúvidas de trading, envie prints do gráfico e receba análise em linguagem simples.", accent: "text-neon" },
   { icon: History, title: "Histórico de Win e Red", text: "Cada análise fica registrada e é conferida automaticamente no fechamento do candle, com sua taxa de acerto.", accent: "text-volt" },

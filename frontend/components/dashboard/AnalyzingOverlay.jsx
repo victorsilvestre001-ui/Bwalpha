@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 
-const STEPS = ["Coletando candles", "Calculando EMA 9/21", "Lendo RSI e MACD", "Detectando padrões", "Lendo os últimos 5 candles", "Consolidando sinal"];
+const STEPS = ["Coletando candles", "Calculando EMA 9/21", "Lendo RSI e MACD", "Detectando padrões", "Consolidando sinal"];
 
 export default function AnalyzingOverlay() {
   const [step, setStep] = useState(0);
