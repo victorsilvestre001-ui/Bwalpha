@@ -134,6 +134,10 @@ PRODUTOS = [
     ('gelato_gloss', 'Lip Gloss Gelato', 'Wike Make', 'Maquiagem – Lábios', 24, 139.99, 7.52, 10.00, 'Estimado', 11.90, 'Evitar (muitos gloss)', 'N', 8, ''),
     ('entregou_tudo', 'Pó Solto Facial Rosa Entregou Tudo', 'Wike Make', 'Maquiagem – Rosto', 15, 76.80, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 8, 'Caixa com 15'),
     ('glow_line_cream', 'Body Cream 125ml (Glow Belle, Angelical, Paradoxo, Glowly, Royal Glow)', 'Glow Line', 'Corpo', 1, 6.80, 19.90, 24.90, 'Estimado', 22.90, 'Opcional', 'N', 8, '5 fragrâncias. A Natuza já cobre os body creams'),
+    # Lote 9
+    ('sweet_lips', 'Balm Sweet Lips / Babalips com chaveiro (5 sabores)', 'Safira', 'Maquiagem – Lábios', 24, 130.99, 9.00, 10.00, 'Confirmado', 9.90, 'Opcional (bom como brinde)', 'N', 9, 'Tutti Frutti, Melancia, Glitter, Chocolate, Goma de Mascar'),
+    ('sarahs_banana', 'Pó Translúcido Banana', "Sarah's Beauty", 'Maquiagem – Rosto', 24, 116.70, 12.90, 12.90, 'Estimado', 12.90, 'Opcional', 'N', 9, 'O Pó de Tapioca Miss Rôse é mais barato'),
+    ('love_rain_vitamin', 'Brilho Labial Vitamin C / Vitamin B3', 'Love Rain', 'Maquiagem – Lábios', 24, 145.80, 12.90, 12.90, 'Estimado', 12.90, 'Evitar (muitos gloss)', 'N', 9, '2 versões'),
 ]
 
 # (nome, componentes (chaves; repetir = mais de uma unidade), preço de venda)
