@@ -259,11 +259,13 @@ premissas = [
     ('pix', 'Desconto Pix no seu site', 0.05, PCT, 'Configuração atual da loja Élan Beauté'),
     ('taxa_pag', 'Taxa do meio de pagamento (seu site)', 0.01, PCT, 'Estimativa para Pix; cartão costuma ser 3–5%'),
     ('emb', 'Embalagem por pedido/unidade (R$)', 1.00, BRL, 'Estimativa: saquinho + etiqueta'),
-    ('ml_com', 'Mercado Livre: comissão', 0.12, PCT, 'Aproximado (anúncio clássico, beleza). Confira a taxa atual'),
-    ('ml_fixa', 'Mercado Livre: taxa fixa por venda abaixo de R$ 79 (R$)', 6.25, BRL, 'Aproximado. Confira a taxa atual'),
+    ('ml_com', 'Mercado Livre: comissão', 0.14, PCT, 'Aproximado (anúncio clássico, beleza: ~11–14%). Usei 14% para ficar do lado seguro. Confira a taxa atual'),
+    ('ml_fixa', 'Mercado Livre: taxa fixa por venda abaixo de R$ 79 (R$)', 6.75, BRL, 'Aproximado (maior faixa abaixo de R$ 79). Confira a taxa atual'),
     ('sh_com', 'Shopee: comissão + frete grátis', 0.20, PCT, 'Aproximado. Confira a taxa atual'),
     ('sh_fixa', 'Shopee: taxa fixa por item (R$)', 4.00, BRL, 'Aproximado. Confira a taxa atual'),
     ('meta', 'Meta de lucro por mês (R$)', 1000.00, BRL, 'Valor de exemplo: coloque a sua meta'),
+    ('margem', 'Lucro mínimo sobre o preço de venda (aba Preços por Canal)', 0.15, PCT, 'Pedido do dono da loja: sair com pelo menos 15% de lucro'),
+    ('mp_taxa', 'Mercado Pago: taxa no cartão, recebimento na hora (seu site)', 0.0499, PCT, 'Aproximado. No Pix a taxa é menor (~1%); usei o cartão para ficar do lado seguro'),
 ]
 REF = {}
 pr.append([])
@@ -380,6 +382,62 @@ for j in range(2, cc + 6):
 kn = len(KITS) + 3
 ks.cell(kn, 1, 'Os itens são IDs da aba Produtos (passe o mouse para ver o nome). Repetir um ID = mais de uma unidade no kit.').font = Font(name=FONT, italic=True, color='666666')
 ks.conditional_formatting.add(f'{L(cc + 2)}2:{L(cc + 4)}{len(KITS) + 1}', ColorScaleRule(start_type='min', start_color='FFFFFF', end_type='max', end_color='63BE7B'))
+
+# ---------- Preços por canal ----------
+pc = wb.create_sheet('Preços por Canal')
+pc['A1'] = f'Preço mínimo para lucrar pelo menos a margem da aba Premissas em cada canal'
+pc['A1'].font = Font(name=FONT, bold=True, size=13)
+pc['A2'] = ('Preço = (custo + embalagem + taxa fixa) ÷ (1 − comissão − margem), arredondado para cima terminando em ,90. '
+            'Markup = quanto o preço está acima do custo. Só produtos marcados "S" e os kits.')
+pc['A2'].font = Font(name=FONT, italic=True, color='666666')
+grupos = [('Mercado Livre', REF['ml_com'], REF['ml_fixa']), ('Shopee', REF['sh_com'], REF['sh_fixa']),
+          ('Seu site (Mercado Pago, cartão)', REF['mp_taxa'], None)]
+cab = ['Produto', 'Marca', 'Custo/un.', 'Internet: maior preço visto']
+for g, _, _ in grupos:
+    cab += [f'{g}: preço mínimo', 'Markup sobre o custo', 'Lucro R$', 'Margem']
+cab += ['Aviso']
+pc.append([]); pc.append(cab)
+for c in pc[4]:
+    c.font, c.fill = CAB_FONT, CAB_FILL
+    c.alignment = Alignment(wrap_text=True, vertical='center', horizontal='center')
+pc.row_dimensions[4].height = 44
+linhas_pc = []
+for i, p in enumerate(PRODUTOS, start=2):
+    if p[11] == 'S' and p[5]:
+        linhas_pc.append((f'=Produtos!B{i}', f'=Produtos!C{i}', f'=Produtos!H{i}', f'=Produtos!J{i}'))
+for j, (nome, comps, preco) in enumerate(KITS, start=2):
+    linhas_pc.append((f'="Kit "&Kits!A{j}', 'Kit', f"=Kits!{get_column_letter(cc)}{j}", None))
+r = 5
+for nome_f, marca_f, custo_f, net_f in linhas_pc:
+    pc.cell(r, 1, nome_f); pc.cell(r, 2, marca_f); pc.cell(r, 3, custo_f).number_format = BRL
+    if net_f:
+        pc.cell(r, 4, net_f).number_format = BRL
+    col = 5
+    for g, com, fixa in grupos:
+        P, M, L, G = (get_column_letter(col + k) for k in range(4))
+        fx = f'+{fixa}' if fixa else ''
+        pc[f'{P}{r}'] = f'=CEILING((C{r}+{REF["emb"]}{fx})/(1-{com}-{REF["margem"]})+0.1,1)-0.1'
+        pc[f'{M}{r}'] = f'={P}{r}/C{r}-1'
+        fx2 = f'-{fixa}' if fixa else ''
+        pc[f'{L}{r}'] = f'={P}{r}*(1-{com}){fx2}-C{r}-{REF["emb"]}'
+        pc[f'{G}{r}'] = f'={L}{r}/{P}{r}'
+        pc[f'{P}{r}'].number_format = BRL; pc[f'{P}{r}'].font = NEGRITO
+        pc[f'{M}{r}'].number_format = '0%'; pc[f'{L}{r}'].number_format = BRL; pc[f'{G}{r}'].number_format = PCT
+        col += 4
+    pc.cell(r, col, f'=IF(AND(ISNUMBER(D{r}),E{r}>D{r}),"Mercado Livre acima do preço da internet: venda em kit","")')
+    for c in pc[r]:
+        c.border = BORDA
+        if c.font != NEGRITO:
+            c.font = PRETO
+    pc[f'E{r}'].font = pc[f'I{r}'].font = pc[f'M{r}'].font = NEGRITO
+    r += 1
+pc.column_dimensions['A'].width = 44; pc.column_dimensions['B'].width = 14
+for k in range(3, col + 1):
+    pc.column_dimensions[get_column_letter(k)].width = 12
+pc.column_dimensions[get_column_letter(col)].width = 46
+pc.freeze_panes = 'B5'
+for L0 in 'EIM':
+    pc.conditional_formatting.add(f'{L0}5:{L0}{r-1}', CellIsRule(operator='greaterThan', formula=['0'], fill=PatternFill('solid', start_color='FFF0F4')))
 
 # ---------- Resumo ----------
 rs = wb.create_sheet('Resumo', 0)
