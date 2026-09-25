@@ -51,12 +51,38 @@ const DUMMY_HASH = bcrypt.hashSync('tradeon-dummy-password', 10);
 const AVATAR_RE = /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/]+=*$/;
 
 
+// Remetente precisa ser de um domínio verificado no Resend (resend.com/domains).
+const EMAIL_FROM = process.env.EMAIL_FROM || 'TradeOn AI <contato@tradeonia.com.br>';
+
+// Cupom de boas-vindas (criado na Kiwify). Sem SIGNUP_COUPON, o e-mail sai sem cupom.
+function welcomeOffer(name, email) {
+    const coupon = process.env.SIGNUP_COUPON;
+    if (!coupon || !process.env.KIWIFY_CHECKOUT_URL) return null;
+    const url = new URL(process.env.KIWIFY_CHECKOUT_URL);
+    url.searchParams.set('email', email);
+    url.searchParams.set('name', name);
+    url.searchParams.set('coupon', coupon);
+    return { coupon, discount: process.env.SIGNUP_COUPON_DISCOUNT || '15%', url: url.toString() };
+}
+
 async function sendWelcomeEmail(name, email) {
     if (!process.env.RESEND_API_KEY) {
         console.error('RESEND_API_KEY não configurada — e-mail de boas-vindas não enviado.');
         return;
     }
     try {
+        const offer = welcomeOffer(name, email);
+        const offerHtml = offer ? `
+                        <div style="margin-top: 24px; padding: 20px; border: 1px dashed #00F0A8; border-radius: 10px; background: rgba(0,240,168,0.06); text-align: center;">
+                            <p style="margin: 0; font-size: 14px; color: #9AA6C3;">Presente de boas-vindas</p>
+                            <p style="margin: 6px 0 0; font-size: 20px; font-weight: 700; color: #E7ECF7;">${escapeHtml(offer.discount)} OFF no plano VIP</p>
+                            <p style="margin: 14px 0 0; font-size: 13px; color: #9AA6C3;">Use o cupom:</p>
+                            <p style="margin: 6px 0 0; font-family: 'Courier New', monospace; font-size: 26px; font-weight: 700; letter-spacing: 3px; color: #00F0A8;">${escapeHtml(offer.coupon)}</p>
+                            <a href="${escapeHtml(offer.url)}" style="display: inline-block; margin-top: 16px; padding: 12px 24px; background: #00F0A8; color: #05070F; text-decoration: none; border-radius: 6px; font-weight: 700;">
+                                Ativar VIP com desconto
+                            </a>
+                            <p style="margin: 12px 0 0; font-size: 12px; color: #5B6788;">Compre com este mesmo e-mail para o VIP ser liberado na sua conta automaticamente.</p>
+                        </div>` : '';
         const res = await fetch('https://api.resend.com/emails', {
             method: 'POST',
             headers: {
@@ -64,9 +90,11 @@ async function sendWelcomeEmail(name, email) {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                from: 'TradeOn AI <onboarding@resend.dev>',
+                from: EMAIL_FROM,
                 to: [email],
-                subject: 'Sua conta na TradeOn AI foi criada 🎉',
+                subject: process.env.SIGNUP_COUPON
+                    ? `Sua conta na TradeOn AI foi criada 🎉 + ${process.env.SIGNUP_COUPON_DISCOUNT || '15%'} OFF no VIP`
+                    : 'Sua conta na TradeOn AI foi criada 🎉',
                 html: `
                     <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; background: #05070F; color: #E7ECF7; border-radius: 12px;">
                         <h1 style="color: #00F0A8; font-size: 22px; margin-bottom: 8px;">Bem-vindo(a), ${escapeHtml(name)}!</h1>
@@ -79,6 +107,7 @@ async function sendWelcomeEmail(name, email) {
                         <a href="${process.env.FRONTEND_URL || 'https://www.tradeonia.com.br'}/auth" style="display: inline-block; margin-top: 16px; padding: 12px 24px; background: linear-gradient(100deg, #00F0A8, #3D8BFF); color: #05070F; text-decoration: none; border-radius: 6px; font-weight: 600;">
                             Acessar minha conta
                         </a>
+                        ${offerHtml}
                         <p style="font-size: 12px; color: #8a8a8a; margin-top: 32px;">
                             Se você não criou essa conta, pode ignorar este e-mail com segurança.
                         </p>
