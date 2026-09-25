@@ -91,8 +91,13 @@ router.post('/register', authLimiter, async (req, res) => {
             { expiresIn: '7d' }
         );
 
-        // Envia o e-mail de boas-vindas sem bloquear a resposta ao usuário
-        sendWelcomeEmail(user.name, user.email);
+        // Envia o e-mail de boas-vindas sem bloquear a resposta ao usuário; se o cupom foi junto,
+        // a conta não entra no envio de cupom para contas antigas (painel do dono).
+        sendWelcomeEmail(user.name, user.email).then((r) => {
+            if (r.couponSent) {
+                return pool.query('INSERT INTO coupon_emails (user_id) VALUES ($1) ON CONFLICT DO NOTHING', [user.id]);
+            }
+        }).catch((err) => console.error('Erro ao registrar cupom enviado:', err.message));
 
         res.status(201).json({ user, token });
     } catch (err) {

@@ -85,4 +85,29 @@ async function sendWelcomeEmail(name, email) {
     return { ...result, couponSent: result.ok && !!offer };
 }
 
-module.exports = { sendEmail, sendWelcomeEmail, escapeHtml };
+// Cupom para quem já tinha conta (enviado pelo painel do dono, com confirmação).
+async function sendCouponEmail(name, email) {
+    const offer = couponOffer(name, email);
+    if (!offer) return { ok: false, error: 'Cupom não configurado (SIGNUP_COUPON / KIWIFY_CHECKOUT_URL)' };
+    const firstName = String(name || '').trim().split(/\s+/)[0];
+    return sendEmail({
+        to: email,
+        subject: `🎁 ${offer.discount} OFF no VIP da TradeOn AI, só para você`,
+        html: layout(`
+            <h1 style="color: #00F0A8; font-size: 22px; margin-bottom: 8px;">${firstName ? `${escapeHtml(firstName)}, um` : 'Um'} presente para você 🎁</h1>
+            <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">
+                Obrigado por ter criado sua conta na <strong>TradeOn AI</strong>. Liberamos um desconto especial para você experimentar o plano VIP:
+            </p>
+            <ul style="font-size: 14px; line-height: 1.8; color: #E7ECF7; padding-left: 18px;">
+                <li>Análises da IA em M1 e M5 (EURUSD, EURJPY e Ouro)</li>
+                <li>Contagem até a entrada, sincronizada com o servidor</li>
+                <li>Histórico de WIN/RED com a sua taxa de acerto real</li>
+                <li>Assistente de IA ilimitado</li>
+            </ul>
+            ${couponBlock(offer, 'Cupom exclusivo')}
+            ${button(`${FRONTEND_URL}/auth`, 'Acessar minha conta')}`,
+            'Você recebeu este e-mail porque criou uma conta na TradeOn AI. Conteúdo educativo; operar envolve risco.'),
+    });
+}
+
+module.exports = { sendEmail, sendWelcomeEmail, sendCouponEmail, escapeHtml };

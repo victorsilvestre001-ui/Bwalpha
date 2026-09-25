@@ -206,6 +206,16 @@ CREATE TABLE IF NOT EXISTS page_visits (
 );
 CREATE INDEX IF NOT EXISTS idx_page_visits_created ON page_visits(created_at);
 
+-- Quem já recebeu o cupom do VIP por e-mail (no cadastro ou pelo painel do dono).
+CREATE TABLE IF NOT EXISTS coupon_emails (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    sent_at TIMESTAMPTZ DEFAULT NOW()
+);
+-- Contas criadas depois que o domínio de e-mail foi verificado já receberam o cupom no cadastro.
+INSERT INTO coupon_emails (user_id)
+    SELECT id FROM users WHERE created_at BETWEEN '2026-09-25 13:40:00' AND '2026-09-25 18:00:00'
+    ON CONFLICT DO NOTHING;
+
 CREATE INDEX IF NOT EXISTS idx_analyses_pending ON analyses(expiry_time) WHERE result IS NULL;
 `;
 

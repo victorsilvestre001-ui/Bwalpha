@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Eye, Loader2, RefreshCw, UserPlus, Users, Crown, Globe, Sparkles, UsersRound } from "lucide-react";
+import { ArrowLeft, Eye, Loader2, RefreshCw, UserPlus, Users, Crown, Globe, Sparkles, UsersRound, Mail } from "lucide-react";
 import Logo from "@/components/Logo";
 import { api, getSessionUser } from "@/lib/api";
 
@@ -78,6 +78,69 @@ function DailyBars({ title, days, valueKey, unit, colorClass, extra }) {
         ))}
       </div>
     </div>
+  );
+}
+
+// Envia o cupom do VIP para as contas antigas (cada conta recebe uma vez só).
+function CouponCampaign() {
+  const [info, setInfo] = useState(null);
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+
+  const load = useCallback(() => {
+    api.couponCampaign().then(setInfo).catch((err) => setError(err.message || "Não foi possível carregar."));
+  }, []);
+  useEffect(load, [load]);
+
+  async function send() {
+    if (!info?.eligible) return;
+    if (!window.confirm(`Enviar o cupom ${info.coupon} (${info.discount} OFF) para ${info.eligible} conta(s) agora?`)) return;
+    setSending(true);
+    setError("");
+    try {
+      setResult(await api.sendCouponCampaign());
+    } catch (err) {
+      setError(err.message || "Erro ao enviar.");
+    } finally {
+      setSending(false);
+      load();
+    }
+  }
+
+  return (
+    <section className="panel p-5">
+      <h3 className="flex items-center gap-2 font-display text-sm font-semibold text-mist"><Mail size={15} className="text-neon" /> Cupom do VIP para contas antigas</h3>
+      {!info ? (
+        <p className="mt-3 text-sm text-mist-faint">{error || "Carregando…"}</p>
+      ) : !info.coupon ? (
+        <p className="mt-3 text-sm text-mist-faint">Nenhum cupom configurado no servidor.</p>
+      ) : (
+        <>
+          <p className="mt-2 text-sm text-mist-dim">
+            Manda por e-mail o cupom <span className="font-mono font-semibold text-neon">{info.coupon}</span> ({info.discount} OFF) para as contas free que ainda não receberam.
+            Quem se cadastrar a partir de agora já recebe no e-mail de boas-vindas.
+          </p>
+          <div className="mt-4 flex flex-wrap items-center gap-4">
+            <button
+              onClick={send}
+              disabled={sending || !info.eligible}
+              className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-neon to-volt px-4 py-2 text-sm font-semibold text-void disabled:opacity-40"
+            >
+              {sending ? <Loader2 size={15} className="animate-spin" /> : <Mail size={15} />}
+              {sending ? "Enviando…" : info.eligible ? `Enviar para ${fmt(info.eligible)} conta(s)` : "Todos já receberam"}
+            </button>
+            <span className="text-xs text-mist-faint">{fmt(info.alreadySent)} conta(s) já receberam o cupom.</span>
+          </div>
+          {result && (
+            <p className="mt-3 text-sm text-mist-dim">
+              ✅ {fmt(result.sent)} enviado(s){result.failed.length ? ` · ${result.failed.length} falha(s)` : ""}{result.remaining ? ` · faltam ${fmt(result.remaining)} (clique de novo)` : ""}.
+            </p>
+          )}
+          {error && <p className="mt-3 text-sm text-ember-soft">{error}</p>}
+        </>
+      )}
+    </section>
   );
 }
 
@@ -200,6 +263,8 @@ export default function AdminPage() {
                 <p className="mt-2 text-xs text-mist-faint">Análises pedidas por todos os usuários hoje.</p>
               </div>
             </section>
+
+            <CouponCampaign />
 
             <section className="panel p-5">
               <h3 className="font-display text-sm font-semibold text-mist">Últimas contas criadas</h3>
