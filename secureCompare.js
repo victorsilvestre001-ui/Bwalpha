@@ -4,6 +4,8 @@ const crypto = require('crypto');
 // validar senhas secretas de webhook (ex: WEBHOOK_SECRET).
 function secureCompare(a, b) {
     if (typeof a !== 'string' || typeof b !== 'string') return false;
+    // Segredo vazio (variável não configurada) nunca libera acesso.
+    if (!a || !b) return false;
     const bufA = Buffer.from(a);
     const bufB = Buffer.from(b);
     if (bufA.length !== bufB.length) {

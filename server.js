@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
 const pool = require('./db');
@@ -16,6 +17,7 @@ const { router: telegramRoutes, setupWebhook } = require('./telegramRoutes');
 const marketAnalysisRoutes = require('./marketAnalysisRoutes');
 const { router: analysesRoutes, resolvePendingAnalyses } = require('./analysesRoutes');
 const adminRoutes = require('./adminRoutes');
+const { OWNER_EMAIL } = require('./authMiddleware');
 
 const app = express();
 
@@ -37,11 +39,14 @@ const ALLOWED_ORIGINS = [
     process.env.FRONTEND_URL,
 ].filter(Boolean);
 
+// Só as prévias do próprio projeto na Vercel (antes valia qualquer site *.vercel.app).
+const VERCEL_PREVIEW_RE = /^https:\/\/bwalpha-next(-[a-z0-9-]+)?\.vercel\.app$/;
+
 app.use(cors({
     origin: (origin, callback) => {
         // Requisições sem origin (ex: apps mobile, curl, webhooks server-to-server) são permitidas.
         if (!origin) return callback(null, true);
-        if (ALLOWED_ORIGINS.includes(origin) || origin.endsWith('.vercel.app')) {
+        if (ALLOWED_ORIGINS.includes(origin) || VERCEL_PREVIEW_RE.test(origin)) {
             return callback(null, true);
         }
         return callback(new Error('Origem não permitida pelo CORS'));
@@ -51,7 +56,18 @@ app.use(cors({
 app.use('/api/stripe/webhook', stripeWebhook);
 app.use('/api/kiwify/webhook', kiwifyWebhook);
 
-app.use(express.json({ limit: '10mb' }));
+// Limite geral por IP para toda a API (proteção contra robôs e ataques de volume).
+app.use('/api', rateLimit({
+    windowMs: 60 * 1000,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Muitas requisições. Aguarde um minuto e tente novamente.' },
+}));
+
+// Corpo grande só onde há imagem (chat com print do gráfico e foto de perfil).
+app.use(['/api/chat', '/api/auth/profile'], express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '100kb' }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/signals', signalsRoutes);
@@ -66,6 +82,18 @@ app.use('/api/webhook/market', marketAnalysisRoutes);
 
 app.get('/', (req, res) => {
     res.json({ status: 'TradeOn AI backend rodando 🚀' });
+});
+
+app.use((req, res) => res.status(404).json({ error: 'Rota não encontrada' }));
+
+// Erros nunca mostram detalhes internos (stack, SQL) para quem chama a API.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+    if (err?.message === 'Origem não permitida pelo CORS') return res.status(403).json({ error: 'Origem não permitida' });
+    if (err?.type === 'entity.too.large') return res.status(413).json({ error: 'Conteúdo muito grande' });
+    if (err?.type === 'entity.parse.failed') return res.status(400).json({ error: 'JSON inválido' });
+    console.error('Erro não tratado:', err);
+    res.status(500).json({ error: 'Erro interno' });
 });
 
 const SCHEMA_SQL = `
@@ -187,6 +215,29 @@ async function runMigrations() {
         console.log('Schema do banco verificado/criado com sucesso ✅');
     } catch (err) {
         console.error('Erro ao rodar migrações do schema:', err.message);
+    }
+    try {
+        // Só a conta original do dono pode ser 'owner' (antes, o mesmo e-mail com letras
+        // maiúsculas criava uma segunda conta que também virava dona).
+        const demoted = await pool.query(
+            `UPDATE users SET plan = 'free'
+             WHERE plan = 'owner'
+               AND id IS DISTINCT FROM (SELECT MIN(id) FROM users WHERE LOWER(email) = $1)
+             RETURNING id`,
+            [OWNER_EMAIL]
+        );
+        if (demoted.rowCount) console.warn(`Segurança: ${demoted.rowCount} conta(s) perderam o acesso de dono indevido:`, demoted.rows.map((r) => r.id).join(', '));
+    } catch (err) {
+        console.error('Erro ao revisar contas de dono:', err.message);
+    }
+    try {
+        // E-mail único sem diferenciar maiúsculas (falha sem travar nada se já houver duplicados).
+        await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower ON users (LOWER(email))');
+    } catch (err) {
+        console.error('Índice de e-mail único não criado (há e-mails duplicados?):', err.message);
+    }
+    if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+        console.warn('Segurança: JWT_SECRET ausente ou curto (use pelo menos 32 caracteres aleatórios).');
     }
 }
 

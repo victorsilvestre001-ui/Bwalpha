@@ -1,4 +1,5 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const { authMiddleware, requireVip } = require('./authMiddleware');
 const pool = require('./db');
 
@@ -786,7 +787,17 @@ function computeEntry(timeframeLabel, fromMs = Date.now()) {
     return { entry, expiry: entry + tf };
 }
 
-router.post('/signal', authMiddleware, requireVip, async (req, res) => {
+// Cada sinal consome cotas da API de mercado: no máximo 12 por minuto por conta.
+const signalLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 12,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => `signal:${req.user.id}`,
+    message: { error: 'Muitas análises seguidas. Aguarde um minuto.' },
+});
+
+router.post('/signal', authMiddleware, requireVip, signalLimiter, async (req, res) => {
     const { pair, timeframe } = req.body;
     if (!SIGNAL_PAIRS[pair] || !SIGNAL_INTERVALS[timeframe]) {
         return res.status(400).json({ error: 'Par ou timeframe inválido. Use EURUSD/EURJPY/XAUUSD e M1/M5.' });

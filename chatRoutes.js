@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('./db');
 const { authMiddleware, requirePaidPlan } = require('./authMiddleware');
 const Anthropic = require('@anthropic-ai/sdk');
+const rateLimit = require('express-rate-limit');
 const { getQuotes, getIndicators, getEconomicSnapshot } = require('./marketRoutes');
 
 const anthropic = new Anthropic(); // usa ANTHROPIC_API_KEY
@@ -9,6 +10,19 @@ const CHAT_MODEL = 'claude-sonnet-4-6';
 const HISTORY_MESSAGES = 8; // últimas mensagens enviadas como contexto da conversa
 
 const router = express.Router();
+
+const MAX_MESSAGE_CHARS = 4000;
+const MAX_IMAGE_BASE64 = 7_000_000; // ~5 MB de imagem
+
+// Mesmo no VIP ilimitado: no máximo 10 perguntas por minuto por conta (evita abuso e custo).
+const chatLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => `chat:${req.user.id}`,
+    message: { error: 'Muitas perguntas seguidas. Aguarde um minuto.' },
+});
 
 const SYSTEM_PROMPT = `Você é o assistente de IA da TradeOn AI: um professor de trading paciente e didático, que explica mercado financeiro para brasileiros de forma clara, bonita e fácil de entender.
 
@@ -72,12 +86,21 @@ async function checkChatLimit(userId) {
     return { allowed: true, usedToday };
 }
 
-router.post('/', authMiddleware, async (req, res) => {
-    const { message, image_base64 } = req.body;
+router.post('/', authMiddleware, chatLimiter, async (req, res) => {
+    const { message, image_base64 } = req.body || {};
     const userId = req.user.id;
 
     if (!message && !image_base64) {
         return res.status(400).json({ error: 'Envie uma mensagem ou uma imagem' });
+    }
+    if (message !== undefined && message !== null && typeof message !== 'string') {
+        return res.status(400).json({ error: 'Mensagem inválida' });
+    }
+    if (message && message.length > MAX_MESSAGE_CHARS) {
+        return res.status(400).json({ error: `A mensagem pode ter no máximo ${MAX_MESSAGE_CHARS} caracteres.` });
+    }
+    if (image_base64 && (typeof image_base64 !== 'string' || image_base64.length > MAX_IMAGE_BASE64)) {
+        return res.status(400).json({ error: 'Imagem inválida ou muito grande (máximo 5 MB).' });
     }
 
     try {

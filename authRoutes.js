@@ -3,7 +3,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const pool = require('./db');
-const { authMiddleware } = require('./authMiddleware');
+const { authMiddleware, OWNER_EMAIL } = require('./authMiddleware');
 const { applyPendingGrant } = require('./kiwifyWebhook');
 
 // Limita tentativas de login/cadastro por IP, pra dificultar força bruta de senha.
@@ -15,10 +15,41 @@ const authLimiter = rateLimit({
     message: { error: 'Muitas tentativas. Aguarde alguns minutos e tente novamente.' },
 });
 
+// Limite por e-mail: impede força bruta numa conta específica mesmo trocando de IP.
+const loginEmailLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
+    keyGenerator: (req) => `login:${normalizeEmail(req.body?.email) || 'vazio'}`,
+    message: { error: 'Muitas tentativas nesta conta. Aguarde 15 minutos e tente novamente.' },
+});
+
 const router = express.Router();
 
-// Conta que deve sempre ter acesso total (dono da plataforma).
-const OWNER_EMAIL = 'victor.silvestre001@gmail.com';
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
+const PASSWORD_MIN = 8;
+const PASSWORD_MAX = 128;
+const NAME_MAX = 100;
+
+// E-mail sempre em minúsculas e sem espaços: evita contas duplicadas como
+// "Fulano@Gmail.com" e "fulano@gmail.com".
+function normalizeEmail(email) {
+    return typeof email === 'string' ? email.trim().toLowerCase() : '';
+}
+
+function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// Hash de uma senha qualquer, usado quando o e-mail não existe: assim o login
+// demora o mesmo tanto e não revela quais e-mails têm conta.
+const DUMMY_HASH = bcrypt.hashSync('tradeon-dummy-password', 10);
+
+// Foto de perfil: só imagem em base64 (PNG, JPEG, WebP ou GIF).
+const AVATAR_RE = /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/]+=*$/;
+
 
 async function sendWelcomeEmail(name, email) {
     if (!process.env.RESEND_API_KEY) {
@@ -38,9 +69,9 @@ async function sendWelcomeEmail(name, email) {
                 subject: 'Sua conta na TradeOn AI foi criada 🎉',
                 html: `
                     <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; background: #05070F; color: #E7ECF7; border-radius: 12px;">
-                        <h1 style="color: #00F0A8; font-size: 22px; margin-bottom: 8px;">Bem-vindo(a), ${name}!</h1>
+                        <h1 style="color: #00F0A8; font-size: 22px; margin-bottom: 8px;">Bem-vindo(a), ${escapeHtml(name)}!</h1>
                         <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">
-                            Sua conta na <strong>TradeOn AI</strong> foi criada com sucesso usando o e-mail <strong>${email}</strong>.
+                            Sua conta na <strong>TradeOn AI</strong> foi criada com sucesso usando o e-mail <strong>${escapeHtml(email)}</strong>.
                         </p>
                         <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">
                             Você já pode entrar na plataforma e acompanhar as análises de mercado em tempo real para EURUSD, EURJPY e XAUUSD (ouro).
@@ -65,24 +96,34 @@ async function sendWelcomeEmail(name, email) {
 }
 
 router.post('/register', authLimiter, async (req, res) => {
-    const { name, email, password } = req.body;
+    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+    const email = normalizeEmail(req.body?.email);
+    const { password } = req.body || {};
 
-    if (!name || !email || !password) {
+    if (!name || !email || typeof password !== 'string' || !password) {
         return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
     }
-
-    if (password.length < 8) {
+    if (name.length > NAME_MAX) {
+        return res.status(400).json({ error: `O nome pode ter no máximo ${NAME_MAX} caracteres.` });
+    }
+    if (!EMAIL_RE.test(email) || email.length > 150) {
+        return res.status(400).json({ error: 'E-mail inválido.' });
+    }
+    if (password.length < PASSWORD_MIN) {
         return res.status(400).json({ error: 'A senha deve ter pelo menos 8 caracteres.' });
+    }
+    if (password.length > PASSWORD_MAX) {
+        return res.status(400).json({ error: `A senha pode ter no máximo ${PASSWORD_MAX} caracteres.` });
     }
 
     try {
-        const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+        const existing = await pool.query('SELECT id FROM users WHERE LOWER(email) = $1', [email]);
         if (existing.rows.length > 0) {
             return res.status(409).json({ error: 'Email já cadastrado' });
         }
 
         const passwordHash = await bcrypt.hash(password, 10);
-        const initialPlan = email.toLowerCase() === OWNER_EMAIL ? 'owner' : 'free';
+        const initialPlan = email === OWNER_EMAIL ? 'owner' : 'free';
 
         const result = await pool.query(
             `INSERT INTO users (name, email, password_hash, plan) 
@@ -108,12 +149,18 @@ router.post('/register', authLimiter, async (req, res) => {
     }
 });
 
-router.post('/login', authLimiter, async (req, res) => {
-    const { email, password } = req.body;
+router.post('/login', authLimiter, loginEmailLimiter, async (req, res) => {
+    const email = normalizeEmail(req.body?.email);
+    const { password } = req.body || {};
+
+    if (!email || typeof password !== 'string' || !password || password.length > PASSWORD_MAX) {
+        return res.status(401).json({ error: 'Credenciais inválidas' });
+    }
 
     try {
-        const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+        const result = await pool.query('SELECT * FROM users WHERE LOWER(email) = $1 ORDER BY id LIMIT 1', [email]);
         if (result.rows.length === 0) {
+            await bcrypt.compare(password, DUMMY_HASH);
             return res.status(401).json({ error: 'Credenciais inválidas' });
         }
 
@@ -126,7 +173,7 @@ router.post('/login', authLimiter, async (req, res) => {
 
         // Garante que a conta do dono sempre tenha o plano 'owner', mesmo que
         // tenha sido criada antes desta regra existir.
-        if (email.toLowerCase() === OWNER_EMAIL && user.plan !== 'owner') {
+        if (user.email.toLowerCase() === OWNER_EMAIL && user.plan !== 'owner') {
             const updated = await pool.query(
                 `UPDATE users SET plan = 'owner' WHERE id = $1 RETURNING id, name, email, plan`,
                 [user.id]
@@ -176,15 +223,20 @@ router.patch('/profile', authMiddleware, async (req, res) => {
     // Limpa o CPF pra guardar só os números, se foi enviado
     let cleanCpf = null;
     if (cpf !== undefined && cpf !== null && cpf !== '') {
-        cleanCpf = String(cpf).replace(/\D/g, '');
+        cleanCpf = String(cpf).slice(0, 20).replace(/\D/g, '');
         if (cleanCpf.length !== 11) {
             return res.status(400).json({ error: 'CPF inválido. Deve conter 11 dígitos.' });
         }
     }
 
     // Limite de tamanho pra foto (evita payloads gigantes no banco)
-    if (avatar && avatar.length > 2_000_000) {
-        return res.status(400).json({ error: 'Imagem muito grande. Escolha uma foto menor.' });
+    if (avatar !== undefined && avatar !== null && avatar !== '') {
+        if (typeof avatar !== 'string' || !AVATAR_RE.test(avatar)) {
+            return res.status(400).json({ error: 'Formato de imagem inválido. Use PNG, JPG, WebP ou GIF.' });
+        }
+        if (avatar.length > 2_000_000) {
+            return res.status(400).json({ error: 'Imagem muito grande. Escolha uma foto menor.' });
+        }
     }
 
     try {
@@ -198,7 +250,7 @@ router.patch('/profile', authMiddleware, async (req, res) => {
         }
         if (avatar !== undefined) {
             fields.push(`avatar_url = $${i++}`);
-            values.push(avatar);
+            values.push(avatar || null);
         }
 
         if (fields.length === 0) {

@@ -1,5 +1,8 @@
 const jwt = require('jsonwebtoken');
 
+// Conta que deve sempre ter acesso total (dono da plataforma).
+const OWNER_EMAIL = 'victor.silvestre001@gmail.com';
+
 function authMiddleware(req, res, next) {
     const authHeader = req.headers.authorization;
 
@@ -60,4 +63,4 @@ function requireOwner(req, res, next) {
     next();
 }
 
-module.exports = { authMiddleware, requirePaidPlan, requireOwner, requireVip };
+module.exports = { authMiddleware, requirePaidPlan, requireOwner, requireVip, OWNER_EMAIL };

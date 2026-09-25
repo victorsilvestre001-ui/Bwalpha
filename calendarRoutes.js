@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('./db');
+const { secureCompare } = require('./secureCompare');
 const { authMiddleware } = require('./authMiddleware');
 
 const router = express.Router();
@@ -20,7 +21,7 @@ router.get('/', authMiddleware, async (req, res) => {
 
 router.post('/sync', async (req, res) => {
     const secret = req.headers['x-webhook-secret'];
-    if (secret !== process.env.WEBHOOK_SECRET) {
+    if (!secureCompare(String(secret || ''), String(process.env.WEBHOOK_SECRET || ''))) {
         return res.status(401).json({ error: 'Não autorizado' });
     }
 
