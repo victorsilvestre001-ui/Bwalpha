@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const pool = require('./db');
 const { authMiddleware } = require('./authMiddleware');
-const { sendCouponEmail } = require('./mailer');
+const { sendCouponEmail, sendTrialEmail } = require('./mailer');
 
 const router = express.Router();
 
@@ -138,67 +138,75 @@ router.get('/stats', authMiddleware, requireOwnerDb, async (req, res) => {
     }
 });
 
-// ---------- Cupom do VIP para quem já tinha conta ----------
-// Contas free que ainda não receberam o cupom (nem no cadastro, nem por aqui).
-const COUPON_ELIGIBLE_SQL = `
-    FROM users u
-    WHERE u.plan = 'free' AND NOT EXISTS (SELECT 1 FROM coupon_emails c WHERE c.user_id = u.id)`;
-const COUPON_BATCH = 200;
-let couponRunning = false;
+// ---------- Envios de e-mail para contas já cadastradas (disparados pelo dono) ----------
+// Cada campanha manda no máximo um e-mail por conta (registrado na tabela da campanha),
+// até 200 por clique e ~2 por segundo (limite do Resend). Falhas continuam elegíveis.
+const CAMPAIGN_BATCH = 200;
 
-router.get('/coupon-campaign', authMiddleware, requireOwnerDb, async (req, res) => {
-    try {
-        const [eligible, sent] = await Promise.all([
-            pool.query(`SELECT COUNT(*)::int AS total ${COUPON_ELIGIBLE_SQL}`),
-            pool.query('SELECT COUNT(*)::int AS total FROM coupon_emails'),
-        ]);
-        res.json({
-            coupon: process.env.SIGNUP_COUPON || null,
-            discount: process.env.SIGNUP_COUPON_DISCOUNT || '15%',
-            eligible: eligible.rows[0].total,
-            alreadySent: sent.rows[0].total,
-            running: couponRunning,
-        });
-    } catch (err) {
-        console.error('Erro ao contar contas para o cupom:', err.message);
-        res.status(500).json({ error: 'Erro ao carregar o envio de cupom' });
-    }
+function registerCampaign(route, { table, where, send, notReady, info = () => ({}) }) {
+    const eligibleSql = `FROM users u WHERE ${where} AND NOT EXISTS (SELECT 1 FROM ${table} c WHERE c.user_id = u.id)`;
+    let running = false;
+
+    router.get(route, authMiddleware, requireOwnerDb, async (req, res) => {
+        try {
+            const [eligible, sent] = await Promise.all([
+                pool.query(`SELECT COUNT(*)::int AS total ${eligibleSql}`),
+                pool.query(`SELECT COUNT(*)::int AS total FROM ${table}`),
+            ]);
+            res.json({ ...info(), ready: !notReady(), eligible: eligible.rows[0].total, alreadySent: sent.rows[0].total, running });
+        } catch (err) {
+            console.error(`Erro ao carregar o envio ${route}:`, err.message);
+            res.status(500).json({ error: 'Erro ao carregar o envio' });
+        }
+    });
+
+    router.post(route, authMiddleware, requireOwnerDb, async (req, res) => {
+        const problem = notReady();
+        if (problem) return res.status(400).json({ error: problem });
+        if (running) return res.status(409).json({ error: 'Já existe um envio em andamento.' });
+        running = true;
+        let sent = 0;
+        const failed = [];
+        try {
+            const { rows } = await pool.query(`SELECT u.id, u.name, u.email ${eligibleSql} ORDER BY u.id LIMIT $1`, [CAMPAIGN_BATCH]);
+            for (const u of rows) {
+                const result = await send(u.name, u.email);
+                if (result.ok) {
+                    await pool.query(`INSERT INTO ${table} (user_id) VALUES ($1) ON CONFLICT DO NOTHING`, [u.id]);
+                    sent += 1;
+                } else {
+                    failed.push(maskEmail(u.email));
+                    console.error(`E-mail ${route} não enviado para a conta ${u.id}:`, result.error);
+                }
+                await new Promise((r) => setTimeout(r, 600));
+            }
+            const left = await pool.query(`SELECT COUNT(*)::int AS total ${eligibleSql}`);
+            console.log(`Envio ${route}: ${sent} e-mail(s) enviado(s), ${failed.length} falha(s).`);
+            res.json({ sent, failed, remaining: left.rows[0].total });
+        } catch (err) {
+            console.error(`Erro no envio ${route}:`, err.message);
+            res.status(500).json({ error: 'Erro ao enviar os e-mails', sent });
+        } finally {
+            running = false;
+        }
+    });
+}
+
+// Cupom do VIP para contas free que ainda não receberam (nem no cadastro, nem por aqui).
+registerCampaign('/coupon-campaign', {
+    table: 'coupon_emails',
+    where: `u.plan = 'free'`,
+    send: sendCouponEmail,
+    notReady: () => (!process.env.SIGNUP_COUPON || !process.env.KIWIFY_CHECKOUT_URL ? 'Cupom não configurado no servidor (SIGNUP_COUPON).' : null),
+    info: () => ({ coupon: process.env.SIGNUP_COUPON || null, discount: process.env.SIGNUP_COUPON_DISCOUNT || '15%' }),
 });
 
-// Envia o cupom para as contas elegíveis (até 200 por clique; cada conta recebe uma vez só).
-router.post('/coupon-campaign', authMiddleware, requireOwnerDb, async (req, res) => {
-    if (!process.env.SIGNUP_COUPON || !process.env.KIWIFY_CHECKOUT_URL) {
-        return res.status(400).json({ error: 'Cupom não configurado no servidor (SIGNUP_COUPON).' });
-    }
-    if (couponRunning) return res.status(409).json({ error: 'Já existe um envio em andamento.' });
-    couponRunning = true;
-    let sent = 0;
-    const failed = [];
-    try {
-        const { rows } = await pool.query(
-            `SELECT u.id, u.name, u.email ${COUPON_ELIGIBLE_SQL} ORDER BY u.id LIMIT $1`,
-            [COUPON_BATCH]
-        );
-        for (const u of rows) {
-            const result = await sendCouponEmail(u.name, u.email);
-            if (result.ok) {
-                await pool.query('INSERT INTO coupon_emails (user_id) VALUES ($1) ON CONFLICT DO NOTHING', [u.id]);
-                sent += 1;
-            } else {
-                failed.push(maskEmail(u.email));
-                console.error(`Cupom não enviado para a conta ${u.id}:`, result.error);
-            }
-            await new Promise((r) => setTimeout(r, 600)); // limite do Resend: ~2 e-mails por segundo
-        }
-        const left = await pool.query(`SELECT COUNT(*)::int AS total ${COUPON_ELIGIBLE_SQL}`);
-        console.log(`Cupom: ${sent} e-mail(s) enviado(s), ${failed.length} falha(s).`);
-        res.json({ sent, failed, remaining: left.rows[0].total });
-    } catch (err) {
-        console.error('Erro no envio de cupom:', err.message);
-        res.status(500).json({ error: 'Erro ao enviar os cupons', sent });
-    } finally {
-        couponRunning = false;
-    }
+// Aviso do teste grátis de 3 sinais: só para contas free que ainda não usaram nenhum sinal.
+registerCampaign('/trial-campaign', {
+    table: 'trial_emails',
+    where: `u.plan = 'free' AND NOT EXISTS (SELECT 1 FROM analyses a WHERE a.user_id = u.id)`,
+    send: sendTrialEmail,
+    notReady: () => (!process.env.RESEND_API_KEY ? 'Envio de e-mail não configurado (RESEND_API_KEY).' : null),
 });
 
 module.exports = router;

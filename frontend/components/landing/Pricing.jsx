@@ -16,7 +16,7 @@ const PLANS = [
   {
     name: "VIP",
     tag: "Mais completo",
-    price: "R$ 197",
+    price: "Acesso total",
     note: "pagamento único · sem mensalidade",
     cta: "Quero ser VIP",
     href: "/auth?mode=register&plan=vip",

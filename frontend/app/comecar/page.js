@@ -127,7 +127,7 @@ export default function Comecar() {
           </div>
           <div className="panel grad-border p-7">
             <div className="font-mono text-xs uppercase tracking-widest text-neon">VIP</div>
-            <div className="mt-2 font-display text-3xl font-bold grad-text">R$ 197</div>
+            <div className="mt-2 font-display text-3xl font-bold grad-text">Acesso total</div>
             <div className="mt-1 text-xs text-mist-faint">pagamento único · sem mensalidade</div>
             <ul className="mt-5 space-y-2 text-sm text-mist-dim">
               {["Leituras da IA em 1 e 5 minutos", "Histórico e taxa de acerto", "Simulador de banca", "Assistente de IA ilimitado", "Pague uma vez, acesso a tudo"].map((t) => <li key={t} className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-neon" />{t}</li>)}

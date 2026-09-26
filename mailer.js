@@ -110,4 +110,31 @@ async function sendCouponEmail(name, email) {
     });
 }
 
-module.exports = { sendEmail, sendWelcomeEmail, sendCouponEmail, escapeHtml };
+// Aviso para contas já cadastradas: teste grátis de 3 sinais liberado.
+async function sendTrialEmail(name, email) {
+    const firstName = String(name || '').trim().split(/\s+/)[0];
+    const offer = couponOffer(name, email);
+    return sendEmail({
+        to: email,
+        subject: '🎁 Liberamos 3 sinais grátis da IA para você testar',
+        html: layout(`
+            <h1 style="color: #00F0A8; font-size: 22px; margin-bottom: 8px;">${firstName ? `${escapeHtml(firstName)}, seu` : 'Seu'} teste grátis está liberado 🎁</h1>
+            <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">
+                Agora toda conta da <strong>TradeOn AI</strong> pode testar <strong>3 sinais da IA de graça</strong>, sem precisar ser VIP.
+            </p>
+            <ol style="font-size: 14px; line-height: 1.8; color: #E7ECF7; padding-left: 18px;">
+                <li>Entre na sua conta</li>
+                <li>Escolha o ativo (EURUSD, EURJPY ou Ouro) e o tempo (M1 ou M5)</li>
+                <li>Clique em <strong>Analisar com IA</strong></li>
+            </ol>
+            <p style="font-size: 14px; line-height: 1.6; color: #9AA6C3;">
+                A IA espera o candle fechar, mostra COMPRA ou VENDA com a contagem até a entrada, e depois confere o resultado no seu histórico (WIN ou RED).
+                Os 3 sinais valem no seu primeiro dia de uso.
+            </p>
+            ${button(`${FRONTEND_URL}/auth`, 'Testar meus 3 sinais')}
+            ${offer ? `<p style="font-size: 13px; line-height: 1.6; color: #9AA6C3; margin-top: 20px;">Gostou? Use o cupom <strong style="color: #00F0A8; font-family: 'Courier New', monospace;">${escapeHtml(offer.coupon)}</strong> para ${escapeHtml(offer.discount)} OFF no VIP.</p>` : ''}`,
+            'Você recebeu este e-mail porque tem uma conta na TradeOn AI. Conteúdo educativo; operar envolve risco.'),
+    });
+}
+
+module.exports = { sendEmail, sendWelcomeEmail, sendCouponEmail, sendTrialEmail, escapeHtml };

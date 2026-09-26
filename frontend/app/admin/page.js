@@ -81,25 +81,25 @@ function DailyBars({ title, days, valueKey, unit, colorClass, extra }) {
   );
 }
 
-// Envia o cupom do VIP para as contas antigas (cada conta recebe uma vez só).
-function CouponCampaign() {
+// Envio de e-mail para contas já cadastradas: mostra quantas vão receber e só envia após confirmar.
+function CampaignCard({ title, load: loadInfo, send: sendAll, describe, confirmText, sentLabel }) {
   const [info, setInfo] = useState(null);
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
 
   const load = useCallback(() => {
-    api.couponCampaign().then(setInfo).catch((err) => setError(err.message || "Não foi possível carregar."));
-  }, []);
+    loadInfo().then(setInfo).catch((err) => setError(err.message || "Não foi possível carregar."));
+  }, [loadInfo]);
   useEffect(load, [load]);
 
   async function send() {
     if (!info?.eligible) return;
-    if (!window.confirm(`Enviar o cupom ${info.coupon} (${info.discount} OFF) para ${info.eligible} conta(s) agora?`)) return;
+    if (!window.confirm(confirmText(info))) return;
     setSending(true);
     setError("");
     try {
-      setResult(await api.sendCouponCampaign());
+      setResult(await sendAll());
     } catch (err) {
       setError(err.message || "Erro ao enviar.");
     } finally {
@@ -110,17 +110,14 @@ function CouponCampaign() {
 
   return (
     <section className="panel p-5">
-      <h3 className="flex items-center gap-2 font-display text-sm font-semibold text-mist"><Mail size={15} className="text-neon" /> Cupom do VIP para contas antigas</h3>
+      <h3 className="flex items-center gap-2 font-display text-sm font-semibold text-mist"><Mail size={15} className="text-neon" /> {title}</h3>
       {!info ? (
         <p className="mt-3 text-sm text-mist-faint">{error || "Carregando…"}</p>
-      ) : !info.coupon ? (
-        <p className="mt-3 text-sm text-mist-faint">Nenhum cupom configurado no servidor.</p>
+      ) : !info.ready ? (
+        <p className="mt-3 text-sm text-mist-faint">Envio não configurado no servidor.</p>
       ) : (
         <>
-          <p className="mt-2 text-sm text-mist-dim">
-            Manda por e-mail o cupom <span className="font-mono font-semibold text-neon">{info.coupon}</span> ({info.discount} OFF) para as contas free que ainda não receberam.
-            Quem se cadastrar a partir de agora já recebe no e-mail de boas-vindas.
-          </p>
+          <p className="mt-2 text-sm text-mist-dim">{describe(info)}</p>
           <div className="mt-4 flex flex-wrap items-center gap-4">
             <button
               onClick={send}
@@ -130,7 +127,7 @@ function CouponCampaign() {
               {sending ? <Loader2 size={15} className="animate-spin" /> : <Mail size={15} />}
               {sending ? "Enviando…" : info.eligible ? `Enviar para ${fmt(info.eligible)} conta(s)` : "Todos já receberam"}
             </button>
-            <span className="text-xs text-mist-faint">{fmt(info.alreadySent)} conta(s) já receberam o cupom.</span>
+            <span className="text-xs text-mist-faint">{fmt(info.alreadySent)} {sentLabel}</span>
           </div>
           {result && (
             <p className="mt-3 text-sm text-mist-dim">
@@ -264,7 +261,24 @@ export default function AdminPage() {
               </div>
             </section>
 
-            <CouponCampaign />
+            <section className="grid gap-4 lg:grid-cols-2">
+              <CampaignCard
+                title="Aviso: teste grátis de 3 sinais"
+                load={api.trialCampaign}
+                send={api.sendTrialCampaign}
+                describe={() => "Avisa por e-mail as contas free que ainda não usaram nenhum sinal que o teste de 3 sinais grátis está liberado."}
+                confirmText={(i) => `Enviar o aviso do teste grátis para ${i.eligible} conta(s) agora?`}
+                sentLabel="conta(s) já receberam o aviso."
+              />
+              <CampaignCard
+                title="Cupom do VIP para contas antigas"
+                load={api.couponCampaign}
+                send={api.sendCouponCampaign}
+                describe={(i) => <>Manda o cupom <span className="font-mono font-semibold text-neon">{i.coupon}</span> ({i.discount} OFF) para as contas free que ainda não receberam. Quem se cadastra agora já recebe no e-mail de boas-vindas.</>}
+                confirmText={(i) => `Enviar o cupom ${i.coupon} (${i.discount} OFF) para ${i.eligible} conta(s) agora?`}
+                sentLabel="conta(s) já receberam o cupom."
+              />
+            </section>
 
             <section className="panel p-5">
               <h3 className="font-display text-sm font-semibold text-mist">Últimas contas criadas</h3>

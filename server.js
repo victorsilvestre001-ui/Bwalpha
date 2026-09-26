@@ -211,6 +211,11 @@ CREATE TABLE IF NOT EXISTS coupon_emails (
     user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     sent_at TIMESTAMPTZ DEFAULT NOW()
 );
+-- Quem já recebeu o aviso do teste grátis de 3 sinais.
+CREATE TABLE IF NOT EXISTS trial_emails (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    sent_at TIMESTAMPTZ DEFAULT NOW()
+);
 -- Contas criadas depois que o domínio de e-mail foi verificado já receberam o cupom no cadastro.
 INSERT INTO coupon_emails (user_id)
     SELECT id FROM users WHERE created_at BETWEEN '2026-09-25 13:40:00' AND '2026-09-25 18:00:00'
