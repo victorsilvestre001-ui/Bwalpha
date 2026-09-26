@@ -60,6 +60,7 @@ export const api = {
   adminStats: () => request("/api/admin/stats"),
   couponCampaign: () => request("/api/admin/coupon-campaign"),
   sendCouponCampaign: () => request("/api/admin/coupon-campaign", { method: "POST" }),
+  signalQuota: () => request("/api/market/signal-quota"),
   signal: (pair, timeframe) => request("/api/market/signal", { method: "POST", body: { pair, timeframe } }),
   analyses: (status = "all", limit = 100) => request(`/api/analyses?status=${encodeURIComponent(status)}&limit=${limit}`),
   chat: (message, image_base64) => request("/api/chat", { method: "POST", body: { message, image_base64 } }),

@@ -1,6 +1,6 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
-const { authMiddleware, requireVip } = require('./authMiddleware');
+const { authMiddleware, currentPlan, isVipPlan } = require('./authMiddleware');
 const pool = require('./db');
 
 const router = express.Router();
@@ -797,7 +797,55 @@ const signalLimiter = rateLimit({
     message: { error: 'Muitas análises seguidas. Aguarde um minuto.' },
 });
 
-router.post('/signal', authMiddleware, requireVip, signalLimiter, async (req, res) => {
+// Plano free: 3 sinais grátis por dia (dia de Brasília). Conta só os sinais com entrada,
+// que são os salvos no histórico.
+const FREE_SIGNALS_PER_DAY = 3;
+
+async function freeSignalsUsedToday(userId) {
+    const { rows } = await pool.query(
+        `SELECT COUNT(*)::int AS used FROM analyses
+         WHERE user_id = $1
+           AND (requested_at AT TIME ZONE 'America/Sao_Paulo')::date = (NOW() AT TIME ZONE 'America/Sao_Paulo')::date`,
+        [userId]
+    );
+    return rows[0].used;
+}
+
+async function signalQuota(userId) {
+    const plan = await currentPlan(userId);
+    if (isVipPlan(plan)) return { vip: true };
+    const used = await freeSignalsUsedToday(userId);
+    return { vip: false, limit: FREE_SIGNALS_PER_DAY, used, remaining: Math.max(0, FREE_SIGNALS_PER_DAY - used) };
+}
+
+router.get('/signal-quota', authMiddleware, async (req, res) => {
+    try {
+        res.json(await signalQuota(req.user.id));
+    } catch (err) {
+        console.error('Erro ao consultar sinais grátis:', err.message);
+        res.status(500).json({ error: 'Erro ao consultar seus sinais' });
+    }
+});
+
+async function requireSignalAccess(req, res, next) {
+    try {
+        const quota = await signalQuota(req.user.id);
+        if (!quota.vip && quota.remaining <= 0) {
+            return res.status(403).json({
+                error: `Você já usou seus ${FREE_SIGNALS_PER_DAY} sinais grátis de hoje. Assine o VIP para sinais ilimitados.`,
+                vipRequired: true,
+                freeLimitReached: true,
+            });
+        }
+        req.signalQuota = quota;
+        next();
+    } catch (err) {
+        console.error('Erro ao verificar plano:', err.message);
+        res.status(500).json({ error: 'Erro ao verificar seu plano' });
+    }
+}
+
+router.post('/signal', authMiddleware, requireSignalAccess, signalLimiter, async (req, res) => {
     const { pair, timeframe } = req.body;
     if (!SIGNAL_PAIRS[pair] || !SIGNAL_INTERVALS[timeframe]) {
         return res.status(400).json({ error: 'Par ou timeframe inválido. Use EURUSD/EURJPY/XAUUSD e M1/M5.' });
@@ -851,7 +899,9 @@ router.post('/signal', authMiddleware, requireVip, signalLimiter, async (req, re
             // O histórico não pode impedir o sinal de ser entregue.
             console.error('Erro ao salvar análise no histórico:', err.message);
         }
-        res.json({ ...result, analysisId, requestedAt, entry, expiry });
+        const quota = req.signalQuota;
+        const freeRemaining = quota.vip ? null : Math.max(0, quota.remaining - (analysisId ? 1 : 0));
+        res.json({ ...result, analysisId, requestedAt, entry, expiry, freeRemaining });
     } catch (err) {
         console.error('Erro ao gerar sinal técnico:', err.message);
         res.status(500).json({ error: 'Erro ao gerar sinal técnico' });

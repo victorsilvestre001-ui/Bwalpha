@@ -11,7 +11,7 @@ const PLANS = [
     cta: "Criar conta grátis",
     href: "/auth?mode=register",
     highlight: false,
-    items: ["Painel com gráfico em tempo real", "Cotações de EURUSD, EURJPY e Ouro", "3 mensagens por dia com a IA"]
+    items: ["3 sinais da IA grátis por dia", "Painel com gráfico em tempo real", "Cotações de EURUSD, EURJPY e Ouro", "3 mensagens por dia com a IA"]
   },
   {
     name: "VIP",
@@ -21,7 +21,7 @@ const PLANS = [
     cta: "Assinar VIP",
     href: "/auth?mode=register&plan=vip",
     highlight: true,
-    items: ["Tudo do plano Free", "Sinais da IA para EURUSD, EURJPY e Ouro (M1 e M5)", "Contagem do próximo candle + histórico de Win/Red", "Assistente de IA ilimitado", "Cancele quando quiser pelo painel"]
+    items: ["Tudo do plano Free", "Sinais da IA ilimitados (EURUSD, EURJPY e Ouro, M1 e M5)", "Contagem do próximo candle + histórico de Win/Red", "Assistente de IA ilimitado", "Cancele quando quiser pelo painel"]
   }
 ];
 

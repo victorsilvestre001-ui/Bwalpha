@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
-import { Sparkles, AlertTriangle, Lock, Crown, Loader2, Clock, Info } from "lucide-react";
+import { Sparkles, AlertTriangle, Lock, Crown, Loader2, Clock, Info, Gift } from "lucide-react";
 import { api } from "@/lib/api";
 import { ASSETS, ASSET_LIST } from "@/lib/assets";
 import TradingViewWidget from "./TradingViewWidget";
@@ -40,12 +40,20 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
   const [marketOpen, setMarketOpen] = useState(null);
   const [offset, setOffset] = useState(null);
   const [watching, setWatching] = useState(null); // { pair, timeframe, releaseAt, startedAt }
+  const [quota, setQuota] = useState(null); // plano free: { limit, used, remaining }
   const runId = useRef(0);
 
   useEffect(() => {
     api.marketStatus().then((s) => setMarketOpen(!!s?.open)).catch(() => {});
     return startClockSync(setOffset);
   }, []);
+
+  useEffect(() => {
+    if (isVip) { setQuota(null); return; }
+    api.signalQuota().then((q) => setQuota(q.vip ? null : q)).catch(() => {});
+  }, [isVip]);
+
+  const canAnalyze = isVip || (quota != null && quota.remaining > 0);
 
   function cancelWatch() {
     runId.current += 1;
@@ -81,6 +89,7 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
       const wait = timeframe === "M1" ? 0 : MIN_ANIMATION_MS - (now() - started);
       if (wait > 0) await new Promise((r) => setTimeout(r, wait));
       setResult(data);
+      if (data.freeRemaining != null) setQuota((q) => q && { ...q, remaining: data.freeRemaining, used: q.limit - data.freeRemaining });
       if (data.noEntry) return;
       // Usa a entrada calculada e salva pelo servidor (a mesma que vai para o histórico).
       const local = computeEntry(timeframe, now());
@@ -89,6 +98,7 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
       setTiming({ requestedAt: data.requestedAt ?? started, entry, expiry });
     } catch (err) {
       if (err.data?.marketClosed) setMarketOpen(false);
+      if (err.data?.freeLimitReached) setQuota((q) => q && { ...q, remaining: 0, used: q.limit });
       setError(err.message || "Não foi possível gerar o sinal agora.");
     } finally {
       if (id === runId.current) setLoading(false);
@@ -132,16 +142,30 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
             </div>
           )}
 
-          {isVip ? (
-            <button onClick={analyze} disabled={loading || !!watching} className="btn-primary mt-6 w-full !py-4 text-base">
-              <Sparkles size={18} /> Analisar com IA
-            </button>
+          {canAnalyze ? (
+            <>
+              <button onClick={analyze} disabled={loading || !!watching} className="btn-primary mt-6 w-full !py-4 text-base">
+                <Sparkles size={18} /> Analisar com IA
+              </button>
+              {!isVip && quota && (
+                <div className="mt-3 flex items-center justify-between gap-3 text-xs">
+                  <span className="flex items-center gap-1.5 text-mist-dim">
+                    <Gift size={13} className="text-neon" /> {quota.remaining} de {quota.limit} sinais grátis hoje
+                  </span>
+                  <button onClick={onUpgrade} disabled={upgrading} className="font-semibold text-neon hover:underline">Ilimitado no VIP</button>
+                </div>
+              )}
+            </>
           ) : (
             <div className="grad-border mt-6 rounded-xl bg-void-deep/70 p-4 text-center">
               <div className="flex items-center justify-center gap-2 font-display text-sm font-semibold text-mist">
-                <Lock size={15} className="text-neon" /> Sinais exclusivos para VIP
+                <Lock size={15} className="text-neon" /> {quota ? "Seus sinais grátis de hoje acabaram" : "Sinais exclusivos para VIP"}
               </div>
-              <p className="mt-1 text-xs text-mist-dim">Assine para receber o sinal do próximo candle, a contagem de entrada e o histórico de Win/Red.</p>
+              <p className="mt-1 text-xs text-mist-dim">
+                {quota
+                  ? `Amanhã você ganha mais ${quota.limit}. Com o VIP os sinais são ilimitados, com contagem de entrada e histórico de Win/Red.`
+                  : "Assine para receber o sinal do próximo candle, a contagem de entrada e o histórico de Win/Red."}
+              </p>
               <button onClick={onUpgrade} disabled={upgrading} className="btn-primary mt-4 w-full !py-3.5">
                 {upgrading ? <Loader2 size={16} className="animate-spin" /> : <><Crown size={16} /> Quero ser VIP</>}
               </button>
