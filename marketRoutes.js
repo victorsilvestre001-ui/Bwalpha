@@ -797,25 +797,27 @@ const signalLimiter = rateLimit({
     message: { error: 'Muitas análises seguidas. Aguarde um minuto.' },
 });
 
-// Plano free: 3 sinais grátis por dia (dia de Brasília). Conta só os sinais com entrada,
-// que são os salvos no histórico.
-const FREE_SIGNALS_PER_DAY = 3;
+// Plano free: 3 sinais grátis só no primeiro dia de uso (o dia, em Brasília, do primeiro sinal).
+// Conta só os sinais com entrada, que são os salvos no histórico.
+const FREE_TRIAL_SIGNALS = 3;
 
-async function freeSignalsUsedToday(userId) {
+async function freeTrialStatus(userId) {
     const { rows } = await pool.query(
-        `SELECT COUNT(*)::int AS used FROM analyses
-         WHERE user_id = $1
-           AND (requested_at AT TIME ZONE 'America/Sao_Paulo')::date = (NOW() AT TIME ZONE 'America/Sao_Paulo')::date`,
+        `SELECT COUNT(*)::int AS used,
+                BOOL_OR((requested_at AT TIME ZONE 'America/Sao_Paulo')::date
+                        < (NOW() AT TIME ZONE 'America/Sao_Paulo')::date) AS started_before_today
+         FROM analyses WHERE user_id = $1`,
         [userId]
     );
-    return rows[0].used;
+    const { used, started_before_today: expired } = rows[0];
+    return { used, remaining: expired ? 0 : Math.max(0, FREE_TRIAL_SIGNALS - used), expired: !!expired };
 }
 
 async function signalQuota(userId) {
     const plan = await currentPlan(userId);
     if (isVipPlan(plan)) return { vip: true };
-    const used = await freeSignalsUsedToday(userId);
-    return { vip: false, limit: FREE_SIGNALS_PER_DAY, used, remaining: Math.max(0, FREE_SIGNALS_PER_DAY - used) };
+    const trial = await freeTrialStatus(userId);
+    return { vip: false, limit: FREE_TRIAL_SIGNALS, used: Math.min(trial.used, FREE_TRIAL_SIGNALS), remaining: trial.remaining, started: trial.used > 0, expired: trial.expired };
 }
 
 router.get('/signal-quota', authMiddleware, async (req, res) => {
@@ -832,7 +834,7 @@ async function requireSignalAccess(req, res, next) {
         const quota = await signalQuota(req.user.id);
         if (!quota.vip && quota.remaining <= 0) {
             return res.status(403).json({
-                error: `Você já usou seus ${FREE_SIGNALS_PER_DAY} sinais grátis de hoje. Assine o VIP para sinais ilimitados.`,
+                error: `Seu teste grátis de ${FREE_TRIAL_SIGNALS} sinais já foi usado. Assine o VIP para sinais ilimitados.`,
                 vipRequired: true,
                 freeLimitReached: true,
             });

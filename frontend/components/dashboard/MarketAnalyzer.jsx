@@ -40,7 +40,7 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
   const [marketOpen, setMarketOpen] = useState(null);
   const [offset, setOffset] = useState(null);
   const [watching, setWatching] = useState(null); // { pair, timeframe, releaseAt, startedAt }
-  const [quota, setQuota] = useState(null); // plano free: { limit, used, remaining }
+  const [quota, setQuota] = useState(null); // plano free: { limit, used, remaining, started, expired }
   const runId = useRef(0);
 
   useEffect(() => {
@@ -89,7 +89,7 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
       const wait = timeframe === "M1" ? 0 : MIN_ANIMATION_MS - (now() - started);
       if (wait > 0) await new Promise((r) => setTimeout(r, wait));
       setResult(data);
-      if (data.freeRemaining != null) setQuota((q) => q && { ...q, remaining: data.freeRemaining, used: q.limit - data.freeRemaining });
+      if (data.freeRemaining != null) setQuota((q) => q && { ...q, remaining: data.freeRemaining, used: q.limit - data.freeRemaining, started: true });
       if (data.noEntry) return;
       // Usa a entrada calculada e salva pelo servidor (a mesma que vai para o histórico).
       const local = computeEntry(timeframe, now());
@@ -150,7 +150,7 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
               {!isVip && quota && (
                 <div className="mt-3 flex items-center justify-between gap-3 text-xs">
                   <span className="flex items-center gap-1.5 text-mist-dim">
-                    <Gift size={13} className="text-neon" /> {quota.remaining} de {quota.limit} sinais grátis hoje
+                    <Gift size={13} className="text-neon" /> {quota.started ? `${quota.remaining} de ${quota.limit} sinais grátis (só hoje)` : `${quota.limit} sinais grátis no seu primeiro dia`}
                   </span>
                   <button onClick={onUpgrade} disabled={upgrading} className="font-semibold text-neon hover:underline">Ilimitado no VIP</button>
                 </div>
@@ -159,11 +159,11 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
           ) : (
             <div className="grad-border mt-6 rounded-xl bg-void-deep/70 p-4 text-center">
               <div className="flex items-center justify-center gap-2 font-display text-sm font-semibold text-mist">
-                <Lock size={15} className="text-neon" /> {quota ? "Seus sinais grátis de hoje acabaram" : "Sinais exclusivos para VIP"}
+                <Lock size={15} className="text-neon" /> {quota ? "Seu teste grátis acabou" : "Sinais exclusivos para VIP"}
               </div>
               <p className="mt-1 text-xs text-mist-dim">
                 {quota
-                  ? `Amanhã você ganha mais ${quota.limit}. Com o VIP os sinais são ilimitados, com contagem de entrada e histórico de Win/Red.`
+                  ? `Você já usou os ${quota.limit} sinais grátis do seu primeiro dia. Com o VIP os sinais são ilimitados, com contagem de entrada e histórico de Win/Red.`
                   : "Assine para receber o sinal do próximo candle, a contagem de entrada e o histórico de Win/Red."}
               </p>
               <button onClick={onUpgrade} disabled={upgrading} className="btn-primary mt-4 w-full !py-3.5">

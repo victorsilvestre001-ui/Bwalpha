@@ -11,7 +11,7 @@ const PLANS = [
     cta: "Criar conta grátis",
     href: "/auth?mode=register",
     highlight: false,
-    items: ["3 sinais da IA grátis por dia", "Painel com gráfico em tempo real", "Cotações de EURUSD, EURJPY e Ouro", "3 mensagens por dia com a IA"]
+    items: ["3 sinais da IA grátis para testar", "Painel com gráfico em tempo real", "Cotações de EURUSD, EURJPY e Ouro", "3 mensagens por dia com a IA"]
   },
   {
     name: "VIP",

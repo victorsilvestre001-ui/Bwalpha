@@ -122,7 +122,7 @@ export default function Comecar() {
             <div className="font-mono text-xs uppercase tracking-widest text-mist-faint">Free</div>
             <div className="mt-2 font-display text-3xl font-bold">R$ 0</div>
             <ul className="mt-5 space-y-2 text-sm text-mist-dim">
-              {["3 sinais da IA grátis por dia", "Painel com gráfico em tempo real", "Cotações de EURUSD, EURJPY e Ouro", "3 mensagens por dia com a IA"].map((t) => <li key={t} className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-neon" />{t}</li>)}
+              {["3 sinais da IA grátis para testar", "Painel com gráfico em tempo real", "Cotações de EURUSD, EURJPY e Ouro", "3 mensagens por dia com a IA"].map((t) => <li key={t} className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-neon" />{t}</li>)}
             </ul>
           </div>
           <div className="panel grad-border p-7">
