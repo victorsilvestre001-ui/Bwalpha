@@ -12,14 +12,14 @@ export default function Privacidade() {
         <li><strong>Cadastro:</strong> nome, e-mail e senha (guardada de forma criptografada).</li>
         <li><strong>Perfil (opcional):</strong> CPF e foto.</li>
         <li><strong>Uso da plataforma:</strong> análises geradas e seus resultados, mensagens enviadas ao assistente de IA.</li>
-        <li><strong>Pagamento:</strong> o pagamento é processado pelo Stripe. Não recebemos nem guardamos dados do seu cartão; guardamos apenas o identificador do cliente e da assinatura.</li>
+        <li><strong>Pagamento:</strong> o pagamento é processado pela Kiwify. Não recebemos nem guardamos dados do seu cartão; guardamos apenas o e-mail da compra e o status do pedido.</li>
         <li><strong>Navegação:</strong> dados técnicos (navegador, IP) e, somente se você aceitar, cookies de marketing.</li>
       </ul>
 
       <h2>Para que usamos</h2>
       <ul>
         <li>Criar e manter sua conta e liberar os recursos do seu plano (execução de contrato).</li>
-        <li>Processar a assinatura VIP (execução de contrato).</li>
+        <li>Processar a compra do VIP (execução de contrato).</li>
         <li>Mostrar seu histórico de análises e responder ao assistente de IA (execução de contrato).</li>
         <li>Enviar e-mails sobre a sua conta (execução de contrato).</li>
         <li>Medir o resultado dos nossos anúncios, apenas com o seu consentimento.</li>
@@ -30,7 +30,7 @@ export default function Privacidade() {
       <p>Não vendemos seus dados. Compartilhamos apenas com fornecedores necessários para o serviço funcionar:</p>
       <ul>
         <li><strong>Vercel</strong> e <strong>Railway</strong>: hospedagem do site, do servidor e do banco de dados.</li>
-        <li><strong>Stripe</strong>: pagamentos.</li>
+        <li><strong>Kiwify</strong>: pagamentos.</li>
         <li><strong>Anthropic</strong>: processamento das mensagens enviadas ao assistente de IA.</li>
         <li><strong>Resend</strong>: envio de e-mails.</li>
         <li><strong>Meta</strong> e <strong>Google</strong>: medição de anúncios, somente se você aceitar os cookies de marketing.</li>

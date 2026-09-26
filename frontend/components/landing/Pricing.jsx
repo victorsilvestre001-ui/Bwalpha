@@ -16,12 +16,12 @@ const PLANS = [
   {
     name: "VIP",
     tag: "Mais completo",
-    price: "Assinatura",
-    note: "mensal · cancele quando quiser",
-    cta: "Assinar VIP",
+    price: "R$ 197",
+    note: "pagamento único · sem mensalidade",
+    cta: "Quero ser VIP",
     href: "/auth?mode=register&plan=vip",
     highlight: true,
-    items: ["Tudo do plano Free", "Sinais da IA ilimitados (EURUSD, EURJPY e Ouro, M1 e M5)", "Contagem do próximo candle + histórico de Win/Red", "Assistente de IA ilimitado", "Cancele quando quiser pelo painel"]
+    items: ["Tudo do plano Free", "Sinais da IA ilimitados (EURUSD, EURJPY e Ouro, M1 e M5)", "Contagem do próximo candle + histórico de Win/Red", "Assistente de IA ilimitado", "Pague uma vez e tenha acesso a tudo"]
   }
 ];
 

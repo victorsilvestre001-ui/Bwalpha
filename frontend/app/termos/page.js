@@ -23,9 +23,9 @@ export default function Termos() {
       <h2>4. Planos e pagamento</h2>
       <ul>
         <li>O plano Free é gratuito e tem recursos limitados.</li>
-        <li>O plano VIP é uma assinatura mensal cobrada pelo Stripe, renovada automaticamente até você cancelar.</li>
-        <li>Você pode cancelar a qualquer momento em Perfil → Gerenciar assinatura. O acesso VIP segue até o fim do período já pago.</li>
-        <li>Nas contratações feitas no Brasil, você pode desistir em até 7 dias após a primeira cobrança e receber o valor de volta (art. 49 do Código de Defesa do Consumidor), pedindo pelo contato abaixo.</li>
+        <li>O plano VIP é um pagamento único, processado pela Kiwify, que libera o acesso completo à plataforma. Não há cobrança recorrente.</li>
+        <li>O acesso é liberado automaticamente na conta com o mesmo e-mail usado na compra.</li>
+        <li>Nas contratações feitas no Brasil, você pode desistir em até 7 dias após a compra e receber o valor de volta (art. 49 do Código de Defesa do Consumidor), pedindo pelo contato abaixo. Com o reembolso, a conta volta para o plano Free.</li>
       </ul>
 
       <h2>5. Uso permitido</h2>

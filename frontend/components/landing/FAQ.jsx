@@ -8,7 +8,7 @@ const QA = [
   { q: "Preciso pagar para usar?", a: "Criar conta é grátis e libera 3 sinais da IA para testar no seu primeiro dia, o painel com gráfico e 3 mensagens por dia com o assistente. No VIP os sinais e o assistente são ilimitados." },
   { q: "Os sinais garantem lucro?", a: "Não. Nenhuma ferramenta garante resultado. Os sinais são apoio à decisão — sempre use gestão de risco e opere apenas o que pode perder." },
   { q: "Quando o mercado está aberto?", a: "O Forex abre domingo às 22h (UTC) e fecha sexta às 22h (UTC). Fora desse horário o painel avisa que o mercado está fechado." },
-  { q: "Como cancelo o VIP?", a: "Pelo link de gerenciamento que chega no e-mail da compra, ou falando com o suporte em tradeonia@gmail.com. Ao cancelar, o VIP continua até o fim do mês já pago." }
+  { q: "O VIP é mensalidade?", a: "Não. O VIP é pagamento único: você paga uma vez e tem acesso a tudo, sem cobrança todo mês. Se não gostar, pode pedir o reembolso em até 7 dias pelo tradeonia@gmail.com." }
 ];
 
 export default function FAQ() {

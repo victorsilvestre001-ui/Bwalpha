@@ -16,7 +16,7 @@ const TITLES = {
   analise: ["Análise de mercado", "Escolha o ativo e o timeframe e deixe a IA ler o gráfico."],
   assistente: ["Assistente IA", "Tire dúvidas e envie prints do seu gráfico."],
   historico: ["Histórico de análises", "Seus últimos sinais conferidos e a sua taxa de acerto."],
-  perfil: ["Perfil e plano", "Seus dados e sua assinatura."]
+  perfil: ["Perfil e plano", "Seus dados e o seu plano."]
 };
 
 function Dashboard() {
@@ -39,12 +39,12 @@ function Dashboard() {
   useEffect(() => {
     const vip = params.get("vip");
     if (vip === "success") {
-      setBanner({ ok: true, text: "Assinatura VIP ativada! Faça login novamente se o plano ainda não aparecer." });
+      setBanner({ ok: true, text: "VIP ativado! Faça login novamente se o plano ainda não aparecer." });
       // Conta a compra uma vez só e tira o parâmetro da URL para um recarregamento não contar de novo.
       track("Purchase", { currency: "BRL" });
       router.replace("/dashboard");
     }
-    if (vip === "cancelled") setBanner({ ok: false, text: "Checkout cancelado. Você pode assinar quando quiser." });
+    if (vip === "cancelled") setBanner({ ok: false, text: "Checkout cancelado. Você pode ativar o VIP quando quiser." });
     if (params.get("upgrade") === "1") setTab("perfil");
   }, [params]);
 

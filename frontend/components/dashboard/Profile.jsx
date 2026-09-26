@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Camera, Crown, Loader2, Check, Settings2 } from "lucide-react";
+import { Camera, Crown, Loader2, Check } from "lucide-react";
 import { api, updateSessionUser } from "@/lib/api";
 import { fileToAvatarDataUrl } from "@/lib/image";
 import { Avatar, isPaid } from "./Sidebar";
@@ -15,7 +15,6 @@ export default function Profile({ user, onUserChange, onUpgrade, upgrading }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
-  const [portalLoading, setPortalLoading] = useState(false);
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -48,12 +47,6 @@ export default function Profile({ user, onUserChange, onUpgrade, upgrading }) {
     e.target.value = "";
     if (!file) return;
     try { await save({ avatar: await fileToAvatarDataUrl(file) }); } catch (err) { setError(err.message); }
-  }
-
-  async function openPortal() {
-    setPortalLoading(true);
-    try { const { url } = await api.createPortalSession(); window.location.href = url; }
-    catch (err) { setError(err.message); setPortalLoading(false); }
   }
 
   const paid = isPaid(user);
@@ -100,16 +93,14 @@ export default function Profile({ user, onUserChange, onUpgrade, upgrading }) {
             <>
               <p className="mt-3 text-sm text-mist-dim">Você tem acesso completo à TradeOn AI.</p>
               {user?.plan === "vip" && (
-                <button onClick={openPortal} disabled={portalLoading} className="btn-ghost mt-6 w-full">
-                  {portalLoading ? <Loader2 size={16} className="animate-spin" /> : <><Settings2 size={16} /> Gerenciar assinatura</>}
-                </button>
+                <p className="mt-2 text-xs text-mist-faint">Pagamento único: seu VIP não tem mensalidade. Dúvidas ou reembolso: tradeonia@gmail.com</p>
               )}
             </>
           ) : (
             <>
               <p className="mt-3 text-sm text-mist-dim">Desbloqueie os sinais da IA (EURUSD, EURJPY e Ouro), o histórico de Win/Red e o assistente de IA ilimitado.</p>
               <button onClick={onUpgrade} disabled={upgrading} className="btn-primary mt-6 w-full !py-3.5">
-                {upgrading ? <Loader2 size={16} className="animate-spin" /> : <><Crown size={16} /> Assinar VIP</>}
+                {upgrading ? <Loader2 size={16} className="animate-spin" /> : <><Crown size={16} /> Quero ser VIP</>}
               </button>
             </>
           )}

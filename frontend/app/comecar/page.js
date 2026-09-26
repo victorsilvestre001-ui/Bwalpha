@@ -26,7 +26,7 @@ const FEATURES = [
 const FAQ = [
   ["A TradeOn AI é uma corretora?", "Não. A TradeOn AI é uma ferramenta de análise e educação. Ela não executa operações e não guarda dinheiro."],
   ["Garante lucro?", "Não. Nenhuma ferramenta garante resultado. As leituras são apoio à decisão, e operar envolve risco de perda."],
-  ["Preciso pagar para testar?", "Não. Você cria a conta grátis e conhece o painel. O plano VIP é mensal e pode ser cancelado quando quiser."]
+  ["Preciso pagar para testar?", "Não. Você cria a conta grátis, conhece o painel e testa 3 sinais da IA. O VIP é pagamento único, sem mensalidade."]
 ];
 
 export default function Comecar() {
@@ -127,9 +127,10 @@ export default function Comecar() {
           </div>
           <div className="panel grad-border p-7">
             <div className="font-mono text-xs uppercase tracking-widest text-neon">VIP</div>
-            <div className="mt-2 font-display text-3xl font-bold grad-text">Mensal</div>
+            <div className="mt-2 font-display text-3xl font-bold grad-text">R$ 197</div>
+            <div className="mt-1 text-xs text-mist-faint">pagamento único · sem mensalidade</div>
             <ul className="mt-5 space-y-2 text-sm text-mist-dim">
-              {["Leituras da IA em 1 e 5 minutos", "Histórico e taxa de acerto", "Simulador de banca", "Assistente de IA ilimitado", "Cancele quando quiser"].map((t) => <li key={t} className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-neon" />{t}</li>)}
+              {["Leituras da IA em 1 e 5 minutos", "Histórico e taxa de acerto", "Simulador de banca", "Assistente de IA ilimitado", "Pague uma vez, acesso a tudo"].map((t) => <li key={t} className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-neon" />{t}</li>)}
             </ul>
           </div>
         </div>
