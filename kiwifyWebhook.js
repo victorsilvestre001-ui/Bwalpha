@@ -56,6 +56,13 @@ router.post('/', express.raw({ type: '*/*' }), async (req, res) => {
         return res.status(400).json({ error: 'JSON inválido' });
     }
 
+    // Algumas entregas vêm com o pedido dentro de "order"; outras (ex.: carrinho abandonado) não são pedidos.
+    if (!body.webhook_event_type && body.order && typeof body.order === 'object') body = body.order;
+    if (!body.webhook_event_type && !body.order_status) {
+        console.log(`Kiwify: entrega sem pedido ignorada (campos: ${Object.keys(body).slice(0, 12).join(', ')})`);
+        return res.json({ received: true, ignored: 'não é um pedido' });
+    }
+
     const event = body.webhook_event_type;
     const status = body.order_status;
     const email = String(body.Customer?.email || '').trim().toLowerCase();
