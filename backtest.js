@@ -167,6 +167,74 @@ const STRATEGIES = {
     },
 };
 
+// ---- Price action: cada padrão sozinho, lido no fim do candle (como o M1 de produção) ----
+// O candle "em formação" (quase fechado) é o candle do padrão; o alvo é o candle seguinte.
+const body = (c) => Math.abs(c.close - c.open);
+const range = (c) => (c.high - c.low) || 1e-9;
+const upW = (c) => c.high - Math.max(c.open, c.close);
+const dnW = (c) => Math.min(c.open, c.close) - c.low;
+const bull = (c) => c.close > c.open;
+const bear = (c) => c.close < c.open;
+
+const PATTERNS = {
+    engolfo: (c1, c2, c3) => (bear(c2) && bull(c3) && c3.open <= c2.close && c3.close >= c2.open ? 'COMPRA'
+        : bull(c2) && bear(c3) && c3.open >= c2.close && c3.close <= c2.open ? 'VENDA' : null),
+    outside_bar: (c1, c2, c3) => (c3.high > c2.high && c3.low < c2.low ? color(c3) : null),
+    marubozu: (c1, c2, c3) => (body(c3) / range(c3) > 0.9 ? color(c3) : null),
+    pin_bar: (c1, c2, c3) => {
+        const b = body(c3), r = range(c3);
+        if (dnW(c3) >= b * 2 && dnW(c3) >= r * 0.5 && upW(c3) <= b * 0.6) return 'COMPRA';
+        if (upW(c3) >= b * 2 && upW(c3) >= r * 0.5 && dnW(c3) <= b * 0.6) return 'VENDA';
+        return null;
+    },
+    rejeicao_pavio: (c1, c2, c3) => {
+        const r = range(c3);
+        if (dnW(c3) >= r * 0.6) return 'COMPRA';
+        if (upW(c3) >= r * 0.6) return 'VENDA';
+        return null;
+    },
+    estrela: (c1, c2, c3) => {
+        const big = (c) => body(c) / range(c) > 0.6, small = (c) => body(c) / range(c) < 0.35;
+        if (big(c1) && bear(c1) && small(c2) && big(c3) && bull(c3) && c3.close > (c1.open + c1.close) / 2) return 'COMPRA';
+        if (big(c1) && bull(c1) && small(c2) && big(c3) && bear(c3) && c3.close < (c1.open + c1.close) / 2) return 'VENDA';
+        return null;
+    },
+    tres_soldados: (c1, c2, c3) => {
+        const strong = (c) => body(c) / range(c) > 0.5;
+        if ([c1, c2, c3].every((c) => bull(c) && strong(c)) && c2.close > c1.close && c3.close > c2.close) return 'COMPRA';
+        if ([c1, c2, c3].every((c) => bear(c) && strong(c)) && c2.close < c1.close && c3.close < c2.close) return 'VENDA';
+        return null;
+    },
+};
+
+// Contextos: onde o padrão aparece.
+const CONTEXTS = {
+    livre: () => true,
+    // Varreu a mínima/máxima dos últimos 30 candles (toque em suporte/resistência) na direção oposta ao sinal.
+    sr30: (d, c3, closed) => {
+        const prev = closed.slice(-30);
+        return d === 'COMPRA' ? c3.low <= Math.min(...prev.map((c) => c.low)) : c3.high >= Math.max(...prev.map((c) => c.high));
+    },
+    // A favor da tendência (EMA9 x EMA21 dos candles fechados).
+    tendencia: (d, c3, closed, sig) => sig.ema9 != null && (d === 'COMPRA' ? sig.ema9 > sig.ema21 : sig.ema9 < sig.ema21),
+    // Contra a tendência (reversão).
+    contra_tendencia: (d, c3, closed, sig) => sig.ema9 != null && (d === 'COMPRA' ? sig.ema9 < sig.ema21 : sig.ema9 > sig.ema21),
+    // RSI esticado a favor da reversão.
+    rsi: (d, c3, closed, sig) => sig.rsi != null && (d === 'COMPRA' ? sig.rsi < 35 : sig.rsi > 65),
+};
+
+for (const [pname, pfn] of Object.entries(PATTERNS)) {
+    for (const [cname, cfn] of Object.entries(CONTEXTS)) {
+        const detect = ({ sig, closed, formingNow }) => {
+            const n = closed.length;
+            const d = pfn(closed[n - 2], closed[n - 1], formingNow);
+            return d && cfn(d, formingNow, closed, sig) ? d : null;
+        };
+        STRATEGIES[`pa_${pname}_${cname}`] = detect;
+        STRATEGIES[`pa_${pname}_${cname}_inv`] = (ctx) => opp(detect(ctx));
+    }
+}
+
 function session(ms) {
     const h = new Date(ms).getUTCHours();
     if (h >= 12 && h < 16) return 'londres_ny';
@@ -242,7 +310,7 @@ async function dbStats() {
 async function run() {
     console.log('BACKTEST_START');
     await dbStats();
-    const plan = [['M1', 3], ['M5', 2]];
+    const plan = [['M1', parseInt(process.env.BACKTEST_M1_PAGES, 10) || 3], ['M5', parseInt(process.env.BACKTEST_M5_PAGES, 10) || 2]];
     for (const pair of Object.keys(SIGNAL_PAIRS)) {
         for (const [tf, pages] of plan) {
             try {
@@ -252,7 +320,7 @@ async function run() {
                 const { evaluated, out } = runOn(candles, tf);
                 console.log(`BACKTEST_RESULT ${pair} ${tf} candles=${candles.length} de=${first} ate=${last} avaliados=${evaluated}`);
                 for (const [name, r] of Object.entries(out)) {
-                    if (!/^(producao|atual$)/.test(name)) continue;
+                    if (!new RegExp(process.env.BACKTEST_FILTER || '^(producao|atual$)').test(name)) continue;
                     console.log(`BACKTEST_ROW ${pair} ${tf} ${name} ${JSON.stringify(r)}`);
                 }
             } catch (err) {
