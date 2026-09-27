@@ -799,7 +799,8 @@ const signalLimiter = rateLimit({
 
 // Plano free: 3 sinais grátis só no primeiro dia de uso (o dia, em Brasília, do primeiro sinal).
 // Conta só os sinais com entrada, que são os salvos no histórico.
-const FREE_TRIAL_SIGNALS = 3;
+// Quantidade ajustável pela variável FREE_TRIAL_SIGNALS no Railway (padrão: 3).
+const FREE_TRIAL_SIGNALS = Math.max(0, parseInt(process.env.FREE_TRIAL_SIGNALS, 10) || 3);
 
 async function freeTrialStatus(userId) {
     const { rows } = await pool.query(
