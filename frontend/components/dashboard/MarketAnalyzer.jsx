@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
-import { Sparkles, AlertTriangle, Lock, Crown, Loader2, Clock, Info, Gift } from "lucide-react";
+import { Sparkles, AlertTriangle, Lock, Crown, Loader2, Info, Gift } from "lucide-react";
 import { api } from "@/lib/api";
 import { ASSETS, ASSET_LIST } from "@/lib/assets";
 import TradingViewWidget from "./TradingViewWidget";
@@ -121,14 +121,6 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
             )}
           </div>
 
-          {offset != null && Math.abs(offset) >= 2000 && (
-            <div className="mt-4 flex items-start gap-2 rounded-lg border border-volt/30 bg-volt/10 px-3 py-2 text-xs text-volt-soft">
-              <Clock size={14} className="mt-0.5 shrink-0" />
-              <span>
-                O relógio do seu aparelho está {Math.round(Math.abs(offset) / 1000)} s {offset > 0 ? "atrasado" : "adiantado"}. Os horários de entrada já estão corrigidos pelo horário do servidor.
-              </span>
-            </div>
-          )}
 
           <div className="mt-6 space-y-4">
             <Dropdown label="Ativo" options={ASSET_OPTIONS} value={pair} onChange={(v) => { cancelWatch(); setPair(v); setResult(null); }} />
