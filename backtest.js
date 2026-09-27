@@ -319,9 +319,17 @@ async function run() {
                 const last = candles.length && new Date(candles[candles.length - 1].time).toISOString();
                 const { evaluated, out } = runOn(candles, tf);
                 console.log(`BACKTEST_RESULT ${pair} ${tf} candles=${candles.length} de=${first} ate=${last} avaliados=${evaluated}`);
-                for (const [name, r] of Object.entries(out)) {
-                    if (!new RegExp(process.env.BACKTEST_FILTER || '^(producao|atual$)').test(name)) continue;
-                    console.log(`BACKTEST_ROW ${pair} ${tf} ${name} ${JSON.stringify(r)}`);
+                const filter = new RegExp(process.env.BACKTEST_FILTER || '^(producao|atual$)');
+                // Resumo compacto: [estratégia, amostras, acerto %, acerto 1ª metade, acerto 2ª metade, cobertura %]
+                const rows = Object.entries(out)
+                    .filter(([name, r]) => filter.test(name) && r.n >= (parseInt(process.env.BACKTEST_MIN_N, 10) || 100))
+                    .sort((a, b) => b[1].wr - a[1].wr)
+                    .map(([name, r]) => [name, r.n, r.wr, r.metade1, r.metade2, r.cobertura]);
+                const top = parseInt(process.env.BACKTEST_TOP, 10) || 30;
+                console.log(`BACKTEST_TOP ${pair} ${tf} ${JSON.stringify(rows.slice(0, top))}`);
+                for (const name of ['producao_m1', 'producao_m1_sempre', 'fraco_contra']) {
+                    const r = out[name];
+                    if (r) console.log(`BACKTEST_BASE ${pair} ${tf} ${name} ${JSON.stringify([r.n, r.wr, r.metade1, r.metade2, r.cobertura])}`);
                 }
             } catch (err) {
                 console.error(`BACKTEST_ERR ${pair} ${tf}:`, err.message);
