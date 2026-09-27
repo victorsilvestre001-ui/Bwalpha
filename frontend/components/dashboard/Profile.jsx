@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Camera, Crown, Loader2, Check } from "lucide-react";
+import { Camera, Crown, Loader2, Check, MessageCircle } from "lucide-react";
 import { api, updateSessionUser } from "@/lib/api";
 import { fileToAvatarDataUrl } from "@/lib/image";
 import { Avatar, isPaid } from "./Sidebar";
@@ -104,6 +104,9 @@ export default function Profile({ user, onUserChange, onUpgrade, upgrading }) {
               </button>
             </>
           )}
+          <button onClick={() => window.dispatchEvent(new Event("open-support"))} className="btn-ghost mt-4 w-full">
+            <MessageCircle size={16} /> Falar com o suporte
+          </button>
         </div>
       </div>
     </div>

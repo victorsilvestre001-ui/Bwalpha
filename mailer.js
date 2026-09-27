@@ -7,7 +7,7 @@ function escapeHtml(value) {
     return String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-async function sendEmail({ to, subject, html }) {
+async function sendEmail({ to, subject, html, replyTo }) {
     if (!process.env.RESEND_API_KEY) return { ok: false, error: 'RESEND_API_KEY não configurada' };
     try {
         const res = await fetch('https://api.resend.com/emails', {
@@ -16,7 +16,7 @@ async function sendEmail({ to, subject, html }) {
                 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ from: EMAIL_FROM, to: [to], subject, html }),
+            body: JSON.stringify({ from: EMAIL_FROM, to: [to], subject, html, ...(replyTo ? { reply_to: replyTo } : {}) }),
         });
         if (!res.ok) return { ok: false, error: `${res.status} ${await res.text()}` };
         return { ok: true };

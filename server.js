@@ -17,6 +17,7 @@ const { router: telegramRoutes, setupWebhook } = require('./telegramRoutes');
 const marketAnalysisRoutes = require('./marketAnalysisRoutes');
 const { router: analysesRoutes, resolvePendingAnalyses } = require('./analysesRoutes');
 const adminRoutes = require('./adminRoutes');
+const supportRoutes = require('./supportRoutes');
 const { OWNER_EMAIL } = require('./authMiddleware');
 
 const app = express();
@@ -77,6 +78,7 @@ app.use('/api/checkout', checkoutRoutes);
 app.use('/api/market', marketRoutes);
 app.use('/api/analyses', analysesRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/support', supportRoutes);
 app.use('/api/telegram', telegramRoutes);
 app.use('/api/webhook/market', marketAnalysisRoutes);
 

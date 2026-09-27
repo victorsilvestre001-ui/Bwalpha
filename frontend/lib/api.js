@@ -63,6 +63,7 @@ export const api = {
   trialCampaign: () => request("/api/admin/trial-campaign"),
   sendTrialCampaign: () => request("/api/admin/trial-campaign", { method: "POST" }),
   signalQuota: () => request("/api/market/signal-quota"),
+  support: (payload) => request("/api/support", { method: "POST", body: payload, auth: false }),
   signal: (pair, timeframe) => request("/api/market/signal", { method: "POST", body: { pair, timeframe } }),
   analyses: (status = "all", limit = 100) => request(`/api/analyses?status=${encodeURIComponent(status)}&limit=${limit}`),
   chat: (message, image_base64) => request("/api/chat", { method: "POST", body: { message, image_base64 } }),
