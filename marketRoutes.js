@@ -672,7 +672,30 @@ function computeCandleFollowSignal(closed, forming) {
 // Versão "sempre COMPRA ou VENDA": candle forte -> segue; candle fraco -> contra
 // (no backtest, seguir o candle fraco acertou só 20-39%, e ir contra acertou 61-80%);
 // doji -> usa a leitura técnica, com confiança baixa.
+// Pin bar no candle atual (pavio longo >= 2x o corpo e >= 50% do candle, pavio oposto curto).
+// Devolve o lado do pavio: pavio longo embaixo = 'COMPRA', em cima = 'VENDA'.
+function detectPinBar(c) {
+    const range = c.high - c.low;
+    if (!(range > 0)) return null;
+    const body = Math.abs(c.close - c.open);
+    const up = c.high - Math.max(c.open, c.close);
+    const dn = Math.min(c.open, c.close) - c.low;
+    if (dn >= body * 2 && dn >= range * 0.5 && up <= body * 0.6) return 'COMPRA';
+    if (up >= body * 2 && up >= range * 0.5 && dn <= body * 0.6) return 'VENDA';
+    return null;
+}
+
+// Pin bar invertido: no backtest do M1 o candle seguinte foi quase sempre para o lado oposto
+// ao pin bar. Experimental (o backtest lê o candle já fechado; aqui ele é lido ~13s antes),
+// por isso sai com confiança Média e fica marcado para medir o acerto real no painel do dono.
+// Desliga com M1_PINBAR_INVERTIDO=0.
+const PINBAR_INVERTIDO = process.env.M1_PINBAR_INVERTIDO !== '0';
+
 function computeM1Signal(closed, forming, technical) {
+    if (PINBAR_INVERTIDO) {
+        const pin = detectPinBar(forming);
+        if (pin) return { direction: pin === 'COMPRA' ? 'VENDA' : 'COMPRA', confidence: 'Média', leitura: 'pinbar_invertido' };
+    }
     const follow = computeCandleFollowSignal(closed, forming);
     if (follow.direction) return { ...follow, leitura: 'forte' };
     const body = forming.close - forming.open;
@@ -892,10 +915,10 @@ router.post('/signal', authMiddleware, requireSignalAccess, signalLimiter, async
         let analysisId = null;
         try {
             const saved = await pool.query(
-                `INSERT INTO analyses (user_id, pair, timeframe, direction, confidence, requested_at, entry_time, expiry_time)
-                 VALUES ($1, $2, $3, $4, $5, to_timestamp($6 / 1000.0), to_timestamp($7 / 1000.0), to_timestamp($8 / 1000.0))
+                `INSERT INTO analyses (user_id, pair, timeframe, direction, confidence, requested_at, entry_time, expiry_time, leitura)
+                 VALUES ($1, $2, $3, $4, $5, to_timestamp($6 / 1000.0), to_timestamp($7 / 1000.0), to_timestamp($8 / 1000.0), $9)
                  RETURNING id`,
-                [req.user.id, pair, timeframe, result.direction, result.confidence, requestedAt, entry, expiry]
+                [req.user.id, pair, timeframe, result.direction, result.confidence, requestedAt, entry, expiry, result.leitura || null]
             );
             analysisId = saved.rows[0].id;
         } catch (err) {
@@ -946,5 +969,5 @@ router.get('/history', authMiddleware, async (req, res) => {
 module.exports = {
     router, getQuotes, getIndicators, getEconomicSnapshot, getNews, getHistory, fetchIntradayCandles, TIMEFRAME_MINUTES,
     computeTechnicalSignal, computeCandleFollowSignal, computeM1Signal, getM1Signal, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, isMarketOpen,
-    emaSeries, rsiLast, macdHistogramLast, detectCandlePatterns, getChinesaStrategySignal, getBwalphaIndicator,
+    emaSeries, rsiLast, macdHistogramLast, detectCandlePatterns, detectPinBar, getChinesaStrategySignal, getBwalphaIndicator,
 };

@@ -195,6 +195,8 @@ CREATE TABLE IF NOT EXISTS analyses (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Tipo de leitura que gerou o sinal (forte, fraco, doji, pinbar_invertido...), para medir o acerto de cada regra.
+ALTER TABLE analyses ADD COLUMN IF NOT EXISTS leitura VARCHAR(24);
 CREATE INDEX IF NOT EXISTS idx_analyses_user ON analyses(user_id, requested_at DESC);
 -- Visitas do site (sem cookies: visitor_hash é um código anônimo que muda todo dia).
 CREATE TABLE IF NOT EXISTS page_visits (
