@@ -73,7 +73,7 @@ function maskEmail(email) {
 
 router.get('/stats', authMiddleware, requireOwnerDb, async (req, res) => {
     try {
-        const [accounts, visits, daily, pages, sources, recent, signals, accuracy] = await Promise.all([
+        const [accounts, visits, daily, pages, sources, recent, signals] = await Promise.all([
             pool.query(`
                 SELECT COUNT(*)::int AS total,
                        COUNT(*) FILTER (WHERE ${USER_LOCAL}::date = ${TODAY_LOCAL})::int AS today,
@@ -113,13 +113,6 @@ router.get('/stats', authMiddleware, requireOwnerDb, async (req, res) => {
             pool.query(`
                 SELECT COUNT(*) FILTER (WHERE (requested_at AT TIME ZONE '${TZ}')::date = ${TODAY_LOCAL})::int AS today
                 FROM analyses`),
-            // Acerto real por ativo, tempo e tipo de leitura (sinais já conferidos).
-            pool.query(`
-                SELECT pair, timeframe, COALESCE(leitura, 'sem registro') AS leitura,
-                       COUNT(*) FILTER (WHERE result = 'win')::int AS wins,
-                       COUNT(*) FILTER (WHERE result = 'loss')::int AS losses
-                FROM analyses WHERE result IN ('win', 'loss')
-                GROUP BY 1, 2, 3 ORDER BY 1, 2, 3`),
         ]);
 
         const days = daily.rows;
@@ -129,7 +122,6 @@ router.get('/stats', authMiddleware, requireOwnerDb, async (req, res) => {
             accounts: accounts.rows[0],
             visits: { ...visits.rows[0], avgPeople7: Math.round(people7 / 7) },
             signalsToday: signals.rows[0].today,
-            accuracy: accuracy.rows,
             daily: days,
             topPages: pages.rows,
             topSources: sources.rows,

@@ -141,61 +141,6 @@ function CampaignCard({ title, load: loadInfo, send: sendAll, describe, confirmT
   );
 }
 
-// Acerto real dos sinais conferidos, por ativo, tempo e tipo de leitura.
-const LEITURA = {
-  forte: "Candle forte (segue)",
-  fraco: "Candle fraco (contra)",
-  doji: "Doji (técnico)",
-  pinbar_invertido: "Pin bar invertido",
-  sem_candle_atual: "Sem candle atual",
-  "sem registro": "Antes do registro",
-};
-
-function AccuracyTable({ rows }) {
-  const total = rows.reduce((a, r) => ({ w: a.w + r.wins, l: a.l + r.losses }), { w: 0, l: 0 });
-  const pct = (w, l) => (w + l ? `${Math.round((w / (w + l)) * 100)}%` : "—");
-  return (
-    <section className="panel p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h3 className="font-display text-sm font-semibold text-mist">Acerto real dos sinais</h3>
-        <span className="font-mono text-xs text-mist-faint">{fmt(total.w)} WIN · {fmt(total.l)} RED · {pct(total.w, total.l)}</span>
-      </div>
-      {rows.length === 0 ? (
-        <p className="mt-4 text-sm text-mist-faint">Ainda sem sinais conferidos.</p>
-      ) : (
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-void-line font-mono text-[10px] uppercase tracking-widest text-mist-faint">
-                <th className="py-2 pr-4 font-medium">Ativo</th>
-                <th className="py-2 pr-4 font-medium">Leitura</th>
-                <th className="py-2 pr-4 font-medium text-right">WIN</th>
-                <th className="py-2 pr-4 font-medium text-right">RED</th>
-                <th className="py-2 font-medium text-right">Acerto</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, i) => {
-                const n = r.wins + r.losses, wr = n ? r.wins / n : 0;
-                return (
-                  <tr key={i} className="border-b border-void-line/60 last:border-0">
-                    <td className="py-2.5 pr-4 font-mono text-mist">{r.pair} <span className="text-mist-faint">{r.timeframe}</span></td>
-                    <td className="py-2.5 pr-4 text-mist-dim">{LEITURA[r.leitura] || r.leitura}</td>
-                    <td className="py-2.5 pr-4 text-right font-mono text-mist-dim">{r.wins}</td>
-                    <td className="py-2.5 pr-4 text-right font-mono text-mist-dim">{r.losses}</td>
-                    <td className={`py-2.5 text-right font-mono font-semibold ${n < 20 ? "text-mist-faint" : wr >= 0.7 ? "text-neon" : wr >= 0.55 ? "text-mist" : "text-ember-soft"}`}>{pct(r.wins, r.losses)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <p className="mt-3 text-xs text-mist-faint">Menos de 20 sinais ainda é pouco para confiar no percentual (aparece em cinza).</p>
-        </div>
-      )}
-    </section>
-  );
-}
-
 function RankList({ title, rows, labelKey, emptyText }) {
   const max = Math.max(1, ...rows.map((r) => r.visits));
   return (
@@ -315,8 +260,6 @@ export default function AdminPage() {
                 <p className="mt-2 text-xs text-mist-faint">Análises pedidas por todos os usuários hoje.</p>
               </div>
             </section>
-
-            <AccuracyTable rows={data.accuracy || []} />
 
             <section className="grid gap-4 lg:grid-cols-2">
               <CampaignCard
