@@ -21,10 +21,16 @@ async function resolvePendingAnalyses() {
     if (resolving) return resolving;
     resolving = (async () => {
         try {
+            // Pendentes + reconferência: resultados gravados logo após a expiração (antes do
+            // candle estar fechado na fonte de dados) são conferidos de novo com o candle final.
             const { rows } = await pool.query(
-                `SELECT id, pair, timeframe, direction, entry_time, expiry_time
+                `SELECT id, pair, timeframe, direction, entry_time, expiry_time, result
                  FROM analyses
-                 WHERE result IS NULL AND expiry_time < NOW() - INTERVAL '5 seconds'
+                 WHERE (result IS NULL AND expiry_time < NOW() - INTERVAL '5 seconds')
+                    OR (result IN ('win', 'loss', 'draw')
+                        AND resolved_at < expiry_time + INTERVAL '60 seconds'
+                        AND expiry_time > NOW() - INTERVAL '48 hours'
+                        AND expiry_time < NOW() - INTERVAL '2 minutes')
                  ORDER BY entry_time ASC
                  LIMIT 300`
             );
@@ -54,12 +60,20 @@ async function resolvePendingAnalyses() {
                 for (const a of items) {
                     const entryMs = new Date(a.entry_time).getTime();
                     const c = byTime.get(entryMs);
-                    if (c) {
+                    // O candle de entrada só está fechado de verdade quando o seguinte já existe na
+                    // fonte (ou 3 min depois da expiração). Antes disso o "fechamento" pode ser um
+                    // preço de alguns segundos antes do fim e trocar WIN por RED.
+                    const closed = byTime.has(entryMs + tfMs) || Date.now() - new Date(a.expiry_time).getTime() > 3 * 60 * 1000;
+                    if (c && closed) {
+                        const result = judge(a.direction, c.open, c.close);
+                        if (a.result && a.result !== result) {
+                            console.log(`Análise ${a.id} reconferida: ${a.result} -> ${result} (${pair} ${timeframe})`);
+                        }
                         await pool.query(
                             `UPDATE analyses SET open_price = $1, close_price = $2, result = $3, resolved_at = NOW() WHERE id = $4`,
-                            [c.open, c.close, judge(a.direction, c.open, c.close), a.id]
+                            [c.open, c.close, result, a.id]
                         );
-                    } else if (entryMs < firstTime || Date.now() - entryMs > 24 * 60 * 60 * 1000) {
+                    } else if (!a.result && (entryMs < firstTime || Date.now() - entryMs > 24 * 60 * 60 * 1000)) {
                         // Candle fora do alcance ou inexistente (mercado fechado): não dá para conferir.
                         await pool.query(`UPDATE analyses SET result = 'unknown', resolved_at = NOW() WHERE id = $1`, [a.id]);
                     }
