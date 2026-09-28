@@ -26,6 +26,7 @@ async function login() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier: process.env.EXNOVA_EMAIL, password: process.env.EXNOVA_PASSWORD }),
+        signal: AbortSignal.timeout(20_000),
     });
     const data = await res.json().catch(() => ({}));
     if (!data.ssid) throw new Error(`login recusado (status ${res.status}${data.code ? `, ${data.code}` : ''})`);
@@ -70,9 +71,12 @@ async function connect() {
         console.error('Exnova OTC: falha no login:', err.message);
         return setTimeout(connect, Math.min((retryMs *= 2), 30 * 60_000));
     }
+    console.log('Exnova OTC: login ok, conectando ao servidor de cotações');
     const ws = new WebSocket(WS_URL);
     const byId = {};
+    const seen = new Set();
     ws.on('open', () => {
+        console.log('Exnova OTC: conexão aberta');
         state.connected = true;
         retryMs = 30_000;
         send(ws, 'ssid', ssid);
@@ -81,6 +85,11 @@ async function connect() {
     ws.on('message', async (raw) => {
         let m;
         try { m = JSON.parse(raw.toString()); } catch { return; }
+        // Diagnóstico: registra cada tipo de mensagem recebida uma vez.
+        if (m.name && !seen.has(m.name) && seen.size < 30) {
+            seen.add(m.name);
+            console.log(`Exnova OTC: mensagem "${m.name}"${m.status ? ` status=${m.status}` : ''}`);
+        }
         if (m.name === 'initialization-data') {
             const ids = findActives(m.msg, wanted);
             state.actives = ids;
@@ -111,6 +120,7 @@ async function connect() {
 
 async function start() {
     if (process.env.EXNOVA_COLLECT !== '1') return;
+    console.log('Exnova OTC: coletor ligado, fazendo login');
     if (!process.env.EXNOVA_EMAIL || !process.env.EXNOVA_PASSWORD) {
         console.error('Exnova OTC: faltam EXNOVA_EMAIL/EXNOVA_PASSWORD.');
         return;
