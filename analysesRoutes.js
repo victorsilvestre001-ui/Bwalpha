@@ -98,6 +98,13 @@ const FILTERS = {
     all: '',
 };
 
+// Recomeço do histórico: com HISTORY_RESET_AT (data ISO), o histórico e a taxa de acerto
+// mostram só os sinais a partir dela. Os antigos seguem no banco (o teste grátis não zera).
+function historyStart() {
+    const t = Date.parse(process.env.HISTORY_RESET_AT || '');
+    return Number.isFinite(t) ? new Date(t) : new Date(0);
+}
+
 router.get('/', authMiddleware, async (req, res) => {
     const filter = FILTERS[req.query.status] !== undefined ? req.query.status : 'all';
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 300);
@@ -110,10 +117,10 @@ router.get('/', authMiddleware, async (req, res) => {
                 `SELECT id, pair, timeframe, direction, confidence, requested_at, entry_time, expiry_time,
                         open_price, close_price, result
                  FROM analyses
-                 WHERE user_id = $1 ${FILTERS[filter]}
+                 WHERE user_id = $1 AND requested_at >= $3 ${FILTERS[filter]}
                  ORDER BY requested_at DESC
                  LIMIT $2`,
-                [req.user.id, limit]
+                [req.user.id, limit, historyStart()]
             ),
             pool.query(
                 `SELECT COUNT(*)::int AS total,
@@ -121,8 +128,8 @@ router.get('/', authMiddleware, async (req, res) => {
                         COUNT(*) FILTER (WHERE result = 'loss')::int AS losses,
                         COUNT(*) FILTER (WHERE result = 'draw')::int AS draws,
                         COUNT(*) FILTER (WHERE result IS NULL)::int AS pending
-                 FROM analyses WHERE user_id = $1`,
-                [req.user.id]
+                 FROM analyses WHERE user_id = $1 AND requested_at >= $2`,
+                [req.user.id, historyStart()]
             ),
         ]);
 
