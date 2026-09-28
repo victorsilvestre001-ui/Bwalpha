@@ -3,7 +3,7 @@
 // e escreve o resultado nos logs, porque a Twelve Data só é acessível de lá.
 const pool = require('./db');
 const {
-    computeTechnicalSignal, computeCandleFollowSignal, computeM1Signal, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, TIMEFRAME_MINUTES, isMarketOpen,
+    computeTechnicalSignal, computeCandleFollowSignal, computeM1Signal, applyRitmo, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, TIMEFRAME_MINUTES, isMarketOpen,
 } = require('./marketRoutes');
 
 const WINDOW = 99; // o /signal usa 100 candles: 99 fechados + 1 em formação
@@ -109,6 +109,17 @@ const STRATEGIES = {
     // Regra que está em produção no M1 (mesma função da rota /signal).
     producao_m1: ({ closed, formingNow }) => computeCandleFollowSignal(closed, formingNow).direction,
     producao_m1_sempre: ({ sig, closed, formingNow }) => computeM1Signal(closed, formingNow, sig).direction,
+    // Ritmo do dia: mesma regra, ajustada pelo acerto dela nos candles recentes.
+    ritmo_m1: ({ sig, closed, formingNow }) => applyRitmo(closed, 'M1', computeM1Signal(closed, formingNow, sig)).direction,
+    ritmo_m1_sem_baixa: ({ sig, closed, formingNow }) => {
+        const r = applyRitmo(closed, 'M1', computeM1Signal(closed, formingNow, sig));
+        return r.confidence === 'Baixa' ? null : r.direction;
+    },
+    ritmo_m5: ({ sig, closed }) => applyRitmo(closed, 'M5', sig).direction,
+    ritmo_m5_sem_baixa: ({ sig, closed }) => {
+        const r = applyRitmo(closed, 'M5', sig);
+        return r.confidence === 'Baixa' ? null : r.direction;
+    },
     producao_m1_alta: ({ closed, formingNow }) => {
         const r = computeCandleFollowSignal(closed, formingNow);
         return r.confidence === 'Alta' ? r.direction : null;
@@ -250,6 +261,7 @@ function stats(list) {
 }
 
 function runOn(candles, timeframe) {
+    const runFilter = new RegExp(process.env.BACKTEST_FILTER || '^(producao|atual$)');
     const tf = TIMEFRAME_MINUTES[timeframe] * 60 * 1000;
     const res = Object.fromEntries(Object.keys(STRATEGIES).map((k) => [k, { all: [], h1: [], h2: [], sess: {} }]));
     let evaluated = 0;
@@ -270,6 +282,8 @@ function runOn(candles, timeframe) {
         evaluated++;
         const outcome = target.close === target.open ? 'draw' : null;
         for (const [name, fn] of Object.entries(STRATEGIES)) {
+            // Só roda o que vai para o relatório (as de "ritmo" são pesadas) e no timeframe certo.
+            if (!runFilter.test(name) || (/_m1/.test(name) && timeframe !== 'M1') || (/_m5/.test(name) && timeframe !== 'M5')) continue;
             const d = fn(ctx);
             if (!d || outcome) continue;
             const r = (d === 'COMPRA') === (target.close > target.open) ? 'win' : 'loss';

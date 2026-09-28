@@ -705,6 +705,59 @@ function computeM1Signal(closed, forming, technical) {
     return { direction: technical.direction, confidence: 'Baixa', leitura: 'doji' };
 }
 
+// ---- Ritmo do dia ----
+// Antes de entregar o sinal, confere como a mesma regra teria se saído nos candles mais
+// recentes do próprio ativo (o "ritmo" do mercado agora). Se o mercado está andando contra
+// a leitura, o sinal é invertido; se está indeciso, a confiança cai; se está a favor, sobe.
+// Liga com RITMO_DIA=1.
+const RITMO_DIA = () => process.env.RITMO_DIA === '1';
+const RITMO_JANELA = { M1: 60, M5: 36 };
+const RITMO_MIN_AMOSTRAS = 10;
+const RITMO_INVERTE = 0.40;   // acerto recente <= 40%: o mercado está fazendo o contrário
+const RITMO_FRACO = 0.52;     // abaixo disso: sinal sai com confiança Baixa
+const RITMO_FORTE = 0.68;     // acima disso: confiança sobe para Alta
+
+const oppDir = (d) => (d === 'COMPRA' ? 'VENDA' : d === 'VENDA' ? 'COMPRA' : null);
+
+// Acerto recente da regra: M1 = mesma leitura (forte/fraco/pinbar); M5 = sinal técnico.
+function ritmoStats(closed, timeframe, leitura) {
+    const janela = RITMO_JANELA[timeframe] || 40;
+    const start = Math.max(timeframe === 'M1' ? 21 : 50, closed.length - 1 - janela);
+    let w = 0, l = 0, wAll = 0, lAll = 0;
+    for (let i = start; i < closed.length - 1; i++) {
+        const target = closed[i + 1];
+        if (target.close === target.open) continue;
+        let dir, lei = null;
+        if (timeframe === 'M1') {
+            const r = computeM1Signal(closed.slice(0, i), closed[i], { direction: null });
+            dir = r.direction; lei = r.leitura;
+        } else {
+            dir = computeTechnicalSignal(closed.slice(0, i), null).direction;
+        }
+        if (!dir) continue;
+        const win = (dir === 'COMPRA') === (target.close > target.open);
+        if (win) wAll++; else lAll++;
+        if (timeframe !== 'M1' || lei === leitura) { if (win) w++; else l++; }
+    }
+    // Poucas amostras da mesma leitura: usa o acerto geral da regra.
+    if (w + l >= RITMO_MIN_AMOSTRAS) return { n: w + l, wr: w / (w + l) };
+    if (wAll + lAll >= RITMO_MIN_AMOSTRAS * 2) return { n: wAll + lAll, wr: wAll / (wAll + lAll) };
+    return null;
+}
+
+function applyRitmo(closed, timeframe, sig) {
+    if (!sig?.direction) return sig;
+    const st = ritmoStats(closed, timeframe, sig.leitura);
+    if (!st) return sig;
+    const ritmo = { amostras: st.n, acertoRecente: Math.round(st.wr * 100) };
+    if (st.wr <= RITMO_INVERTE) {
+        return { ...sig, direction: oppDir(sig.direction), confidence: 'Média', leitura: `${sig.leitura || 'tecnico'}_ritmo_inv`, ritmo: { ...ritmo, acao: 'invertido' } };
+    }
+    if (st.wr < RITMO_FRACO) return { ...sig, confidence: 'Baixa', ritmo: { ...ritmo, acao: 'confianca_baixa' } };
+    if (st.wr >= RITMO_FORTE && sig.confidence !== 'Alta') return { ...sig, confidence: 'Alta', ritmo: { ...ritmo, acao: 'confianca_alta' } };
+    return { ...sig, ritmo: { ...ritmo, acao: 'mantido' } };
+}
+
 const m1Cache = {};
 
 async function getM1Signal(pairLabel, nowMs = Date.now()) {
@@ -725,7 +778,8 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
     }
     // Indicadores seguem calculados (inclusive o BwAlpha), mas a decisão do M1 é a leitura do candle atual.
     const technical = computeTechnicalSignal(closed, forming);
-    const m1 = computeM1Signal(closed, forming, technical);
+    let m1 = computeM1Signal(closed, forming, technical);
+    if (RITMO_DIA()) m1 = applyRitmo(closed, 'M1', m1);
     const result = {
         ...technical,
         pair: pairLabel,
@@ -734,6 +788,7 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
         direction: m1.direction,
         confidence: m1.confidence,
         leitura: m1.leitura,
+        ritmo: m1.ritmo || null,
         candleAtual: { bodyRatio: m1.bodyRatio ?? null, bodyVsAvg: m1.bodyVsAvg ?? null },
     };
     m1Cache[pairLabel] = { bucketStart, at: nowMs, result };
@@ -757,7 +812,8 @@ async function getTechnicalSignal(pairLabel, timeframeLabel) {
     const allCandles = await fetchIntradayCandles(pairLabel, timeframeLabel);
     if (!allCandles || allCandles.length < 40) return null;
     const { closed: candles, forming } = splitFormingCandle(allCandles, intervalMs);
-    const result = { pair: pairLabel, timeframe: timeframeLabel, ...computeTechnicalSignal(candles, forming) };
+    let result = { pair: pairLabel, timeframe: timeframeLabel, ...computeTechnicalSignal(candles, forming) };
+    if (RITMO_DIA()) result = applyRitmo(candles, timeframeLabel, result);
 
     technicalCache[cacheKey] = result;
 
@@ -969,5 +1025,5 @@ router.get('/history', authMiddleware, async (req, res) => {
 module.exports = {
     router, getQuotes, getIndicators, getEconomicSnapshot, getNews, getHistory, fetchIntradayCandles, TIMEFRAME_MINUTES,
     computeTechnicalSignal, computeCandleFollowSignal, computeM1Signal, getM1Signal, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, isMarketOpen,
-    emaSeries, rsiLast, macdHistogramLast, detectCandlePatterns, detectPinBar, getChinesaStrategySignal, getBwalphaIndicator,
+    emaSeries, rsiLast, macdHistogramLast, detectCandlePatterns, detectPinBar, getChinesaStrategySignal, getBwalphaIndicator, applyRitmo,
 };
