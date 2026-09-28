@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('./db');
 const { authMiddleware } = require('./authMiddleware');
+const { createVipCheckout } = require('./asaas');
 
 const router = express.Router();
 
@@ -11,6 +12,7 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.tradeonia.com.br';
 // Provedor do checkout: PAYMENT_PROVIDER=stripe usa o Stripe (Pix + cartão, pagamento único);
 // senão, com KIWIFY_CHECKOUT_URL configurada, usa a Kiwify.
 function provider() {
+    if (process.env.PAYMENT_PROVIDER === 'asaas') return 'asaas';
     if (process.env.PAYMENT_PROVIDER === 'stripe') return 'stripe';
     return process.env.KIWIFY_CHECKOUT_URL ? 'kiwify' : 'stripe';
 }
@@ -47,6 +49,14 @@ router.post('/create-session', authMiddleware, async (req, res) => {
         const { rows } = await pool.query('SELECT name, email FROM users WHERE id = $1', [req.user.id]);
         const user = rows[0] || req.user;
         if (provider() === 'kiwify') return res.json({ url: kiwifyCheckoutUrl(user) });
+        if (provider() === 'asaas') {
+            try {
+                return res.json({ url: await createVipCheckout(req.user.id) });
+            } catch (err) {
+                if (err.status) return res.status(err.status).json({ error: err.message });
+                throw err;
+            }
+        }
 
         const methods = (process.env.STRIPE_PAYMENT_METHODS || 'card,pix').split(',').map((m) => m.trim()).filter(Boolean);
         const params = (types) => ({

@@ -31,7 +31,7 @@ async function sendEmail({ to, subject, html, replyTo }) {
 function couponOffer(name, email) {
     const coupon = process.env.SIGNUP_COUPON;
     if (!coupon) return null;
-    if (process.env.PAYMENT_PROVIDER === 'stripe' || !process.env.KIWIFY_CHECKOUT_URL) {
+    if ((process.env.PAYMENT_PROVIDER && process.env.PAYMENT_PROVIDER !== 'kiwify') || !process.env.KIWIFY_CHECKOUT_URL) {
         return { coupon, discount: process.env.SIGNUP_COUPON_DISCOUNT || '15%', url: `${FRONTEND_URL}/dashboard?upgrade=1` };
     }
     const url = new URL(process.env.KIWIFY_CHECKOUT_URL);
@@ -174,7 +174,7 @@ async function sendMarketOpenEmail(name, email, account = {}) {
 async function sendPixReminderEmail(name, email) {
     const firstName = String(name || '').trim().split(/\s+/)[0];
     let checkout = `${FRONTEND_URL}/dashboard?upgrade=1`;
-    if (process.env.PAYMENT_PROVIDER !== 'stripe' && process.env.KIWIFY_CHECKOUT_URL) {
+    if ((!process.env.PAYMENT_PROVIDER || process.env.PAYMENT_PROVIDER === 'kiwify') && process.env.KIWIFY_CHECKOUT_URL) {
         const url = new URL(process.env.KIWIFY_CHECKOUT_URL);
         url.searchParams.set('email', email);
         if (name) url.searchParams.set('name', name);

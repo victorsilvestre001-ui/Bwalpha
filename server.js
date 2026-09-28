@@ -12,6 +12,7 @@ const { router: calendarRoutes, syncEconomicCalendar } = require('./calendarRout
 const checkoutRoutes = require('./checkoutRoutes');
 const stripeWebhook = require('./stripeWebhook');
 const { router: kiwifyWebhook } = require('./kiwifyWebhook');
+const { router: asaasWebhook } = require('./asaas');
 const { router: marketRoutes } = require('./marketRoutes');
 const { router: telegramRoutes, setupWebhook } = require('./telegramRoutes');
 const marketAnalysisRoutes = require('./marketAnalysisRoutes');
@@ -56,6 +57,7 @@ app.use(cors({
 
 app.use('/api/stripe/webhook', stripeWebhook);
 app.use('/api/kiwify/webhook', kiwifyWebhook);
+app.use('/api/asaas/webhook', asaasWebhook);
 
 // Limite geral por IP para toda a API (proteção contra robôs e ataques de volume).
 app.use('/api', rateLimit({
@@ -117,6 +119,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id VARCHAR(100);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS cpf VARCHAR(14);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS payment_provider VARCHAR(20);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS kiwify_subscription_id VARCHAR(100);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS asaas_customer_id VARCHAR(60);
 
 -- Compras da Kiwify por e-mail (vale também para quem comprou antes de criar a conta).
 CREATE TABLE IF NOT EXISTS vip_grants (
