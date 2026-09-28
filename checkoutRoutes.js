@@ -15,10 +15,23 @@ function provider() {
     return process.env.KIWIFY_CHECKOUT_URL ? 'kiwify' : 'stripe';
 }
 
-// O VIP é pagamento único: usa o preço STRIPE_VIP_PRICE_ID (preço avulso em BRL no Stripe).
-function vipLineItem() {
-    if (!process.env.STRIPE_VIP_PRICE_ID) throw new Error('STRIPE_VIP_PRICE_ID não configurado');
-    return { price: process.env.STRIPE_VIP_PRICE_ID, quantity: 1 };
+// O VIP é pagamento único (preço avulso em BRL no Stripe). Aceita o ID do preço (price_...)
+// ou o do produto (prod_...), usando o preço padrão do produto.
+let vipPriceCache = null;
+async function vipLineItem() {
+    const id = process.env.STRIPE_VIP_PRICE_ID || process.env.STRIPE_VIP_PRODUCT_ID;
+    if (!id) throw new Error('STRIPE_VIP_PRICE_ID/STRIPE_VIP_PRODUCT_ID não configurado');
+    if (!vipPriceCache) {
+        if (id.startsWith('prod_')) {
+            const product = await stripe.products.retrieve(id);
+            const def = product.default_price;
+            vipPriceCache = typeof def === 'string' ? def : def?.id;
+            if (!vipPriceCache) throw new Error(`Produto ${id} sem preço padrão no Stripe`);
+        } else {
+            vipPriceCache = id;
+        }
+    }
+    return { price: vipPriceCache, quantity: 1 };
 }
 
 function kiwifyCheckoutUrl(user) {
@@ -39,7 +52,7 @@ router.post('/create-session', authMiddleware, async (req, res) => {
             mode: 'payment',
             // Pix precisa estar ativado no painel do Stripe (Configurações > Formas de pagamento).
             payment_method_types: (process.env.STRIPE_PAYMENT_METHODS || 'card,pix').split(',').map((m) => m.trim()).filter(Boolean),
-            line_items: [vipLineItem()],
+            line_items: [await vipLineItem()],
             customer_email: user.email,
             customer_creation: 'always',
             allow_promotion_codes: true,
