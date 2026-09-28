@@ -80,8 +80,24 @@ async function connect() {
         state.connected = true;
         retryMs = 30_000;
         send(ws, 'ssid', ssid);
-        send(ws, 'sendMessage', { name: 'get-initialization-data', version: '3.0', body: {} });
     });
+    const subscribe = (ids) => {
+        for (const [name, id] of Object.entries(ids)) {
+            if (byId[id]) continue;
+            byId[id] = name;
+            send(ws, 'subscribeMessage', { name: 'candle-generated', params: { routingFilters: { active_id: id, size: 60 } } });
+        }
+        state.actives = { ...state.actives, ...ids };
+    };
+    // Se a lista de ativos não vier, usa os ids conhecidos (mesma plataforma da IQ Option).
+    // EXNOVA_ACTIVE_IDS permite trocar, ex.: "EURUSD-OTC:76,GBPUSD-OTC:81".
+    const fallback = setTimeout(() => {
+        if (Object.keys(byId).length) return;
+        const known = Object.fromEntries((process.env.EXNOVA_ACTIVE_IDS || 'EURUSD-OTC:76').split(',')
+            .map((s) => s.trim().split(':')).filter(([n, id]) => n && id).map(([n, id]) => [n.toUpperCase(), Number(id)]));
+        console.log(`Exnova OTC: lista de ativos não veio, assinando ids conhecidos ${JSON.stringify(known)}`);
+        subscribe(known);
+    }, 15_000);
     ws.on('message', async (raw) => {
         let m;
         try { m = JSON.parse(raw.toString()); } catch { return; }
@@ -90,15 +106,15 @@ async function connect() {
             seen.add(m.name);
             console.log(`Exnova OTC: mensagem "${m.name}"${m.status ? ` status=${m.status}` : ''}`);
         }
-        if (m.name === 'initialization-data') {
+        if (m.name === 'profile') {
+            // Autenticado: pede a lista de ativos.
+            send(ws, 'sendMessage', { name: 'get-initialization-data', version: '3.0', body: {} });
+        } else if (m.name === 'initialization-data') {
             const ids = findActives(m.msg, wanted);
-            state.actives = ids;
             console.log(`Exnova OTC: ativos encontrados ${JSON.stringify(ids)} (pedidos: ${wanted.join(',')})`);
-            for (const [name, id] of Object.entries(ids)) {
-                byId[id] = name;
-                send(ws, 'subscribeMessage', { name: 'candle-generated', params: { routingFilters: { active_id: id, size: 60 } } });
-            }
+            if (Object.keys(ids).length) { clearTimeout(fallback); subscribe(ids); }
         } else if (m.name === 'candle-generated' && m.msg && byId[m.msg.active_id] && m.msg.size === 60) {
+            if (state.saved === 0) console.log(`Exnova OTC: primeiro candle ${byId[m.msg.active_id]} ${JSON.stringify({ from: m.msg.from, open: m.msg.open, close: m.msg.close, min: m.msg.min, max: m.msg.max })}`);
             try {
                 await saveCandle(byId[m.msg.active_id], m.msg);
                 state.saved++;
@@ -111,6 +127,7 @@ async function connect() {
         }
     });
     ws.on('close', (code) => {
+        clearTimeout(fallback);
         state.connected = false;
         console.log(`Exnova OTC: conexão fechada (${code}), reconectando`);
         setTimeout(connect, retryMs);
