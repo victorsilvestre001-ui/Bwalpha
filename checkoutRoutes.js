@@ -57,7 +57,11 @@ router.post('/create-session', authMiddleware, async (req, res) => {
             customer_email: user.email,
             customer_creation: 'always',
             allow_promotion_codes: true,
-            ...(types.includes('pix') ? { payment_method_options: { pix: { expires_after_seconds: 3600 } } } : {}),
+            payment_method_options: {
+                ...(types.includes('pix') ? { pix: { expires_after_seconds: 3600 } } : {}),
+                // Boleto vence em 3 dias; o VIP libera quando compensar (async_payment_succeeded).
+                ...(types.includes('boleto') ? { boleto: { expires_after_days: 3 } } : {}),
+            },
             success_url: `${FRONTEND_URL}/dashboard?vip=success`,
             cancel_url: `${FRONTEND_URL}/dashboard?vip=cancelled`,
             client_reference_id: String(req.user.id),
