@@ -141,6 +141,54 @@ function CampaignCard({ title, load: loadInfo, send: sendAll, describe, confirmT
   );
 }
 
+function PixReminderCard() {
+  const [email, setEmail] = useState("");
+  const [sending, setSending] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  async function send(e) {
+    e.preventDefault();
+    const target = email.trim();
+    if (!target || !window.confirm(`Enviar o lembrete de Pix para ${target}?`)) return;
+    setSending(true);
+    setMsg(null);
+    try {
+      const r = await api.pixReminder(target);
+      setMsg({ ok: true, text: `✅ Enviado para ${target}${r.hasAccount ? ` (conta: ${r.name || "sem nome"})` : " (ainda sem conta no site)"}.` });
+      setEmail("");
+    } catch (err) {
+      setMsg({ ok: false, text: err.message || "Erro ao enviar." });
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <section className="panel p-5">
+      <h3 className="flex items-center gap-2 font-display text-sm font-semibold text-mist"><Mail size={15} className="text-neon" /> Lembrete: Pix não pago</h3>
+      <p className="mt-2 text-sm text-mist-dim">Para quem gerou o Pix na Kiwify e não pagou. Explica o que falta e manda o link para finalizar (com o cupom).</p>
+      <form onSubmit={send} className="mt-4 flex flex-wrap gap-3">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="email@cliente.com"
+          className="min-w-0 flex-1 rounded-lg border border-void-line bg-void px-3 py-2 text-sm text-mist outline-none focus:border-neon"
+        />
+        <button
+          type="submit"
+          disabled={sending || !email.trim()}
+          className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-neon to-volt px-4 py-2 text-sm font-semibold text-void disabled:opacity-40"
+        >
+          {sending ? <Loader2 size={15} className="animate-spin" /> : <Mail size={15} />}
+          {sending ? "Enviando…" : "Enviar lembrete"}
+        </button>
+      </form>
+      {msg && <p className={`mt-3 text-sm ${msg.ok ? "text-mist-dim" : "text-ember-soft"}`}>{msg.text}</p>}
+    </section>
+  );
+}
+
 function RankList({ title, rows, labelKey, emptyText }) {
   const max = Math.max(1, ...rows.map((r) => r.visits));
   return (
@@ -278,6 +326,7 @@ export default function AdminPage() {
                 confirmText={(i) => `Enviar o aviso do teste grátis para ${i.eligible} conta(s) agora?`}
                 sentLabel="conta(s) já receberam o aviso."
               />
+              <PixReminderCard />
 
             </section>
 

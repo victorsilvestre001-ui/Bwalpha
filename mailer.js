@@ -165,4 +165,43 @@ async function sendMarketOpenEmail(name, email, account = {}) {
     });
 }
 
-module.exports = { sendEmail, sendWelcomeEmail, sendCouponEmail, sendTrialEmail, sendMarketOpenEmail, escapeHtml };
+// Lembrete para quem gerou o Pix (ou boleto) na Kiwify e não concluiu o pagamento.
+async function sendPixReminderEmail(name, email) {
+    const firstName = String(name || '').trim().split(/\s+/)[0];
+    let checkout = null;
+    if (process.env.KIWIFY_CHECKOUT_URL) {
+        const url = new URL(process.env.KIWIFY_CHECKOUT_URL);
+        url.searchParams.set('email', email);
+        if (name) url.searchParams.set('name', name);
+        if (process.env.SIGNUP_COUPON) url.searchParams.set('coupon', process.env.SIGNUP_COUPON);
+        checkout = url.toString();
+    }
+    const offer = couponOffer(name, email);
+    return sendEmail({
+        to: email,
+        subject: 'Seu Pix do VIP TradeOn AI ainda não foi pago',
+        html: layout(`
+            <h1 style="color: #00F0A8; font-size: 22px; margin-bottom: 8px;">${firstName ? `${escapeHtml(firstName)}, falta` : 'Falta'} só um passo ⏳</h1>
+            <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">
+                Vimos que você gerou um <strong>Pix para o VIP da TradeOn AI</strong>, mas o pagamento ainda não foi confirmado.
+            </p>
+            <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">O que falta para finalizar:</p>
+            <ol style="font-size: 14px; line-height: 1.8; color: #E7ECF7; padding-left: 18px;">
+                <li>Abra o app do seu banco e pague o Pix (QR Code ou <strong>copia e cola</strong>) que apareceu na tela de compra.</li>
+                <li>O Pix tem prazo de validade. Se venceu, é só gerar um novo pelo botão abaixo.</li>
+                <li>Use este mesmo e-mail (<strong>${escapeHtml(email)}</strong>) para o VIP ser liberado na sua conta automaticamente.</li>
+            </ol>
+            <p style="font-size: 14px; line-height: 1.6; color: #9AA6C3;">
+                Assim que o pagamento cair, o acesso é liberado na hora. É pagamento único, sem mensalidade.
+            </p>
+            ${checkout ? button(checkout, 'Finalizar pagamento') : ''}
+            ${offer ? `<p style="font-size: 13px; line-height: 1.6; color: #9AA6C3; margin-top: 20px;">O cupom <strong style="color: #00F0A8; font-family: 'Courier New', monospace;">${escapeHtml(offer.coupon)}</strong> (${escapeHtml(offer.discount)} OFF) já vai aplicado no link.</p>` : ''}
+            <p style="font-size: 14px; line-height: 1.6; color: #9AA6C3; margin-top: 20px;">
+                Teve alguma dificuldade? É só responder este e-mail que a gente te ajuda.
+            </p>`,
+            'Você recebeu este e-mail porque iniciou uma compra na TradeOn AI. Se já pagou, pode ignorar. Conteúdo educativo; operar envolve risco.'),
+        replyTo: process.env.SUPPORT_EMAIL || 'tradeonia@gmail.com',
+    });
+}
+
+module.exports = { sendEmail, sendPixReminderEmail, sendWelcomeEmail, sendCouponEmail, sendTrialEmail, sendMarketOpenEmail, escapeHtml };

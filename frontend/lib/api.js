@@ -64,6 +64,7 @@ export const api = {
   sendTrialCampaign: () => request("/api/admin/trial-campaign", { method: "POST" }),
   marketOpenCampaign: () => request("/api/admin/market-open-campaign"),
   sendMarketOpenCampaign: () => request("/api/admin/market-open-campaign", { method: "POST" }),
+  pixReminder: (email) => request("/api/admin/pix-reminder", { method: "POST", body: { email } }),
   signalQuota: () => request("/api/market/signal-quota"),
   support: (payload) => request("/api/support", { method: "POST", body: payload, auth: false }),
   signal: (pair, timeframe) => request("/api/market/signal", { method: "POST", body: { pair, timeframe } }),

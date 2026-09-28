@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const pool = require('./db');
 const { authMiddleware } = require('./authMiddleware');
-const { sendCouponEmail, sendTrialEmail, sendMarketOpenEmail } = require('./mailer');
+const { sendCouponEmail, sendTrialEmail, sendMarketOpenEmail, sendPixReminderEmail } = require('./mailer');
 
 const router = express.Router();
 
@@ -240,6 +240,32 @@ registerCampaign('/market-open-campaign', {
     where: `u.plan <> 'owner'`,
     send: sendMarketOpenEmail,
     notReady: () => (!process.env.RESEND_API_KEY ? 'Envio de e-mail não configurado (RESEND_API_KEY).' : null),
+});
+
+// Lembrete de Pix/boleto não pago para um e-mail específico (dono digita no painel).
+const pixReminderLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false });
+router.post('/pix-reminder', authMiddleware, requireOwnerDb, pixReminderLimiter, async (req, res) => {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+        return res.status(400).json({ error: 'E-mail inválido' });
+    }
+    try {
+        const { rows } = await pool.query(`SELECT name, plan FROM users WHERE LOWER(email) = $1`, [email]);
+        const user = rows[0];
+        if (user && (user.plan === 'vip' || user.plan === 'owner')) {
+            return res.status(409).json({ error: 'Essa conta já é VIP (o pagamento já foi confirmado).' });
+        }
+        const result = await sendPixReminderEmail(user?.name || String(req.body?.name || '').slice(0, 80), email);
+        if (!result.ok) {
+            console.error('Erro ao enviar lembrete de Pix:', result.error);
+            return res.status(502).json({ error: 'Não foi possível enviar o e-mail agora.' });
+        }
+        console.log(`Lembrete de Pix enviado para ${email.replace(/^(.{2}).*@/, '$1***@')} (conta ${user ? 'existe' : 'não existe'})`);
+        res.json({ sent: true, hasAccount: !!user, name: user?.name || null });
+    } catch (err) {
+        console.error('Erro no lembrete de Pix:', err.message);
+        res.status(500).json({ error: 'Erro ao enviar lembrete' });
+    }
 });
 
 module.exports = router;
