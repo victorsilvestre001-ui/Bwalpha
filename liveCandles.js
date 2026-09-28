@@ -21,6 +21,9 @@ function onTick(symbol, price, tsMs) {
     if (c && c.time > minute) return; // tick atrasado de um minuto que já virou
     if (!c || c.time !== minute) {
         // Guarda o minuto que fechou (se o streaming acompanhou desde o começo dele).
+        if (c && process.env.LIVE_TICKS_LOG === '1') {
+            console.log(`Ticks ${symbol} ${new Date(c.time).toISOString().slice(11, 16)}: ${c.ticks} ticks, primeiro aos ${Math.round((c.firstTickAt - c.time) / 1000)}s`);
+        }
         if (c && (c.prev || c.firstTickAt - c.time <= 5_000)) {
             const h = (history[symbol] ||= []);
             h.push({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close });

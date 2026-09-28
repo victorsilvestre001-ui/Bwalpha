@@ -878,7 +878,7 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
         candleAtual: { bodyRatio: m1.bodyRatio ?? null, bodyVsAvg: m1.bodyVsAvg ?? null },
     };
     const fmt = (c) => `${new Date(c.time).toISOString().slice(11, 16)} ${c.open}/${c.high}/${c.low}/${c.close}`;
-    console.log(`M1 ${pairLabel} ${result.direction} ${result.confidence} leitura=${result.leitura} ao_vivo=${forming.ticks != null} atual=[${fmt(forming)}] fechados=[${closed.slice(-3).map(fmt).join(' | ')}]`);
+    console.log(`M1 ${pairLabel} ${result.direction} ${result.confidence} leitura=${result.leitura} ticks=${forming.ticks ?? 'rest'} atual=[${fmt(forming)}] fechados=[${closed.slice(-3).map(fmt).join(' | ')}]`);
     m1Cache[pairLabel] = { bucketStart, at: nowMs, result };
     return result;
 }
