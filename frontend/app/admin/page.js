@@ -261,7 +261,7 @@ export default function AdminPage() {
               </div>
             </section>
 
-            <section className="grid gap-4 lg:grid-cols-3">
+            <section className="grid gap-4 lg:grid-cols-2">
               <CampaignCard
                 title="Aviso: mercado aberto"
                 load={api.marketOpenCampaign}
@@ -278,14 +278,7 @@ export default function AdminPage() {
                 confirmText={(i) => `Enviar o aviso do teste grátis para ${i.eligible} conta(s) agora?`}
                 sentLabel="conta(s) já receberam o aviso."
               />
-              <CampaignCard
-                title="Cupom do VIP para contas antigas"
-                load={api.couponCampaign}
-                send={api.sendCouponCampaign}
-                describe={(i) => <>Manda o cupom <span className="font-mono font-semibold text-neon">{i.coupon}</span> ({i.discount} OFF) para as contas free que ainda não receberam. Quem se cadastra agora já recebe no e-mail de boas-vindas.</>}
-                confirmText={(i) => `Enviar o cupom ${i.coupon} (${i.discount} OFF) para ${i.eligible} conta(s) agora?`}
-                sentLabel="conta(s) já receberam o cupom."
-              />
+
             </section>
 
             <section className="panel p-5">
