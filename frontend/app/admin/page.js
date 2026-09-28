@@ -261,7 +261,15 @@ export default function AdminPage() {
               </div>
             </section>
 
-            <section className="grid gap-4 lg:grid-cols-2">
+            <section className="grid gap-4 lg:grid-cols-3">
+              <CampaignCard
+                title="Aviso: mercado aberto"
+                load={api.marketOpenCampaign}
+                send={api.sendMarketOpenCampaign}
+                describe={() => "Avisa todas as contas que o mercado está aberto. VIP: abrir o painel · free com teste: usar os 3 sinais grátis · free sem teste: conhecer o VIP. Pode enviar uma vez por dia."}
+                confirmText={(i) => `Enviar o aviso de mercado aberto para ${i.eligible} conta(s) agora?`}
+                sentLabel="conta(s) já receberam hoje."
+              />
               <CampaignCard
                 title="Aviso: teste grátis de 3 sinais"
                 load={api.trialCampaign}

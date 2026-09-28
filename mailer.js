@@ -137,4 +137,32 @@ async function sendTrialEmail(name, email) {
     });
 }
 
-module.exports = { sendEmail, sendWelcomeEmail, sendCouponEmail, sendTrialEmail, escapeHtml };
+// "Mercado aberto": o convite muda conforme o plano da conta.
+async function sendMarketOpenEmail(name, email, account = {}) {
+    const firstName = String(name || '').trim().split(/\s+/)[0];
+    const hi = firstName ? `${escapeHtml(firstName)}, o` : 'O';
+    const vip = account.plan === 'vip' || account.plan === 'owner';
+    const trialLeft = !vip && !account.trial_expired && (account.signals_used || 0) < (parseInt(process.env.FREE_TRIAL_SIGNALS, 10) || 3);
+    const offer = !vip && !trialLeft ? couponOffer(name, email) : null;
+
+    const body = vip
+        ? `<p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">Os ativos já estão em movimento. Entre no painel, escolha <strong>EURUSD, EURJPY ou Ouro</strong> e deixe a IA ler o candle para você.</p>
+           ${button(`${FRONTEND_URL}/dashboard`, 'Abrir o painel')}`
+        : trialLeft
+            ? `<p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">Seus <strong>3 sinais grátis</strong> estão esperando por você. Ótimo momento para testar a IA com o mercado em movimento.</p>
+               ${button(`${FRONTEND_URL}/dashboard`, 'Testar meus sinais grátis')}`
+            : `<p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">Com o <strong>VIP</strong> você recebe as análises da IA sem limite, com contagem até a entrada e histórico de WIN/RED.</p>
+               ${offer ? couponBlock(offer, 'Condição especial') : button(`${FRONTEND_URL}/dashboard`, 'Conhecer o VIP')}`;
+
+    return sendEmail({
+        to: email,
+        subject: '📈 Mercado aberto: a IA da TradeOn já está analisando',
+        html: layout(`
+            <h1 style="color: #00F0A8; font-size: 22px; margin-bottom: 8px;">${hi} mercado está aberto! 📈</h1>
+            ${body}
+            <p style="font-size: 13px; line-height: 1.6; color: #9AA6C3; margin-top: 20px;">Lembre da gestão: valor fixo por entrada e stop diário. Confiança não é garantia.</p>`,
+            'Você recebeu este e-mail porque tem uma conta na TradeOn AI. Conteúdo educativo; operar envolve risco.'),
+    });
+}
+
+module.exports = { sendEmail, sendWelcomeEmail, sendCouponEmail, sendTrialEmail, sendMarketOpenEmail, escapeHtml };

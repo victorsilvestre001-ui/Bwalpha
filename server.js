@@ -215,6 +215,13 @@ CREATE TABLE IF NOT EXISTS coupon_emails (
     user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     sent_at TIMESTAMPTZ DEFAULT NOW()
 );
+-- Envios que se repetem (ex.: "mercado aberto", um por dia): campanha + conta.
+CREATE TABLE IF NOT EXISTS campaign_emails (
+    campaign VARCHAR(60) NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    sent_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (campaign, user_id)
+);
 -- Quem já recebeu o aviso do teste grátis de 3 sinais.
 CREATE TABLE IF NOT EXISTS trial_emails (
     user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,

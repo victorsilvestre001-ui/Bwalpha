@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const pool = require('./db');
 const { authMiddleware } = require('./authMiddleware');
-const { sendCouponEmail, sendTrialEmail } = require('./mailer');
+const { sendCouponEmail, sendTrialEmail, sendMarketOpenEmail } = require('./mailer');
 
 const router = express.Router();
 
@@ -143,17 +143,32 @@ router.get('/stats', authMiddleware, requireOwnerDb, async (req, res) => {
 // até 200 por clique e ~2 por segundo (limite do Resend). Falhas continuam elegíveis.
 const CAMPAIGN_BATCH = 200;
 
-function registerCampaign(route, { table, where, send, notReady, info = () => ({}) }) {
-    const eligibleSql = `FROM users u WHERE ${where} AND NOT EXISTS (SELECT 1 FROM ${table} c WHERE c.user_id = u.id)`;
+// campaign (opcional): envios que se repetem (ex.: um por dia) usam a tabela campaign_emails
+// com uma chave; sem ela, a tabela da campanha guarda só user_id (um e-mail por conta, para sempre).
+function registerCampaign(route, { table, campaign, where, send, notReady, info = () => ({}) }) {
+    const sentFilter = () => (campaign
+        ? { sql: `NOT EXISTS (SELECT 1 FROM campaign_emails c WHERE c.user_id = u.id AND c.campaign = $1)`, params: [campaign()] }
+        : { sql: `NOT EXISTS (SELECT 1 FROM ${table} c WHERE c.user_id = u.id)`, params: [] });
+    const eligible = () => {
+        const f = sentFilter();
+        return { sql: `FROM users u WHERE ${where} AND ${f.sql}`, params: f.params };
+    };
+    const countSent = () => (campaign
+        ? pool.query('SELECT COUNT(*)::int AS total FROM campaign_emails WHERE campaign = $1', [campaign()])
+        : pool.query(`SELECT COUNT(*)::int AS total FROM ${table}`));
+    const markSent = (userId) => (campaign
+        ? pool.query('INSERT INTO campaign_emails (campaign, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [campaign(), userId])
+        : pool.query(`INSERT INTO ${table} (user_id) VALUES ($1) ON CONFLICT DO NOTHING`, [userId]));
     let running = false;
 
     router.get(route, authMiddleware, requireOwnerDb, async (req, res) => {
         try {
-            const [eligible, sent] = await Promise.all([
-                pool.query(`SELECT COUNT(*)::int AS total ${eligibleSql}`),
-                pool.query(`SELECT COUNT(*)::int AS total FROM ${table}`),
+            const e = eligible();
+            const [elig, sent] = await Promise.all([
+                pool.query(`SELECT COUNT(*)::int AS total ${e.sql}`, e.params),
+                countSent(),
             ]);
-            res.json({ ...info(), ready: !notReady(), eligible: eligible.rows[0].total, alreadySent: sent.rows[0].total, running });
+            res.json({ ...info(), ready: !notReady(), eligible: elig.rows[0].total, alreadySent: sent.rows[0].total, running });
         } catch (err) {
             console.error(`Erro ao carregar o envio ${route}:`, err.message);
             res.status(500).json({ error: 'Erro ao carregar o envio' });
@@ -168,11 +183,19 @@ function registerCampaign(route, { table, where, send, notReady, info = () => ({
         let sent = 0;
         const failed = [];
         try {
-            const { rows } = await pool.query(`SELECT u.id, u.name, u.email ${eligibleSql} ORDER BY u.id LIMIT $1`, [CAMPAIGN_BATCH]);
+            const e = eligible();
+            const { rows } = await pool.query(
+                `SELECT u.id, u.name, u.email, u.plan,
+                        (SELECT COUNT(*)::int FROM analyses a WHERE a.user_id = u.id) AS signals_used,
+                        COALESCE((SELECT BOOL_OR((a.requested_at AT TIME ZONE '${TZ}')::date < ${TODAY_LOCAL})
+                                  FROM analyses a WHERE a.user_id = u.id), false) AS trial_expired
+                 ${e.sql} ORDER BY u.id LIMIT ${CAMPAIGN_BATCH}`,
+                e.params
+            );
             for (const u of rows) {
-                const result = await send(u.name, u.email);
+                const result = await send(u.name, u.email, u);
                 if (result.ok) {
-                    await pool.query(`INSERT INTO ${table} (user_id) VALUES ($1) ON CONFLICT DO NOTHING`, [u.id]);
+                    await markSent(u.id);
                     sent += 1;
                 } else {
                     failed.push(maskEmail(u.email));
@@ -180,9 +203,10 @@ function registerCampaign(route, { table, where, send, notReady, info = () => ({
                 }
                 await new Promise((r) => setTimeout(r, 600));
             }
-            const left = await pool.query(`SELECT COUNT(*)::int AS total ${eligibleSql}`);
+            const left = eligible();
+            const leftCount = await pool.query(`SELECT COUNT(*)::int AS total ${left.sql}`, left.params);
             console.log(`Envio ${route}: ${sent} e-mail(s) enviado(s), ${failed.length} falha(s).`);
-            res.json({ sent, failed, remaining: left.rows[0].total });
+            res.json({ sent, failed, remaining: leftCount.rows[0].total });
         } catch (err) {
             console.error(`Erro no envio ${route}:`, err.message);
             res.status(500).json({ error: 'Erro ao enviar os e-mails', sent });
@@ -206,6 +230,15 @@ registerCampaign('/trial-campaign', {
     table: 'trial_emails',
     where: `u.plan = 'free' AND NOT EXISTS (SELECT 1 FROM analyses a WHERE a.user_id = u.id)`,
     send: sendTrialEmail,
+    notReady: () => (!process.env.RESEND_API_KEY ? 'Envio de e-mail não configurado (RESEND_API_KEY).' : null),
+});
+
+// "Mercado aberto": aviso para todas as contas (menos a do dono), no máximo um por dia.
+// O texto muda conforme a conta: VIP, free com teste disponível ou free com teste encerrado.
+registerCampaign('/market-open-campaign', {
+    campaign: () => `mercado-aberto-${new Date().toLocaleDateString('en-CA', { timeZone: TZ })}`,
+    where: `u.plan <> 'owner'`,
+    send: sendMarketOpenEmail,
     notReady: () => (!process.env.RESEND_API_KEY ? 'Envio de e-mail não configurado (RESEND_API_KEY).' : null),
 });
 
