@@ -9,6 +9,23 @@ const CONF_STYLE = {
   Baixa: "border-pulse/40 bg-pulse/10 text-pulse-soft"
 };
 
+// Barra de pressão: compradores (verde) x vendedores (vermelho) nos últimos candles.
+function PressureBar({ pressao }) {
+  if (!pressao) return null;
+  return (
+    <div className="rounded-xl border border-void-line bg-void-deep/60 p-4">
+      <div className="flex justify-between font-mono text-[11px] uppercase tracking-wider">
+        <span className="text-neon">Compradora {pressao.compradora}%</span>
+        <span className="text-ember-soft">Vendedora {pressao.vendedora}%</span>
+      </div>
+      <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-void-line">
+        <div className="bg-neon" style={{ width: `${pressao.compradora}%` }} />
+        <div className="bg-ember" style={{ width: `${pressao.vendedora}%` }} />
+      </div>
+    </div>
+  );
+}
+
 export default function SignalResult({ result, timing, onRetry }) {
   if (result.noEntry) {
     return (
@@ -18,6 +35,7 @@ export default function SignalResult({ result, timing, onRetry }) {
           <PauseCircle size={26} className="text-volt" /> Sem entrada agora
         </div>
         <p className="mt-2 text-sm text-mist-dim">{result.reason || "Sem um sinal confiável neste candle."}</p>
+        {result.pressao && <div className="mt-4"><PressureBar pressao={result.pressao} /></div>}
         {onRetry && (
           <button onClick={onRetry} className="btn-ghost mt-4 w-full !py-3">
             <RefreshCw size={15} /> Analisar o próximo candle
@@ -47,6 +65,8 @@ export default function SignalResult({ result, timing, onRetry }) {
       </div>
 
       {timing && <CandleTimer direction={result.direction} timeframe={result.timeframe} {...timing} />}
+
+      <PressureBar pressao={result.pressao} />
 
       {result.candlePatterns?.length > 0 && (
         <div className="flex flex-wrap gap-2">

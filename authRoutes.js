@@ -6,6 +6,7 @@ const pool = require('./db');
 const { authMiddleware, OWNER_EMAIL } = require('./authMiddleware');
 const { applyPendingGrant } = require('./kiwifyWebhook');
 const { sendWelcomeEmail } = require('./mailer');
+const { cleanCpf, isValidCpf, CPF_TAKEN } = require('./cpf');
 
 // Limita tentativas de login/cadastro por IP, pra dificultar força bruta de senha.
 const authLimiter = rateLimit({
@@ -51,9 +52,13 @@ router.post('/register', authLimiter, async (req, res) => {
     const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
     const email = normalizeEmail(req.body?.email);
     const { password } = req.body || {};
+    const cpf = cleanCpf(req.body?.cpf);
 
-    if (!name || !email || typeof password !== 'string' || !password) {
-        return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
+    if (!name || !email || typeof password !== 'string' || !password || !cpf) {
+        return res.status(400).json({ error: 'Nome, CPF, email e senha são obrigatórios' });
+    }
+    if (!isValidCpf(cpf)) {
+        return res.status(400).json({ error: 'CPF inválido. Confira os números.' });
     }
     if (name.length > NAME_MAX) {
         return res.status(400).json({ error: `O nome pode ter no máximo ${NAME_MAX} caracteres.` });
@@ -73,14 +78,18 @@ router.post('/register', authLimiter, async (req, res) => {
         if (existing.rows.length > 0) {
             return res.status(409).json({ error: 'Email já cadastrado' });
         }
+        const cpfInUse = await pool.query('SELECT id FROM users WHERE cpf = $1 LIMIT 1', [cpf]);
+        if (cpfInUse.rows.length > 0) {
+            return res.status(409).json({ error: CPF_TAKEN });
+        }
 
         const passwordHash = await bcrypt.hash(password, 10);
         const initialPlan = email === OWNER_EMAIL ? 'owner' : 'free';
 
         const result = await pool.query(
-            `INSERT INTO users (name, email, password_hash, plan) 
-             VALUES ($1, $2, $3, $4) RETURNING id, name, email, plan`,
-            [name, email, passwordHash, initialPlan]
+            `INSERT INTO users (name, email, password_hash, plan, cpf)
+             VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, plan`,
+            [name, email, passwordHash, initialPlan, cpf]
         );
 
         // Quem comprou o VIP na Kiwify antes de criar a conta já entra como VIP.
@@ -101,6 +110,10 @@ router.post('/register', authLimiter, async (req, res) => {
 
         res.status(201).json({ user, token });
     } catch (err) {
+        // Dois cadastros simultâneos com o mesmo CPF/e-mail: o índice único barra o segundo.
+        if (err.code === '23505') {
+            return res.status(409).json({ error: /cpf/i.test(err.constraint || '') ? CPF_TAKEN : 'Email já cadastrado' });
+        }
         console.error(err);
         res.status(500).json({ error: 'Erro ao criar usuário' });
     }
@@ -177,13 +190,11 @@ router.get('/me', authMiddleware, async (req, res) => {
 router.patch('/profile', authMiddleware, async (req, res) => {
     const { cpf, avatar } = req.body;
 
-    // Limpa o CPF pra guardar só os números, se foi enviado
-    let cleanCpf = null;
-    if (cpf !== undefined && cpf !== null && cpf !== '') {
-        cleanCpf = String(cpf).slice(0, 20).replace(/\D/g, '');
-        if (cleanCpf.length !== 11) {
-            return res.status(400).json({ error: 'CPF inválido. Deve conter 11 dígitos.' });
-        }
+    // CPF: só números e com dígitos válidos. Depois de cadastrado não pode ser trocado nem
+    // apagado (senão daria para liberar o CPF e criar outra conta com ele).
+    const newCpf = cpf !== undefined && cpf !== null && cpf !== '' ? cleanCpf(cpf) : null;
+    if (newCpf !== null && !isValidCpf(newCpf)) {
+        return res.status(400).json({ error: 'CPF inválido. Confira os números.' });
     }
 
     // Limite de tamanho pra foto (evita payloads gigantes no banco)
@@ -202,8 +213,16 @@ router.patch('/profile', authMiddleware, async (req, res) => {
         let i = 1;
 
         if (cpf !== undefined) {
-            fields.push(`cpf = $${i++}`);
-            values.push(cleanCpf);
+            const current = (await pool.query('SELECT cpf FROM users WHERE id = $1', [req.user.id])).rows[0]?.cpf || null;
+            if (current && current !== newCpf) {
+                return res.status(400).json({ error: 'O CPF não pode ser alterado. Se precisar corrigir, fale com o suporte.' });
+            }
+            if (!current && newCpf) {
+                const inUse = await pool.query('SELECT id FROM users WHERE cpf = $1 AND id <> $2 LIMIT 1', [newCpf, req.user.id]);
+                if (inUse.rows.length > 0) return res.status(409).json({ error: CPF_TAKEN });
+                fields.push(`cpf = $${i++}`);
+                values.push(newCpf);
+            }
         }
         if (avatar !== undefined) {
             fields.push(`avatar_url = $${i++}`);
@@ -211,7 +230,9 @@ router.patch('/profile', authMiddleware, async (req, res) => {
         }
 
         if (fields.length === 0) {
-            return res.status(400).json({ error: 'Nada para atualizar' });
+            // Ex.: salvou o mesmo CPF que já estava cadastrado.
+            const same = await pool.query('SELECT id, name, email, plan, cpf, avatar_url FROM users WHERE id = $1', [req.user.id]);
+            return res.json(same.rows[0]);
         }
 
         values.push(req.user.id);
@@ -222,6 +243,7 @@ router.patch('/profile', authMiddleware, async (req, res) => {
 
         res.json(result.rows[0]);
     } catch (err) {
+        if (err.code === '23505') return res.status(409).json({ error: CPF_TAKEN });
         console.error(err);
         res.status(500).json({ error: 'Erro ao atualizar perfil' });
     }

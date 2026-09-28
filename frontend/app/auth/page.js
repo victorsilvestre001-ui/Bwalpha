@@ -3,9 +3,10 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mail, Lock, User, Eye, EyeOff, ArrowRight, ArrowLeft, Loader2 } from "lucide-react";
+import { Mail, Lock, User, Eye, EyeOff, ArrowRight, ArrowLeft, Loader2, Contact } from "lucide-react";
 import Logo from "@/components/Logo";
 import { api, setSession } from "@/lib/api";
+import { formatCpf, isValidCpf } from "@/lib/cpf";
 import { track } from "@/lib/track";
 
 function Field({ icon: Icon, children }) {
@@ -23,6 +24,7 @@ function AuthForm() {
   const [mode, setMode] = useState("login");
   const [showPw, setShowPw] = useState(false);
   const [name, setName] = useState("");
+  const [cpf, setCpf] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -36,8 +38,12 @@ function AuthForm() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
-    if (!email || !password || (mode === "register" && !name)) {
+    if (!email || !password || (mode === "register" && (!name || !cpf))) {
       setError("Preencha todos os campos para continuar.");
+      return;
+    }
+    if (mode === "register" && !isValidCpf(cpf)) {
+      setError("CPF inválido. Confira os números.");
       return;
     }
     if (mode === "register" && password.length < 8) {
@@ -46,7 +52,7 @@ function AuthForm() {
     }
     setLoading(true);
     try {
-      const data = mode === "login" ? await api.login(email, password) : await api.register(name, email, password);
+      const data = mode === "login" ? await api.login(email, password) : await api.register(name, email, password, cpf);
       setSession(data.token, data.user);
       if (mode === "register") track("CompleteRegistration");
       router.push(wantsVip ? "/dashboard?upgrade=1" : "/dashboard");
@@ -78,14 +84,17 @@ function AuthForm() {
       </div>
 
       <h1 className="mt-8 font-display text-2xl font-bold text-mist">{isLogin ? "Bem-vindo de volta" : "Crie sua conta"}</h1>
-      <p className="mt-1 text-sm text-mist-dim">{isLogin ? "Acesse seu painel TradeOn AI." : "Leva menos de um minuto. Sem cartão."}</p>
+      <p className="mt-1 text-sm text-mist-dim">{isLogin ? "Acesse seu painel TradeOn AI." : "Leva menos de um minuto. Sem cartão. Uma conta por CPF."}</p>
 
       <form onSubmit={handleSubmit} className="mt-7 space-y-3">
         <AnimatePresence initial={false}>
           {!isLogin && (
-            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="space-y-3">
               <Field icon={User}>
                 <input className="input !pl-11" placeholder="Seu nome" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
+              </Field>
+              <Field icon={Contact}>
+                <input className="input !pl-11" placeholder="CPF (000.000.000-00)" value={cpf} onChange={(e) => setCpf(formatCpf(e.target.value))} inputMode="numeric" autoComplete="off" />
               </Field>
             </motion.div>
           )}

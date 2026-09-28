@@ -2,7 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { Sparkles, AlertTriangle, Lock, Crown, Loader2, Info, Gift } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, updateSessionUser } from "@/lib/api";
+import { formatCpf, isValidCpf } from "@/lib/cpf";
 import { ASSETS, ASSET_LIST } from "@/lib/assets";
 import TradingViewWidget from "./TradingViewWidget";
 import AnalyzingOverlay from "./AnalyzingOverlay";
@@ -18,6 +19,44 @@ const TIMEFRAME_OPTIONS = [
   { value: "M5", label: "M5", hint: "5 minutos" }
 ];
 const MIN_ANIMATION_MS = 2600;
+
+// Conta antiga sem CPF: o teste grátis é um por CPF, então pede antes de liberar.
+function CpfGate({ onDone }) {
+  const [cpf, setCpf] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!isValidCpf(cpf)) { setError("CPF inválido. Confira os números."); return; }
+    setSaving(true);
+    setError("");
+    try {
+      updateSessionUser(await api.updateProfile({ cpf }));
+      onDone();
+    } catch (err) {
+      setError(err.message || "Não foi possível salvar.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="grad-border mt-6 rounded-xl bg-void-deep/70 p-4">
+      <div className="flex items-center gap-2 font-display text-sm font-semibold text-mist">
+        <Gift size={15} className="text-neon" /> Libere seus sinais grátis
+      </div>
+      <p className="mt-1 text-xs text-mist-dim">O teste grátis é um por pessoa. Cadastre seu CPF para liberar (não pode ser alterado depois).</p>
+      <div className="mt-3 flex gap-2">
+        <input className="input" value={cpf} onChange={(e) => setCpf(formatCpf(e.target.value))} placeholder="000.000.000-00" inputMode="numeric" />
+        <button type="submit" disabled={saving} className="btn-primary !px-5">
+          {saving ? <Loader2 size={16} className="animate-spin" /> : "Liberar"}
+        </button>
+      </div>
+      {error && <p className="mt-2 text-xs text-ember-soft">{error}</p>}
+    </form>
+  );
+}
 // M1: o sinal sai perto do fechamento do candle atual (validado no backtest).
 const M1_MS = 60_000;
 const M1_RELEASE_BEFORE_CLOSE_MS = 13_000;
@@ -48,12 +87,14 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
     return startClockSync(setOffset);
   }, []);
 
+  const loadQuota = () => api.signalQuota().then((q) => setQuota(q.vip ? null : q)).catch(() => {});
   useEffect(() => {
     if (isVip) { setQuota(null); return; }
-    api.signalQuota().then((q) => setQuota(q.vip ? null : q)).catch(() => {});
+    loadQuota();
   }, [isVip]);
 
-  const canAnalyze = isVip || (quota != null && quota.remaining > 0);
+  const needsCpf = !isVip && quota?.cpfRequired && quota.remaining > 0;
+  const canAnalyze = isVip || (quota != null && quota.remaining > 0 && !quota.cpfRequired);
 
   function cancelWatch() {
     runId.current += 1;
@@ -99,6 +140,7 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
     } catch (err) {
       if (err.data?.marketClosed) setMarketOpen(false);
       if (err.data?.freeLimitReached) setQuota((q) => q && { ...q, remaining: 0, used: q.limit });
+      if (err.data?.cpfRequired) setQuota((q) => q && { ...q, cpfRequired: true });
       setError(err.message || "Não foi possível gerar o sinal agora.");
     } finally {
       if (id === runId.current) setLoading(false);
@@ -134,7 +176,9 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
             </div>
           )}
 
-          {canAnalyze ? (
+          {needsCpf ? (
+            <CpfGate onDone={loadQuota} />
+          ) : canAnalyze ? (
             <>
               <button onClick={analyze} disabled={loading || !!watching} className="btn-primary mt-6 w-full !py-4 text-base">
                 <Sparkles size={18} /> Analisar com IA

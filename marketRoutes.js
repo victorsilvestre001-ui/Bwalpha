@@ -758,6 +758,39 @@ function applyRitmo(closed, timeframe, sig) {
     return { ...sig, ritmo: { ...ritmo, acao: 'mantido' } };
 }
 
+// ---- Pressão compradora x vendedora ----
+// Mede quem está no controle agora: o saldo dos corpos dos últimos 3 candles + o atual
+// (em relação ao tamanho médio dos candles) e onde o candle atual está fechando dentro
+// do próprio range (perto da máxima = comprador empurrando; perto da mínima = vendedor).
+// Resultado de -1 (vendedor total) a +1 (comprador total).
+const PRESSAO_FORTE = 0.4;
+const PRESSAO_FILTRO = () => process.env.PRESSAO_FILTRO !== '0';
+
+function computePressao(closed, forming) {
+    const recent = closed.slice(-20);
+    const avgRange = recent.reduce((a, c) => a + (c.high - c.low), 0) / Math.max(recent.length, 1);
+    if (!(avgRange > 0)) return null;
+    const last = [...closed.slice(-3), ...(forming ? [forming] : [])];
+    const saldo = last.reduce((a, c) => a + (c.close - c.open), 0) / avgRange;
+    const atual = forming || closed[closed.length - 1];
+    const range = atual.high - atual.low;
+    const fechamento = range > 0 ? ((atual.close - atual.low) - (atual.high - atual.close)) / range : 0;
+    const score = Math.max(-1, Math.min(1, 0.6 * Math.max(-1, Math.min(1, saldo / 2)) + 0.4 * fechamento));
+    return {
+        score: +score.toFixed(2),
+        compradora: Math.round((score + 1) * 50),
+        vendedora: 100 - Math.round((score + 1) * 50),
+        lado: score >= PRESSAO_FORTE ? 'COMPRA' : score <= -PRESSAO_FORTE ? 'VENDA' : null,
+    };
+}
+
+// Pressão forte manda: se a leitura do candle deu o lado contrário (ex.: VENDA com os
+// compradores empurrando), o sinal vai a favor da pressão.
+function applyPressao(sig, pressao) {
+    if (!sig?.direction || !pressao?.lado || pressao.lado === sig.direction) return sig;
+    return { ...sig, direction: pressao.lado, confidence: 'Média', leitura: `${sig.leitura || 'tecnico'}_pressao` };
+}
+
 const m1Cache = {};
 
 async function getM1Signal(pairLabel, nowMs = Date.now()) {
@@ -780,6 +813,8 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
     const technical = computeTechnicalSignal(closed, forming);
     let m1 = computeM1Signal(closed, forming, technical);
     if (RITMO_DIA()) m1 = applyRitmo(closed, 'M1', m1);
+    const pressao = computePressao(closed, forming);
+    if (PRESSAO_FILTRO()) m1 = applyPressao(m1, pressao);
     const result = {
         ...technical,
         pair: pairLabel,
@@ -789,6 +824,7 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
         confidence: m1.confidence,
         leitura: m1.leitura,
         ritmo: m1.ritmo || null,
+        pressao,
         candleAtual: { bodyRatio: m1.bodyRatio ?? null, bodyVsAvg: m1.bodyVsAvg ?? null },
     };
     m1Cache[pairLabel] = { bucketStart, at: nowMs, result };
@@ -814,6 +850,8 @@ async function getTechnicalSignal(pairLabel, timeframeLabel) {
     const { closed: candles, forming } = splitFormingCandle(allCandles, intervalMs);
     let result = { pair: pairLabel, timeframe: timeframeLabel, ...computeTechnicalSignal(candles, forming) };
     if (RITMO_DIA()) result = applyRitmo(candles, timeframeLabel, result);
+    result.pressao = computePressao(candles, forming);
+    if (PRESSAO_FILTRO()) result = applyPressao(result, result.pressao);
 
     technicalCache[cacheKey] = result;
 
@@ -897,7 +935,10 @@ async function signalQuota(userId) {
     const plan = await currentPlan(userId);
     if (isVipPlan(plan)) return { vip: true };
     const trial = await freeTrialStatus(userId);
-    return { vip: false, limit: FREE_TRIAL_SIGNALS, used: Math.min(trial.used, FREE_TRIAL_SIGNALS), remaining: trial.remaining, started: trial.used > 0, expired: trial.expired };
+    // O teste grátis é um por CPF: conta antiga sem CPF precisa cadastrar antes de usar.
+    const { rows } = await pool.query('SELECT cpf FROM users WHERE id = $1', [userId]);
+    const cpfRequired = !rows[0]?.cpf;
+    return { vip: false, limit: FREE_TRIAL_SIGNALS, used: Math.min(trial.used, FREE_TRIAL_SIGNALS), remaining: trial.remaining, started: trial.used > 0, expired: trial.expired, cpfRequired };
 }
 
 router.get('/signal-quota', authMiddleware, async (req, res) => {
@@ -918,6 +959,9 @@ async function requireSignalAccess(req, res, next) {
                 vipRequired: true,
                 freeLimitReached: true,
             });
+        }
+        if (!quota.vip && quota.cpfRequired) {
+            return res.status(403).json({ error: 'Cadastre seu CPF para liberar os sinais grátis.', cpfRequired: true });
         }
         req.signalQuota = quota;
         next();
@@ -1025,5 +1069,5 @@ router.get('/history', authMiddleware, async (req, res) => {
 module.exports = {
     router, getQuotes, getIndicators, getEconomicSnapshot, getNews, getHistory, fetchIntradayCandles, TIMEFRAME_MINUTES,
     computeTechnicalSignal, computeCandleFollowSignal, computeM1Signal, getM1Signal, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, isMarketOpen,
-    emaSeries, rsiLast, macdHistogramLast, detectCandlePatterns, detectPinBar, getChinesaStrategySignal, getBwalphaIndicator, applyRitmo,
+    emaSeries, rsiLast, macdHistogramLast, detectCandlePatterns, detectPinBar, getChinesaStrategySignal, getBwalphaIndicator, applyRitmo, computePressao, applyPressao,
 };

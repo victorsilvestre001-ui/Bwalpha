@@ -262,6 +262,12 @@ async function runMigrations() {
     } catch (err) {
         console.error('Índice de e-mail único não criado (há e-mails duplicados?):', err.message);
     }
+    try {
+        // Uma conta por CPF (contas antigas sem CPF ficam de fora).
+        await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_cpf ON users (cpf) WHERE cpf IS NOT NULL AND cpf <> ''");
+    } catch (err) {
+        console.error('Índice de CPF único não criado (há CPFs repetidos?):', err.message);
+    }
     if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
         console.warn('Segurança: JWT_SECRET ausente ou curto (use pelo menos 32 caracteres aleatórios).');
     }

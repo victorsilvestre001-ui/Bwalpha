@@ -3,7 +3,7 @@
 // e escreve o resultado nos logs, porque a Twelve Data só é acessível de lá.
 const pool = require('./db');
 const {
-    computeTechnicalSignal, computeCandleFollowSignal, computeM1Signal, applyRitmo, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, TIMEFRAME_MINUTES, isMarketOpen,
+    computeTechnicalSignal, computeCandleFollowSignal, computeM1Signal, applyRitmo, computePressao, applyPressao, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, TIMEFRAME_MINUTES, isMarketOpen,
 } = require('./marketRoutes');
 
 const WINDOW = 99; // o /signal usa 100 candles: 99 fechados + 1 em formação
@@ -115,6 +115,15 @@ const STRATEGIES = {
         const r = applyRitmo(closed, 'M1', computeM1Signal(closed, formingNow, sig));
         return r.confidence === 'Baixa' ? null : r.direction;
     },
+    // Pressão compradora x vendedora: descarta o sinal quando a pressão forte está contra ele.
+    // Pressão a favor: quando a pressão forte está contra a leitura, o sinal segue a pressão.
+    pressao_m1: ({ sig, closed, formingNow }) => applyPressao(computeM1Signal(closed, formingNow, sig), computePressao(closed, formingNow)).direction,
+    // Comparação: descartar o sinal em vez de virar.
+    pressao_pula_m1: ({ sig, closed, formingNow }) => {
+        const base = computeM1Signal(closed, formingNow, sig);
+        return applyPressao(base, computePressao(closed, formingNow)).direction === base.direction ? base.direction : null;
+    },
+    pressao_m5: ({ sig, closed }) => applyPressao(sig, computePressao(closed, null)).direction,
     ritmo_m5: ({ sig, closed }) => applyRitmo(closed, 'M5', sig).direction,
     ritmo_m5_sem_baixa: ({ sig, closed }) => {
         const r = applyRitmo(closed, 'M5', sig);
@@ -316,6 +325,16 @@ async function dbStats() {
                    COUNT(*) FILTER (WHERE result IS NULL OR result = 'unknown')::int AS other
             FROM analyses GROUP BY 1,2,3,4 ORDER BY 1,2,3,4`);
         console.log('BACKTEST_DB ' + JSON.stringify(rows));
+        // Detalhe dos sinais recentes: leitura, segundo do candle em que foi pedido e preços.
+        const det = await pool.query(`
+            SELECT id, pair, timeframe AS tf, direction AS dir, confidence AS conf, leitura,
+                   to_char(requested_at AT TIME ZONE 'UTC', 'MM-DD HH24:MI:SS') AS pedido,
+                   to_char(entry_time AT TIME ZONE 'UTC', 'HH24:MI') AS entrada,
+                   open_price AS o, close_price AS c, result
+            FROM analyses WHERE requested_at > NOW() - INTERVAL '4 days' ORDER BY id`);
+        for (let i = 0; i < det.rows.length; i += 25) {
+            console.log('BACKTEST_DET ' + JSON.stringify(det.rows.slice(i, i + 25).map((r) => Object.values(r))));
+        }
     } catch (err) {
         console.error('BACKTEST_DB erro:', err.message);
     }
@@ -324,6 +343,7 @@ async function dbStats() {
 async function run() {
     console.log('BACKTEST_START');
     await dbStats();
+    if (process.env.BACKTEST_ONLY_DB === '1') { console.log('BACKTEST_END'); return; }
     const plan = [['M1', parseInt(process.env.BACKTEST_M1_PAGES, 10) || 3], ['M5', parseInt(process.env.BACKTEST_M5_PAGES, 10) || 2]];
     for (const pair of Object.keys(SIGNAL_PAIRS)) {
         for (const [tf, pages] of plan) {

@@ -50,7 +50,7 @@ async function request(path, { method = "GET", body, auth = true } = {}) {
 }
 
 export const api = {
-  register: (name, email, password) => request("/api/auth/register", { method: "POST", body: { name, email, password }, auth: false }),
+  register: (name, email, password, cpf) => request("/api/auth/register", { method: "POST", body: { name, email, password, cpf }, auth: false }),
   login: (email, password) => request("/api/auth/login", { method: "POST", body: { email, password }, auth: false }),
   me: () => request("/api/auth/me"),
   updateProfile: (patch) => request("/api/auth/profile", { method: "PATCH", body: patch }),

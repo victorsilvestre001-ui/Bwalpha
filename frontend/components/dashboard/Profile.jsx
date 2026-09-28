@@ -4,11 +4,7 @@ import { Camera, Crown, Loader2, Check, MessageCircle } from "lucide-react";
 import { api, updateSessionUser } from "@/lib/api";
 import { fileToAvatarDataUrl } from "@/lib/image";
 import { Avatar, isPaid } from "./Sidebar";
-
-function formatCpf(v = "") {
-  const d = String(v).replace(/\D/g, "").slice(0, 11);
-  return d.replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d{1,2})$/, "$1-$2");
-}
+import { formatCpf } from "@/lib/cpf";
 
 export default function Profile({ user, onUserChange, onUpgrade, upgrading }) {
   const [cpf, setCpf] = useState(formatCpf(user?.cpf || ""));
@@ -71,12 +67,22 @@ export default function Profile({ user, onUserChange, onUpgrade, upgrading }) {
 
         <form onSubmit={(e) => { e.preventDefault(); save({ cpf }); }} className="mt-8 max-w-sm">
           <label className="mb-2 block font-mono text-[10px] uppercase tracking-widest text-mist-faint">CPF</label>
-          <div className="flex gap-2">
-            <input className="input" value={cpf} onChange={(e) => setCpf(formatCpf(e.target.value))} placeholder="000.000.000-00" inputMode="numeric" />
-            <button type="submit" disabled={saving} className="btn-primary !px-5">
-              {saving ? <Loader2 size={16} className="animate-spin" /> : saved ? <Check size={16} /> : "Salvar"}
-            </button>
-          </div>
+          {user?.cpf ? (
+            <>
+              <input className="input opacity-70" value={formatCpf(user.cpf)} disabled readOnly />
+              <p className="mt-2 text-xs text-mist-faint">O CPF não pode ser alterado. Precisa corrigir? Fale com o suporte.</p>
+            </>
+          ) : (
+            <>
+              <div className="flex gap-2">
+                <input className="input" value={cpf} onChange={(e) => setCpf(formatCpf(e.target.value))} placeholder="000.000.000-00" inputMode="numeric" />
+                <button type="submit" disabled={saving} className="btn-primary !px-5">
+                  {saving ? <Loader2 size={16} className="animate-spin" /> : saved ? <Check size={16} /> : "Salvar"}
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-mist-faint">Uma conta por CPF. Depois de salvo, não pode ser alterado.</p>
+            </>
+          )}
         </form>
         {error && <p className="mt-4 rounded-lg border border-ember/30 bg-ember/10 px-3 py-2 text-sm text-ember-soft">{error}</p>}
       </div>

@@ -10,7 +10,8 @@ export default function Privacidade() {
       <h2>Dados que coletamos</h2>
       <ul>
         <li><strong>Cadastro:</strong> nome, e-mail e senha (guardada de forma criptografada).</li>
-        <li><strong>Perfil (opcional):</strong> CPF e foto.</li>
+        <li><strong>CPF:</strong> pedido no cadastro para garantir uma conta por pessoa (e um teste grátis por pessoa). Não é exibido para terceiros nem usado para outra finalidade.</li>
+        <li><strong>Perfil (opcional):</strong> foto.</li>
         <li><strong>Uso da plataforma:</strong> análises geradas e seus resultados, mensagens enviadas ao assistente de IA.</li>
         <li><strong>Pagamento:</strong> o pagamento é processado pela Kiwify. Não recebemos nem guardamos dados do seu cartão; guardamos apenas o e-mail da compra e o status do pedido.</li>
         <li><strong>Navegação:</strong> dados técnicos (navegador, IP) e, somente se você aceitar, cookies de marketing.</li>
