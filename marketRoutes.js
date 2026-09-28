@@ -786,8 +786,10 @@ function computePressao(closed, forming) {
 
 // Pressão forte manda: se a leitura do candle deu o lado contrário (ex.: VENDA com os
 // compradores empurrando), o sinal vai a favor da pressão.
+// Pressão forte a favor da leitura confirma a entrada: confiança Alta.
 function applyPressao(sig, pressao) {
-    if (!sig?.direction || !pressao?.lado || pressao.lado === sig.direction) return sig;
+    if (!sig?.direction || !pressao?.lado) return sig;
+    if (pressao.lado === sig.direction) return { ...sig, confidence: 'Alta' };
     return { ...sig, direction: pressao.lado, confidence: 'Média', leitura: `${sig.leitura || 'tecnico'}_pressao` };
 }
 

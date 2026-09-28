@@ -118,6 +118,11 @@ const STRATEGIES = {
     // Pressão compradora x vendedora: descarta o sinal quando a pressão forte está contra ele.
     // Pressão a favor: quando a pressão forte está contra a leitura, o sinal segue a pressão.
     pressao_m1: ({ sig, closed, formingNow }) => applyPressao(computeM1Signal(closed, formingNow, sig), computePressao(closed, formingNow)).direction,
+    // Só as entradas confirmadas pela pressão (confiança Alta).
+    pressao_m1_alta: ({ sig, closed, formingNow }) => {
+        const r = applyPressao(computeM1Signal(closed, formingNow, sig), computePressao(closed, formingNow));
+        return r.confidence === 'Alta' ? r.direction : null;
+    },
     // Comparação: descartar o sinal em vez de virar.
     pressao_pula_m1: ({ sig, closed, formingNow }) => {
         const base = computeM1Signal(closed, formingNow, sig);
