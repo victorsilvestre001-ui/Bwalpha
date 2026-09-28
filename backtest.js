@@ -294,8 +294,8 @@ function stats(list) {
     return { n, wr: n ? +(w / n * 100).toFixed(1) : null, ci: n ? +(196 * Math.sqrt((w / n) * (1 - w / n) / n)).toFixed(1) : null };
 }
 
-function runOn(candles, timeframe) {
-    const runFilter = new RegExp(process.env.BACKTEST_FILTER || '^(producao|atual$)');
+function runOn(candles, timeframe, opts = {}) {
+    const runFilter = opts.filter || new RegExp(process.env.BACKTEST_FILTER || '^(producao|atual$)');
     const tf = TIMEFRAME_MINUTES[timeframe] * 60 * 1000;
     const res = Object.fromEntries(Object.keys(STRATEGIES).map((k) => [k, { all: [], h1: [], h2: [], sess: {} }]));
     let evaluated = 0;
@@ -305,7 +305,8 @@ function runOn(candles, timeframe) {
         // Só conta sequências contínuas (sem buraco de fim de semana ou falha de dados).
         if (target.time - forming.time !== tf || forming.time - candles[k - WINDOW].time !== WINDOW * tf) continue;
         // Fim de semana: a fonte gera candles artificiais com o mercado fechado; o /signal nem responde.
-        if (!isMarketOpen(new Date(target.time)) || !isMarketOpen(new Date(candles[k - WINDOW].time))) continue;
+        // (O OTC funciona 24h, inclusive no fim de semana.)
+        if (!opts.anyTime && (!isMarketOpen(new Date(target.time)) || !isMarketOpen(new Date(candles[k - WINDOW].time)))) continue;
         const closed = candles.slice(k - WINDOW, k);
         // No momento do pedido o candle em formação só tem a abertura (o indicador usa só o open).
         const formingOpen = { time: forming.time, open: forming.open, high: forming.open, low: forming.open, close: forming.open };
@@ -365,8 +366,41 @@ async function dbStats() {
     }
 }
 
+// OTC (Exnova): usa os candles gravados pelo coletor. Ordena pelo PIOR acerto entre as duas
+// metades dos dados, para só aparecer padrão que se repete (e não o que acertou por sorte).
+async function runOtc() {
+    const { rows: actives } = await pool.query('SELECT active, COUNT(*)::int AS n FROM otc_candles GROUP BY active ORDER BY active');
+    // Por padrão testa todas as estratégias, menos as de "ritmo" (pesadas).
+    const filter = new RegExp(process.env.BACKTEST_OTC_FILTER || '^(?!ritmo|pressao_ritmo)');
+    const minN = parseInt(process.env.BACKTEST_MIN_N, 10) || 100;
+    for (const { active, n } of actives) {
+        const { rows } = await pool.query(
+            'SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 ORDER BY time', [active]);
+        // Descarta o último candle (pode ainda estar em formação).
+        const candles = rows.slice(0, -1).map((r) => ({
+            time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close,
+        }));
+        const { evaluated, out } = runOn(candles, 'M1', { anyTime: true, filter });
+        console.log(`BACKTEST_OTC ${active} candles=${n} de=${rows[0] && new Date(rows[0].time).toISOString()} avaliados=${evaluated}`);
+        const ranked = Object.entries(out)
+            .filter(([name, r]) => filter.test(name) && r.n >= minN && r.metade1 != null && r.metade2 != null)
+            .map(([name, r]) => [name, r.n, r.wr, r.metade1, r.metade2, r.cobertura, Math.min(r.metade1, r.metade2)])
+            .sort((a, b) => b[6] - a[6]);
+        const top = parseInt(process.env.BACKTEST_TOP, 10) || 25;
+        // [estratégia, amostras, acerto %, 1ª metade, 2ª metade, cobertura %, pior metade]
+        console.log(`BACKTEST_OTC_TOP ${active} ${JSON.stringify(ranked.slice(0, top))}`);
+        const base = out.producao_m1_sempre;
+        if (base) console.log(`BACKTEST_OTC_BASE ${active} producao_m1_sempre ${JSON.stringify([base.n, base.wr, base.metade1, base.metade2])}`);
+    }
+}
+
 async function run() {
     console.log('BACKTEST_START');
+    if (process.env.BACKTEST_SOURCE === 'otc') {
+        try { await runOtc(); } catch (err) { console.error('BACKTEST_ERR OTC:', err.message); }
+        console.log('BACKTEST_END');
+        return;
+    }
     await dbStats();
     if (process.env.BACKTEST_ONLY_DB === '1') { console.log('BACKTEST_END'); return; }
     const plan = [['M1', parseInt(process.env.BACKTEST_M1_PAGES, 10) || 3], ['M5', parseInt(process.env.BACKTEST_M5_PAGES, 10) || 2]];
