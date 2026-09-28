@@ -287,6 +287,7 @@ runMigrations().then(() => {
         setInterval(resolvePendingAnalyses, 60 * 1000);
         // Streaming de preços da Twelve Data: monta o candle M1 em formação para os sinais.
         require('./liveCandles').connect(['EUR/USD', 'EUR/JPY', 'XAU/USD']);
+        checkoutRoutes.checkStripeSetup();
         // Backtest sob demanda: RUN_BACKTEST=1 escreve nos logs a taxa de acerto de cada estratégia.
         if (process.env.RUN_BACKTEST === '1') {
             require('./backtest').run().catch((err) => console.error('BACKTEST_ERR', err.message));

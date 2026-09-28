@@ -75,5 +75,20 @@ router.post('/portal-session', authMiddleware, async (req, res) => {
     res.status(400).json({ error: 'O VIP é pagamento único, sem mensalidade. Dúvidas ou reembolso: tradeonia@gmail.com.' });
 });
 
+// Conferência ao iniciar: mostra nos logs se o produto/preço do VIP está pronto para o checkout.
+async function checkStripeSetup() {
+    if (provider() !== 'stripe') return;
+    try {
+        const { price } = await vipLineItem();
+        const p = await stripe.prices.retrieve(price);
+        console.log(`Stripe pronto: preço ${p.id} ${p.currency.toUpperCase()} ${(p.unit_amount / 100).toFixed(2)} tipo=${p.type} ativo=${p.active} modo=${p.livemode ? 'real' : 'teste'}`);
+        if (p.type !== 'one_time') console.error('Stripe: o preço do VIP precisa ser de PAGAMENTO ÚNICO (não recorrente).');
+        if (p.currency !== 'brl') console.error('Stripe: o preço precisa ser em BRL para aceitar Pix.');
+    } catch (err) {
+        console.error('Stripe: configuração do VIP com problema:', err.message);
+    }
+}
+
 module.exports = router;
 module.exports.provider = provider;
+module.exports.checkStripeSetup = checkStripeSetup;
