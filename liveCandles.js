@@ -8,6 +8,7 @@ const WS_URL = process.env.TD_WS_URL || 'wss://ws.twelvedata.com/v1/quotes/price
 const M1_MS = 60_000;
 
 const candles = {};   // símbolo -> { time, open, high, low, close, ticks, firstTickAt }
+const history = {};   // símbolo -> candles M1 já fechados, montados pelo streaming (últimos 120)
 const status = { connected: false, subscribed: [], failed: [], lastTickAt: null };
 let ws = null;
 let heartbeat = null;
@@ -17,7 +18,14 @@ function onTick(symbol, price, tsMs) {
     if (!Number.isFinite(price)) return;
     const minute = Math.floor(tsMs / M1_MS) * M1_MS;
     const c = candles[symbol];
+    if (c && c.time > minute) return; // tick atrasado de um minuto que já virou
     if (!c || c.time !== minute) {
+        // Guarda o minuto que fechou (se o streaming acompanhou desde o começo dele).
+        if (c && (c.prev || c.firstTickAt - c.time <= 5_000)) {
+            const h = (history[symbol] ||= []);
+            h.push({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close });
+            if (h.length > 120) h.shift();
+        }
         // Abre o minuto no fechamento do anterior (se for o minuto seguinte), como no gráfico.
         const open = c && c.time === minute - M1_MS ? c.close : price;
         candles[symbol] = {
@@ -76,4 +84,9 @@ function getLiveM1(symbol, bucketStart, nowMs = Date.now()) {
     return { time: c.time, open: c.open, high: c.high, low: c.low, close: c.close, ticks: c.ticks };
 }
 
-module.exports = { connect, getLiveM1, status };
+// Candles fechados montados pelo streaming, para cobrir os minutos que a API REST ainda não entregou.
+function getLiveClosed(symbol) {
+    return (history[symbol] || []).slice();
+}
+
+module.exports = { connect, getLiveM1, getLiveClosed, status };

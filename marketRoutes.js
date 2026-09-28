@@ -2,7 +2,7 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { authMiddleware, currentPlan, isVipPlan } = require('./authMiddleware');
 const pool = require('./db');
-const { getLiveM1, status: liveStatus } = require('./liveCandles');
+const { getLiveM1, getLiveClosed, status: liveStatus } = require('./liveCandles');
 
 const router = express.Router();
 const AV_BASE = 'https://www.alphavantage.co/query';
@@ -826,6 +826,22 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
             closed = closed.filter((c) => c.time < bucketStart);
         }
     }
+    // A API REST às vezes entrega os candles fechados com alguns minutos de atraso: completa
+    // os minutos que faltam com os montados pelo streaming, para a leitura não usar o passado.
+    if (closed.length) {
+        const lastRest = closed[closed.length - 1].time;
+        const extra = getLiveClosed(SIGNAL_PAIRS[pairLabel].td).filter((c) => c.time > lastRest && c.time < bucketStart);
+        if (extra.length) closed = [...closed, ...extra];
+    }
+    const lastClosedTime = closed.length ? closed[closed.length - 1].time : 0;
+    const atrasoMin = Math.round((bucketStart - M1_MS - lastClosedTime) / M1_MS);
+    if (forming && forming.time === bucketStart && atrasoMin > 0) {
+        // Ainda faltam candles recentes: a leitura seria feita com o gráfico "velho".
+        console.log(`M1 ${pairLabel}: candles fechados atrasados ${atrasoMin} min (ultimo=${new Date(lastClosedTime).toISOString()})`);
+        const result = { pair: pairLabel, timeframe: 'M1', noEntry: true, reason: 'Os dados deste ativo estão chegando atrasados agora. Tente de novo em instantes.' };
+        m1Cache[pairLabel] = { bucketStart, at: nowMs, result };
+        return result;
+    }
     if (!forming || forming.time !== bucketStart) {
         const last = allCandles[allCandles.length - 1];
         console.log(`M1 sem candle atual ${pairLabel}: ultimo=${new Date(last.time).toISOString()} candle_atual=${new Date(bucketStart).toISOString()} websocket=${JSON.stringify(liveStatus)}`);
@@ -861,6 +877,8 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
         pressao,
         candleAtual: { bodyRatio: m1.bodyRatio ?? null, bodyVsAvg: m1.bodyVsAvg ?? null },
     };
+    const fmt = (c) => `${new Date(c.time).toISOString().slice(11, 16)} ${c.open}/${c.high}/${c.low}/${c.close}`;
+    console.log(`M1 ${pairLabel} ${result.direction} ${result.confidence} leitura=${result.leitura} ao_vivo=${forming.ticks != null} atual=[${fmt(forming)}] fechados=[${closed.slice(-3).map(fmt).join(' | ')}]`);
     m1Cache[pairLabel] = { bucketStart, at: nowMs, result };
     return result;
 }
