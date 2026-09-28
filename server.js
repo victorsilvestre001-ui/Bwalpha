@@ -288,6 +288,8 @@ runMigrations().then(() => {
         // Streaming de preços da Twelve Data: monta o candle M1 em formação para os sinais.
         require('./liveCandles').connect(['EUR/USD', 'EUR/JPY', 'XAU/USD']);
         checkoutRoutes.checkStripeSetup();
+        // Teste: coleta de candles do OTC da Exnova para backtest (desligado sem EXNOVA_COLLECT=1).
+        require('./exnovaCollector').start();
         // Backtest sob demanda: RUN_BACKTEST=1 escreve nos logs a taxa de acerto de cada estratégia.
         if (process.env.RUN_BACKTEST === '1') {
             require('./backtest').run().catch((err) => console.error('BACKTEST_ERR', err.message));
