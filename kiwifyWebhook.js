@@ -11,11 +11,12 @@ const REVOKE_EVENTS = new Set(['order_refunded', 'chargeback']);
 const REVOKE_STATUS = new Set(['refunded', 'chargedback']);
 
 // A Kiwify assina cada entrega: ?signature=<HMAC-SHA1 do corpo cru, com o token do webhook>.
+// Cada webhook da Kiwify tem seu token; KIWIFY_WEBHOOK_TOKEN aceita vários, separados por vírgula.
 function validSignature(rawBody, signature) {
-    const token = process.env.KIWIFY_WEBHOOK_TOKEN;
-    if (!token || !signature) return false;
-    const expected = crypto.createHmac('sha1', token).update(rawBody).digest('hex');
-    return secureCompare(expected, String(signature));
+    const tokens = String(process.env.KIWIFY_WEBHOOK_TOKEN || '').split(',').map((t) => t.trim()).filter(Boolean);
+    if (!tokens.length || !signature) return false;
+    return tokens.some((token) =>
+        secureCompare(crypto.createHmac('sha1', token).update(rawBody).digest('hex'), String(signature)));
 }
 
 // Grava o estado do VIP no usuário (se já tiver conta) e em vip_grants (para quem
