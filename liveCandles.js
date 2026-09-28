@@ -83,7 +83,9 @@ function getLiveM1(symbol, bucketStart, nowMs = Date.now()) {
     const c = candles[symbol];
     if (!c || c.time !== bucketStart) return null;
     const coveredFromStart = c.prev || c.firstTickAt - bucketStart <= 5_000;
-    if (!coveredFromStart || nowMs - status.lastTickAt > 15_000) return null;
+    // O streaming manda ~30 preços por minuto; com menos de 8 (ex.: logo após reiniciar o servidor)
+    // a máxima/mínima do candle ficam imprecisas.
+    if (!coveredFromStart || c.ticks < 8 || nowMs - status.lastTickAt > 15_000) return null;
     return { time: c.time, open: c.open, high: c.high, low: c.low, close: c.close, ticks: c.ticks };
 }
 
