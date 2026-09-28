@@ -3,7 +3,7 @@
 // e escreve o resultado nos logs, porque a Twelve Data só é acessível de lá.
 const pool = require('./db');
 const {
-    computeTechnicalSignal, computeCandleFollowSignal, computeM1Signal, applyRitmo, computePressao, applyPressao, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, TIMEFRAME_MINUTES, isMarketOpen,
+    computeTechnicalSignal, computeCandleFollowSignal, computeM1Signal, applyRitmo, computePressao, applyPressao, applyChinesa, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, TIMEFRAME_MINUTES, isMarketOpen,
 } = require('./marketRoutes');
 
 const WINDOW = 99; // o /signal usa 100 candles: 99 fechados + 1 em formação
@@ -109,6 +109,19 @@ const STRATEGIES = {
     // Regra que está em produção no M1 (mesma função da rota /signal).
     producao_m1: ({ closed, formingNow }) => computeCandleFollowSignal(closed, formingNow).direction,
     producao_m1_sempre: ({ sig, closed, formingNow }) => computeM1Signal(closed, formingNow, sig).direction,
+    // Estratégia Chinesa como confirmação: acerto quando concorda x quando discorda do M1.
+    chinesa_concorda_m1: ({ sig, closed, formingNow }) => {
+        const r = applyChinesa(computeM1Signal(closed, formingNow, sig), closed, formingNow);
+        return r.chinesa?.concorda ? r.direction : null;
+    },
+    chinesa_discorda_m1: ({ sig, closed, formingNow }) => {
+        const r = applyChinesa(computeM1Signal(closed, formingNow, sig), closed, formingNow);
+        return r.chinesa && !r.chinesa.concorda ? r.direction : null;
+    },
+    chinesa_neutra_m1: ({ sig, closed, formingNow }) => {
+        const r = applyChinesa(computeM1Signal(closed, formingNow, sig), closed, formingNow);
+        return r.chinesa ? null : r.direction;
+    },
     // O que dá para fazer sem o candle em formação: lê o último candle FECHADO e entra no
     // candle seguinte ao atual (uma vela de atraso), que é o que a fonte grátis permite.
     atraso1_m1: ({ sig, closed }) => computeM1Signal(closed.slice(0, -1), closed[closed.length - 1], sig).direction,

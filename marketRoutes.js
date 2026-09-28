@@ -794,6 +794,19 @@ function applyPressao(sig, pressao) {
     return { ...sig, direction: pressao.lado, confidence: 'Média', leitura: `${sig.leitura || 'tecnico'}_pressao` };
 }
 
+// ---- Estratégia Chinesa como confirmação do M1 ----
+// Padrão dos últimos 5 candles (contando o atual). Não muda a direção: se concorda com a
+// leitura do candle, a confiança vira Alta; se discorda, vira Baixa. Desliga com CHINESA_M1=0.
+const CHINESA_M1 = () => process.env.CHINESA_M1 !== '0';
+
+function applyChinesa(sig, closed, forming) {
+    if (!sig?.direction) return sig;
+    const ch = getChinesaStrategySignal(forming ? [...closed, forming] : closed);
+    if (!ch?.direction) return { ...sig, chinesa: null };
+    const concorda = ch.direction === sig.direction;
+    return { ...sig, confidence: concorda ? 'Alta' : 'Baixa', chinesa: { direction: ch.direction, concorda } };
+}
+
 const m1Cache = {};
 
 async function getM1Signal(pairLabel, nowMs = Date.now()) {
@@ -832,6 +845,7 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
     const technical = computeTechnicalSignal(closed, forming);
     let m1 = computeM1Signal(closed, forming, technical);
     if (RITMO_DIA()) m1 = applyRitmo(closed, 'M1', m1);
+    if (CHINESA_M1()) m1 = applyChinesa(m1, closed, forming);
     const pressao = computePressao(closed, forming);
     if (PRESSAO_FILTRO()) m1 = applyPressao(m1, pressao);
     const result = {
@@ -843,6 +857,7 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
         confidence: m1.confidence,
         leitura: m1.leitura,
         ritmo: m1.ritmo || null,
+        chinesaConfirma: m1.chinesa || null,
         pressao,
         candleAtual: { bodyRatio: m1.bodyRatio ?? null, bodyVsAvg: m1.bodyVsAvg ?? null },
     };
@@ -1088,5 +1103,5 @@ router.get('/history', authMiddleware, async (req, res) => {
 module.exports = {
     router, getQuotes, getIndicators, getEconomicSnapshot, getNews, getHistory, fetchIntradayCandles, TIMEFRAME_MINUTES,
     computeTechnicalSignal, computeCandleFollowSignal, computeM1Signal, getM1Signal, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, isMarketOpen,
-    emaSeries, rsiLast, macdHistogramLast, detectCandlePatterns, detectPinBar, getChinesaStrategySignal, getBwalphaIndicator, applyRitmo, computePressao, applyPressao,
+    emaSeries, rsiLast, macdHistogramLast, detectCandlePatterns, detectPinBar, getChinesaStrategySignal, getBwalphaIndicator, applyRitmo, computePressao, applyPressao, applyChinesa,
 };
