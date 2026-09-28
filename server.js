@@ -285,6 +285,8 @@ runMigrations().then(() => {
         setInterval(syncEconomicCalendar, CALENDAR_SYNC_INTERVAL_MS);
         // Confere WIN/RED das análises cujo candle já fechou, mesmo sem ninguém abrir o histórico.
         setInterval(resolvePendingAnalyses, 60 * 1000);
+        // Streaming de preços da Twelve Data: monta o candle M1 em formação para os sinais.
+        require('./liveCandles').connect(['EUR/USD', 'EUR/JPY', 'XAU/USD']);
         // Backtest sob demanda: RUN_BACKTEST=1 escreve nos logs a taxa de acerto de cada estratégia.
         if (process.env.RUN_BACKTEST === '1') {
             require('./backtest').run().catch((err) => console.error('BACKTEST_ERR', err.message));

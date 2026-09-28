@@ -2,6 +2,7 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { authMiddleware, currentPlan, isVipPlan } = require('./authMiddleware');
 const pool = require('./db');
+const { getLiveM1, status: liveStatus } = require('./liveCandles');
 
 const router = express.Router();
 const AV_BASE = 'https://www.alphavantage.co/query';
@@ -803,10 +804,24 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
 
     const allCandles = await fetchIntradayCandles(pairLabel, 'M1');
     if (!allCandles || allCandles.length < 40) return null;
-    const { closed, forming } = splitFormingCandle(allCandles, M1_MS, nowMs);
+    let { closed, forming } = splitFormingCandle(allCandles, M1_MS, nowMs);
+    if (!forming || forming.time !== bucketStart) {
+        // A API REST não traz o candle em formação: usa o montado pelo streaming (WebSocket).
+        const live = getLiveM1(SIGNAL_PAIRS[pairLabel].td, bucketStart, nowMs);
+        if (live) {
+            forming = live;
+            closed = closed.filter((c) => c.time < bucketStart);
+        }
+    }
     if (!forming || forming.time !== bucketStart) {
         const last = allCandles[allCandles.length - 1];
-        console.log(`M1 sem candle atual ${pairLabel}: ultimo=${new Date(last.time).toISOString()} candle_atual=${new Date(bucketStart).toISOString()} agora=${new Date(nowMs).toISOString()} ultimo_ohlc=${[last.open, last.high, last.low, last.close].join('/')}`);
+        console.log(`M1 sem candle atual ${pairLabel}: ultimo=${new Date(last.time).toISOString()} candle_atual=${new Date(bucketStart).toISOString()} websocket=${JSON.stringify(liveStatus)}`);
+        if (process.env.M1_EXIGIR_AO_VIVO === '1') {
+            // Sem o candle ao vivo a leitura vira cara ou coroa: melhor não dar entrada.
+            const result = { pair: pairLabel, timeframe: 'M1', noEntry: true, reason: 'Os dados ao vivo deste ativo estão indisponíveis agora. Tente outro ativo ou aguarde um instante.' };
+            m1Cache[pairLabel] = { bucketStart, at: nowMs, result };
+            return result;
+        }
         // Candle atual ainda não chegou da fonte: usa a leitura técnica dos candles fechados.
         const technical = computeTechnicalSignal(closed, null);
         const result = { ...technical, pair: pairLabel, timeframe: 'M1', confidence: 'Baixa', leitura: 'sem_candle_atual' };
