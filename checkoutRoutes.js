@@ -48,21 +48,32 @@ router.post('/create-session', authMiddleware, async (req, res) => {
         const user = rows[0] || req.user;
         if (provider() === 'kiwify') return res.json({ url: kiwifyCheckoutUrl(user) });
 
-        const session = await stripe.checkout.sessions.create({
+        const methods = (process.env.STRIPE_PAYMENT_METHODS || 'card,pix').split(',').map((m) => m.trim()).filter(Boolean);
+        const params = (types) => ({
             mode: 'payment',
             // Pix precisa estar ativado no painel do Stripe (Configurações > Formas de pagamento).
-            payment_method_types: (process.env.STRIPE_PAYMENT_METHODS || 'card,pix').split(',').map((m) => m.trim()).filter(Boolean),
-            line_items: [await vipLineItem()],
+            payment_method_types: types,
+            line_items: [lineItem],
             customer_email: user.email,
             customer_creation: 'always',
             allow_promotion_codes: true,
-            payment_method_options: { pix: { expires_after_seconds: 3600 } },
+            ...(types.includes('pix') ? { payment_method_options: { pix: { expires_after_seconds: 3600 } } } : {}),
             success_url: `${FRONTEND_URL}/dashboard?vip=success`,
             cancel_url: `${FRONTEND_URL}/dashboard?vip=cancelled`,
             client_reference_id: String(req.user.id),
             metadata: { user_id: String(req.user.id) },
             payment_intent_data: { metadata: { user_id: String(req.user.id) } },
         });
+        const lineItem = await vipLineItem();
+        let session;
+        try {
+            session = await stripe.checkout.sessions.create(params(methods));
+        } catch (err) {
+            // Pix ainda não ativado na conta: não deixa o cliente sem comprar, cai para só cartão.
+            if (!/pix/i.test(err.message) || !methods.includes('card')) throw err;
+            console.error('Stripe: Pix indisponível, checkout só com cartão:', err.message);
+            session = await stripe.checkout.sessions.create(params(methods.filter((m) => m !== 'pix')));
+        }
         res.json({ url: session.url });
     } catch (err) {
         console.error('Erro ao criar sessão de checkout:', err.message);
