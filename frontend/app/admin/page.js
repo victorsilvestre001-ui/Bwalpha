@@ -311,6 +311,14 @@ export default function AdminPage() {
 
             <section className="grid gap-4 lg:grid-cols-2">
               <CampaignCard
+                title="Aviso: resultados de hoje (M1)"
+                load={api.resultsCampaign}
+                send={api.sendResultsCampaign}
+                describe={() => "E-mail com a imagem do histórico M1 de 28/09 (4 sinais, 4 WIN) e o convite conforme o plano. Uma vez por conta."}
+                confirmText={(i) => `Enviar o e-mail de resultados para ${i.eligible} conta(s) agora?`}
+                sentLabel="conta(s) já receberam."
+              />
+              <CampaignCard
                 title="Aviso: mercado aberto"
                 load={api.marketOpenCampaign}
                 send={api.sendMarketOpenCampaign}

@@ -204,4 +204,36 @@ async function sendPixReminderEmail(name, email) {
     });
 }
 
-module.exports = { sendEmail, sendPixReminderEmail, sendWelcomeEmail, sendCouponEmail, sendTrialEmail, sendMarketOpenEmail, escapeHtml };
+// Resultados do dia: imagem do histórico (hospedada no site) + convite conforme o plano.
+async function sendResultsEmail(name, email, account = {}) {
+    const firstName = String(name || '').trim().split(/\s+/)[0];
+    const vip = account.plan === 'vip' || account.plan === 'owner';
+    const trialLeft = !vip && !account.trial_expired && (account.signals_used || 0) < (parseInt(process.env.FREE_TRIAL_SIGNALS, 10) || 3);
+    const offer = !vip && !trialLeft ? couponOffer(name, email) : null;
+    const cta = vip
+        ? button(`${FRONTEND_URL}/dashboard`, 'Abrir o painel')
+        : trialLeft
+            ? button(`${FRONTEND_URL}/dashboard`, 'Testar meus 3 sinais grátis')
+            : (offer ? couponBlock(offer, 'Condição especial') : button(`${FRONTEND_URL}/dashboard`, 'Conhecer o VIP'));
+    return sendEmail({
+        to: email,
+        subject: '📊 Como foram os sinais M1 de hoje na TradeOn AI',
+        html: layout(`
+            <h1 style="color: #00F0A8; font-size: 22px; margin-bottom: 8px;">${firstName ? `${escapeHtml(firstName)}, olha` : 'Olha'} o histórico de hoje 📊</h1>
+            <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">
+                Atualizamos a leitura do M1: agora a IA acompanha o <strong>candle ao vivo</strong> no Ouro e no EURUSD.
+                Hoje foram 4 sinais conferidos no histórico, os 4 com WIN.
+            </p>
+            <img src="${FRONTEND_URL}/email/historico-m1-2809.jpg" alt="Histórico de sinais M1 de 28/09" width="432" style="display: block; width: 100%; max-width: 432px; margin: 20px auto; border-radius: 12px;">
+            <p style="font-size: 14px; line-height: 1.6; color: #9AA6C3;">
+                Cada sinal mostra o horário de entrada, a expiração e a confiança, e o resultado é conferido automaticamente, com os acertos e os erros.
+            </p>
+            ${cta}
+            <p style="font-size: 12px; line-height: 1.6; color: #5B6788; margin-top: 20px;">
+                Registro de um único dia (amostra pequena). Resultados passados não garantem resultados futuros. Opere com gestão e só com o que pode perder.
+            </p>`,
+            'Você recebeu este e-mail porque tem uma conta na TradeOn AI. Conteúdo educativo; operar envolve risco.'),
+    });
+}
+
+module.exports = { sendEmail, sendPixReminderEmail, sendResultsEmail, sendWelcomeEmail, sendCouponEmail, sendTrialEmail, sendMarketOpenEmail, escapeHtml };

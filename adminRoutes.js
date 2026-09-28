@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const pool = require('./db');
 const { authMiddleware } = require('./authMiddleware');
-const { sendCouponEmail, sendTrialEmail, sendMarketOpenEmail, sendPixReminderEmail } = require('./mailer');
+const { sendCouponEmail, sendTrialEmail, sendMarketOpenEmail, sendPixReminderEmail, sendResultsEmail } = require('./mailer');
 
 const router = express.Router();
 
@@ -239,6 +239,14 @@ registerCampaign('/market-open-campaign', {
     campaign: () => `mercado-aberto-${new Date().toLocaleDateString('en-CA', { timeZone: TZ })}`,
     where: `u.plan <> 'owner'`,
     send: sendMarketOpenEmail,
+    notReady: () => (!process.env.RESEND_API_KEY ? 'Envio de e-mail não configurado (RESEND_API_KEY).' : null),
+});
+
+// Resultados do dia (imagem do histórico M1 de 28/09): uma vez por conta.
+registerCampaign('/results-campaign', {
+    campaign: () => 'resultados-m1-2809',
+    where: `u.plan <> 'owner'`,
+    send: sendResultsEmail,
     notReady: () => (!process.env.RESEND_API_KEY ? 'Envio de e-mail não configurado (RESEND_API_KEY).' : null),
 });
 
