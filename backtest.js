@@ -109,6 +109,13 @@ const STRATEGIES = {
     // Regra que está em produção no M1 (mesma função da rota /signal).
     producao_m1: ({ closed, formingNow }) => computeCandleFollowSignal(closed, formingNow).direction,
     producao_m1_sempre: ({ sig, closed, formingNow }) => computeM1Signal(closed, formingNow, sig).direction,
+    // O que dá para fazer sem o candle em formação: lê o último candle FECHADO e entra no
+    // candle seguinte ao atual (uma vela de atraso), que é o que a fonte grátis permite.
+    atraso1_m1: ({ sig, closed }) => computeM1Signal(closed.slice(0, -1), closed[closed.length - 1], sig).direction,
+    atraso1_m1_forte: ({ sig, closed }) => {
+        const r = computeM1Signal(closed.slice(0, -1), closed[closed.length - 1], sig);
+        return r.leitura === 'forte' ? r.direction : null;
+    },
     // Ritmo do dia: mesma regra, ajustada pelo acerto dela nos candles recentes.
     ritmo_m1: ({ sig, closed, formingNow }) => applyRitmo(closed, 'M1', computeM1Signal(closed, formingNow, sig)).direction,
     ritmo_m1_sem_baixa: ({ sig, closed, formingNow }) => {
