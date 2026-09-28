@@ -805,6 +805,8 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
     if (!allCandles || allCandles.length < 40) return null;
     const { closed, forming } = splitFormingCandle(allCandles, M1_MS, nowMs);
     if (!forming || forming.time !== bucketStart) {
+        const last = allCandles[allCandles.length - 1];
+        console.log(`M1 sem candle atual ${pairLabel}: ultimo=${new Date(last.time).toISOString()} candle_atual=${new Date(bucketStart).toISOString()} agora=${new Date(nowMs).toISOString()} ultimo_ohlc=${[last.open, last.high, last.low, last.close].join('/')}`);
         // Candle atual ainda não chegou da fonte: usa a leitura técnica dos candles fechados.
         const technical = computeTechnicalSignal(closed, null);
         const result = { ...technical, pair: pairLabel, timeframe: 'M1', confidence: 'Baixa', leitura: 'sem_candle_atual' };
