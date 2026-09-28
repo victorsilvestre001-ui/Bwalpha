@@ -58,6 +58,8 @@ router.post('/create-session', authMiddleware, async (req, res) => {
             customer_creation: 'always',
             allow_promotion_codes: true,
             payment_method_options: {
+                // Parcelamento no cartão (Brasil): o cliente escolhe as parcelas no checkout.
+                ...(types.includes('card') && installments ? { card: { installments: { enabled: true } } } : {}),
                 ...(types.includes('pix') ? { pix: { expires_after_seconds: 3600 } } : {}),
                 // Boleto vence em 3 dias; o VIP libera quando compensar (async_payment_succeeded).
                 ...(types.includes('boleto') ? { boleto: { expires_after_days: 3 } } : {}),
@@ -69,14 +71,25 @@ router.post('/create-session', authMiddleware, async (req, res) => {
             payment_intent_data: { metadata: { user_id: String(req.user.id) } },
         });
         const lineItem = await vipLineItem();
+        let installments = process.env.STRIPE_INSTALLMENTS !== '0';
+        let types = methods;
         let session;
-        try {
-            session = await stripe.checkout.sessions.create(params(methods));
-        } catch (err) {
-            // Pix ainda não ativado na conta: não deixa o cliente sem comprar, cai para só cartão.
-            if (!/pix/i.test(err.message) || !methods.includes('card')) throw err;
-            console.error('Stripe: Pix indisponível, checkout só com cartão:', err.message);
-            session = await stripe.checkout.sessions.create(params(methods.filter((m) => m !== 'pix')));
+        // Se o Pix ou o parcelamento ainda não estiverem liberados na conta, tira o recurso e
+        // tenta de novo: o cliente nunca fica sem conseguir comprar.
+        for (let attempt = 0; !session; attempt++) {
+            try {
+                session = await stripe.checkout.sessions.create(params(types));
+            } catch (err) {
+                if (attempt < 3 && types.includes('pix') && types.length > 1 && /pix/i.test(err.message)) {
+                    console.error('Stripe: Pix indisponível, checkout sem Pix:', err.message);
+                    types = types.filter((m) => m !== 'pix');
+                } else if (attempt < 3 && installments && /installment/i.test(err.message)) {
+                    console.error('Stripe: parcelamento indisponível, checkout sem parcelas:', err.message);
+                    installments = false;
+                } else {
+                    throw err;
+                }
+            }
         }
         res.json({ url: session.url });
     } catch (err) {
