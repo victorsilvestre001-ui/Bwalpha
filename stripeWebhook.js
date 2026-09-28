@@ -4,6 +4,17 @@ const pool = require('./db');
 const router = express.Router();
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
+// Libera (ou tira) o VIP da conta. Pagamento único: sem data de expiração.
+async function setVip(userId, active, customerId) {
+    const result = await pool.query(
+        `UPDATE users SET plan = $1, subscription_status = $2, payment_provider = 'stripe',
+                stripe_customer_id = COALESCE($3, stripe_customer_id)
+         WHERE id = $4 AND plan <> 'owner' RETURNING id`,
+        [active ? 'vip' : 'free', active ? 'active' : 'refunded', customerId || null, userId]
+    );
+    return result.rowCount;
+}
+
 // IMPORTANTE: essa rota precisa do corpo cru (raw), não JSON parseado —
 // por isso ela é registrada no server.js ANTES do express.json() global.
 router.post('/', express.raw({ type: 'application/json' }), async (req, res) => {
@@ -18,51 +29,38 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
     }
 
     try {
+        const obj = event.data.object;
         switch (event.type) {
-            case 'checkout.session.completed': {
-                const session = event.data.object;
-                const userId = session.metadata?.user_id || session.client_reference_id;
-                const customerId = session.customer;
-                const subscriptionId = session.subscription;
-
-                if (userId) {
-                    await pool.query(
-                        `UPDATE users 
-                         SET plan = 'vip', subscription_status = 'active', stripe_customer_id = $1, stripe_subscription_id = $2
-                         WHERE id = $3`,
-                        [customerId, subscriptionId, userId]
-                    );
-                    console.log(`Usuário ${userId} virou VIP ✅`);
+            // Cartão: já chega pago. Pix: chega "unpaid" e o pagamento confirma depois (async_payment_succeeded).
+            case 'checkout.session.completed':
+            case 'checkout.session.async_payment_succeeded': {
+                const userId = obj.metadata?.user_id || obj.client_reference_id;
+                if (userId && obj.payment_status === 'paid') {
+                    const n = await setVip(userId, true, obj.customer);
+                    console.log(`Stripe: pagamento confirmado (${event.type}), conta ${userId} VIP ✅ (${n})`);
+                } else {
+                    console.log(`Stripe: checkout ${obj.id} aguardando pagamento (${obj.payment_status})`);
                 }
                 break;
             }
-
-            case 'customer.subscription.deleted':
-            case 'customer.subscription.updated': {
-                const subscription = event.data.object;
-                const status = subscription.status; // active | canceled | past_due | etc.
-                const isActive = status === 'active' || status === 'trialing';
-
-                await pool.query(
-                    `UPDATE users 
-                     SET plan = $1, subscription_status = $2
-                     WHERE stripe_subscription_id = $3`,
-                    [isActive ? 'vip' : 'free', status, subscription.id]
-                );
-                console.log(`Assinatura ${subscription.id} atualizada: ${status}`);
+            case 'checkout.session.async_payment_failed':
+                console.log(`Stripe: Pix não pago/expirado no checkout ${obj.id}`);
+                break;
+            // Reembolso total ou contestação: tira o VIP.
+            case 'charge.refunded':
+            case 'charge.dispute.created': {
+                const charge = event.type === 'charge.refunded' ? obj : await stripe.charges.retrieve(obj.charge);
+                const pi = charge.payment_intent ? await stripe.paymentIntents.retrieve(charge.payment_intent) : null;
+                const userId = pi?.metadata?.user_id;
+                if (userId && (event.type === 'charge.dispute.created' || charge.refunded)) {
+                    await setVip(userId, false);
+                    console.log(`Stripe: ${event.type}, VIP removido da conta ${userId}`);
+                }
                 break;
             }
-
-            case 'invoice.payment_failed': {
-                const invoice = event.data.object;
-                console.log(`Pagamento falhou pra assinatura ${invoice.subscription}`);
-                break;
-            }
-
             default:
                 break;
         }
-
         res.json({ received: true });
     } catch (err) {
         console.error('Erro ao processar webhook:', err.message);

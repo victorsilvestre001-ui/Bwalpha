@@ -221,7 +221,7 @@ registerCampaign('/coupon-campaign', {
     table: 'coupon_emails',
     where: `u.plan = 'free'`,
     send: sendCouponEmail,
-    notReady: () => (!process.env.SIGNUP_COUPON || !process.env.KIWIFY_CHECKOUT_URL ? 'Cupom não configurado no servidor (SIGNUP_COUPON).' : null),
+    notReady: () => (!process.env.SIGNUP_COUPON ? 'Cupom não configurado no servidor (SIGNUP_COUPON).' : null),
     info: () => ({ coupon: process.env.SIGNUP_COUPON || null, discount: process.env.SIGNUP_COUPON_DISCOUNT || '15%' }),
 });
 

@@ -26,9 +26,14 @@ async function sendEmail({ to, subject, html, replyTo }) {
 }
 
 // Cupom do VIP (criado na Kiwify). Sem SIGNUP_COUPON, os e-mails saem sem cupom.
+// Com o Stripe, o link leva ao painel (o botão de VIP abre o checkout) e o cupom é digitado
+// no campo "código promocional" do pagamento.
 function couponOffer(name, email) {
     const coupon = process.env.SIGNUP_COUPON;
-    if (!coupon || !process.env.KIWIFY_CHECKOUT_URL) return null;
+    if (!coupon) return null;
+    if (process.env.PAYMENT_PROVIDER === 'stripe' || !process.env.KIWIFY_CHECKOUT_URL) {
+        return { coupon, discount: process.env.SIGNUP_COUPON_DISCOUNT || '15%', url: `${FRONTEND_URL}/dashboard?upgrade=1` };
+    }
     const url = new URL(process.env.KIWIFY_CHECKOUT_URL);
     url.searchParams.set('email', email);
     if (name) url.searchParams.set('name', name);
@@ -168,8 +173,8 @@ async function sendMarketOpenEmail(name, email, account = {}) {
 // Lembrete para quem gerou o Pix (ou boleto) na Kiwify e não concluiu o pagamento.
 async function sendPixReminderEmail(name, email) {
     const firstName = String(name || '').trim().split(/\s+/)[0];
-    let checkout = null;
-    if (process.env.KIWIFY_CHECKOUT_URL) {
+    let checkout = `${FRONTEND_URL}/dashboard?upgrade=1`;
+    if (process.env.PAYMENT_PROVIDER !== 'stripe' && process.env.KIWIFY_CHECKOUT_URL) {
         const url = new URL(process.env.KIWIFY_CHECKOUT_URL);
         url.searchParams.set('email', email);
         if (name) url.searchParams.set('name', name);

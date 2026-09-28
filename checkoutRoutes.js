@@ -6,34 +6,21 @@ const router = express.Router();
 
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-const VIP_PRICE_ID = process.env.STRIPE_VIP_PRICE_ID || 'price_1Tze961kvSRT3RoOkxXhq787';
-
-// O VIP é uma assinatura mensal. Se o preço cadastrado no Stripe for de pagamento
-// único (não recorrente), o Stripe recusa o checkout em modo "subscription"; nesse
-// caso montamos a cobrança mensal com o mesmo valor, moeda e produto do preço.
-let vipLineItemCache = null;
-async function getVipLineItem() {
-    if (vipLineItemCache) return vipLineItemCache;
-    const price = await stripe.prices.retrieve(VIP_PRICE_ID);
-    vipLineItemCache = price.recurring
-        ? { price: price.id, quantity: 1 }
-        : {
-            price_data: {
-                currency: price.currency,
-                unit_amount: price.unit_amount,
-                product: typeof price.product === 'string' ? price.product : price.product.id,
-                recurring: { interval: 'month' },
-            },
-            quantity: 1,
-        };
-    return vipLineItemCache;
-}
-
-
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.tradeonia.com.br';
 
-// Com KIWIFY_CHECKOUT_URL configurada, o VIP é vendido pela Kiwify (o webhook libera o plano
-// pelo e-mail da compra, por isso o e-mail da conta já vai preenchido). Sem ela, usa o Stripe.
+// Provedor do checkout: PAYMENT_PROVIDER=stripe usa o Stripe (Pix + cartão, pagamento único);
+// senão, com KIWIFY_CHECKOUT_URL configurada, usa a Kiwify.
+function provider() {
+    if (process.env.PAYMENT_PROVIDER === 'stripe') return 'stripe';
+    return process.env.KIWIFY_CHECKOUT_URL ? 'kiwify' : 'stripe';
+}
+
+// O VIP é pagamento único: usa o preço STRIPE_VIP_PRICE_ID (preço avulso em BRL no Stripe).
+function vipLineItem() {
+    if (!process.env.STRIPE_VIP_PRICE_ID) throw new Error('STRIPE_VIP_PRICE_ID não configurado');
+    return { price: process.env.STRIPE_VIP_PRICE_ID, quantity: 1 };
+}
+
 function kiwifyCheckoutUrl(user) {
     const url = new URL(process.env.KIWIFY_CHECKOUT_URL);
     if (user.email) url.searchParams.set('email', user.email);
@@ -41,29 +28,28 @@ function kiwifyCheckoutUrl(user) {
     return url.toString();
 }
 
-// Cria uma sessão de checkout pra assinatura VIP
+// Cria a sessão de checkout do VIP
 router.post('/create-session', authMiddleware, async (req, res) => {
-    if (process.env.KIWIFY_CHECKOUT_URL) {
-        try {
-            const { rows } = await pool.query('SELECT name, email FROM users WHERE id = $1', [req.user.id]);
-            return res.json({ url: kiwifyCheckoutUrl(rows[0] || req.user) });
-        } catch (err) {
-            console.error('Erro ao montar checkout Kiwify:', err.message);
-            return res.status(500).json({ error: 'Erro ao iniciar checkout' });
-        }
-    }
     try {
+        const { rows } = await pool.query('SELECT name, email FROM users WHERE id = $1', [req.user.id]);
+        const user = rows[0] || req.user;
+        if (provider() === 'kiwify') return res.json({ url: kiwifyCheckoutUrl(user) });
+
         const session = await stripe.checkout.sessions.create({
-            mode: 'subscription',
-            payment_method_types: ['card'],
-            line_items: [await getVipLineItem()],
-            customer_email: req.user.email,
+            mode: 'payment',
+            // Pix precisa estar ativado no painel do Stripe (Configurações > Formas de pagamento).
+            payment_method_types: (process.env.STRIPE_PAYMENT_METHODS || 'card,pix').split(',').map((m) => m.trim()).filter(Boolean),
+            line_items: [vipLineItem()],
+            customer_email: user.email,
+            customer_creation: 'always',
+            allow_promotion_codes: true,
+            payment_method_options: { pix: { expires_after_seconds: 3600 } },
             success_url: `${FRONTEND_URL}/dashboard?vip=success`,
             cancel_url: `${FRONTEND_URL}/dashboard?vip=cancelled`,
             client_reference_id: String(req.user.id),
             metadata: { user_id: String(req.user.id) },
+            payment_intent_data: { metadata: { user_id: String(req.user.id) } },
         });
-
         res.json({ url: session.url });
     } catch (err) {
         console.error('Erro ao criar sessão de checkout:', err.message);
@@ -71,35 +57,10 @@ router.post('/create-session', authMiddleware, async (req, res) => {
     }
 });
 
-// Cria uma sessão do Customer Portal (pra cancelar/gerenciar assinatura)
+// VIP é pagamento único: não há assinatura para gerenciar.
 router.post('/portal-session', authMiddleware, async (req, res) => {
-    try {
-        const result = await pool.query(
-            'SELECT stripe_customer_id, payment_provider FROM users WHERE id = $1',
-            [req.user.id]
-        );
-        if (result.rows[0]?.payment_provider === 'kiwify') {
-            if (process.env.KIWIFY_MANAGE_URL) return res.json({ url: process.env.KIWIFY_MANAGE_URL });
-            return res.status(400).json({
-                error: 'Sua assinatura é gerenciada pela Kiwify: use o link do e-mail de compra ou fale com a gente em tradeonia@gmail.com.',
-            });
-        }
-        const customerId = result.rows[0]?.stripe_customer_id;
-
-        if (!customerId) {
-            return res.status(400).json({ error: 'Nenhuma assinatura encontrada' });
-        }
-
-        const portalSession = await stripe.billingPortal.sessions.create({
-            customer: customerId,
-            return_url: `${FRONTEND_URL}/dashboard`,
-        });
-
-        res.json({ url: portalSession.url });
-    } catch (err) {
-        console.error('Erro ao criar sessão do portal:', err.message);
-        res.status(500).json({ error: 'Erro ao abrir portal de gerenciamento' });
-    }
+    res.status(400).json({ error: 'O VIP é pagamento único, sem mensalidade. Dúvidas ou reembolso: tradeonia@gmail.com.' });
 });
 
 module.exports = router;
+module.exports.provider = provider;

@@ -39,7 +39,7 @@ function Dashboard() {
   useEffect(() => {
     const vip = params.get("vip");
     if (vip === "success") {
-      setBanner({ ok: true, text: "VIP ativado! Faça login novamente se o plano ainda não aparecer." });
+      setBanner({ ok: true, text: "Pagamento enviado! No cartão o VIP libera na hora; no Pix, assim que o pagamento cair (normalmente em segundos). Atualize a página se o plano ainda não aparecer." });
       // Conta a compra uma vez só e tira o parâmetro da URL para um recarregamento não contar de novo.
       track("Purchase", { currency: "BRL" });
       router.replace("/dashboard");
