@@ -3,7 +3,7 @@
 // e escreve o resultado nos logs, porque a Twelve Data só é acessível de lá.
 const pool = require('./db');
 const {
-    computeTechnicalSignal, computeCandleFollowSignal, computeM1Signal, applyRitmo, computePressao, applyPressao, applyChinesa, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, TIMEFRAME_MINUTES, isMarketOpen,
+    computeTechnicalSignal, computeCandleFollowSignal, computeM1Signal, detectPinBar, applyRitmo, computePressao, applyPressao, applyChinesa, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, TIMEFRAME_MINUTES, isMarketOpen,
 } = require('./marketRoutes');
 
 const WINDOW = 99; // o /signal usa 100 candles: 99 fechados + 1 em formação
@@ -183,6 +183,10 @@ const STRATEGIES = {
         const dn = Math.min(formingNow.open, formingNow.close) - formingNow.low;
         return up > dn ? 'VENDA' : dn > up ? 'COMPRA' : null;
     },
+    // Pin bar no candle atual: produção vai contra o pavio; aqui também o lado do pavio.
+    pin_invertido_m1: ({ formingNow }) => { const p = detectPinBar(formingNow); return p ? opp(p) : null; },
+    pin_segue_m1: ({ formingNow }) => detectPinBar(formingNow),
+    forte_m1: ({ closed, formingNow }) => (detectPinBar(formingNow) ? null : computeCandleFollowSignal(closed, formingNow).direction),
     fraco_chinesa: (ctx) => (computeCandleFollowSignal(ctx.closed, ctx.formingNow).direction ? null : STRATEGIES.chinesa(ctx)),
     fraco_tecnico: ({ closed, formingNow }) => {
         if (computeCandleFollowSignal(closed, formingNow).direction) return null;
@@ -321,7 +325,11 @@ function runOn(candles, timeframe, opts = {}) {
         const sig = computeTechnicalSignal(closed, formingOpen);
         // Leitura "meio candle": o que o candle em formação mostra na metade do tempo não existe
         // nos dados; aproxima com o candle inteiro só para a estratégia experimental dele.
-        const ctx = { sig, closed, formingNow: forming };
+        // Com as fotos do candle ao vivo (BACKTEST_SOURCE=snap), a leitura usa o candle como ele
+        // estava no segundo do pedido; sem foto daquele minuto, o minuto fica de fora.
+        const formingNow = opts.snaps ? opts.snaps.get(forming.time) : forming;
+        if (!formingNow) continue;
+        const ctx = { sig, closed, formingNow };
         evaluated++;
         const outcome = target.close === target.open ? 'draw' : null;
         for (const [name, fn] of Object.entries(STRATEGIES)) {
@@ -402,8 +410,33 @@ async function runOtc() {
     }
 }
 
+// Backtest com as fotos do candle ao vivo (m1Snapshots.js) e os candles oficiais (fechados e alvo).
+async function runSnap() {
+    const filter = new RegExp(process.env.BACKTEST_SNAP_FILTER || '^(producao_m1|fraco_|pin_|forte_m1|chinesa|ultimo_candle|contra_ultimo|tendencia_ema|pressao_m1$|atual$)');
+    const minN = parseInt(process.env.BACKTEST_MIN_N, 10) || 30;
+    const pages = parseInt(process.env.BACKTEST_M1_PAGES, 10) || 2;
+    for (const pair of ['EURUSD', 'XAUUSD']) {
+        const { rows } = await pool.query('SELECT time, open, high, low, close FROM m1_snapshots WHERE pair = $1 ORDER BY time', [pair]);
+        const snaps = new Map(rows.map((r) => [new Date(r.time).getTime(), { time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }]));
+        const candles = await fetchLongHistory(pair, 'M1', pages);
+        const { evaluated, out } = runOn(candles, 'M1', { filter, snaps });
+        console.log(`BACKTEST_SNAP ${pair} fotos=${rows.length} de=${rows[0] && new Date(rows[0].time).toISOString()} avaliados=${evaluated}`);
+        const ranked = Object.entries(out)
+            .filter(([name, r]) => filter.test(name) && r.n >= minN)
+            .map(([name, r]) => [name, r.n, r.wr, r.metade1, r.metade2, r.cobertura])
+            .sort((a, b) => b[2] - a[2]);
+        // [estratégia, amostras, acerto %, 1ª metade, 2ª metade, cobertura %]
+        console.log(`BACKTEST_SNAP_TOP ${pair} ${JSON.stringify(ranked)}`);
+    }
+}
+
 async function run() {
     console.log('BACKTEST_START');
+    if (process.env.BACKTEST_SOURCE === 'snap') {
+        try { await runSnap(); } catch (err) { console.error('BACKTEST_ERR SNAP:', err.message); }
+        console.log('BACKTEST_END');
+        return;
+    }
     if (process.env.BACKTEST_SOURCE === 'otc') {
         try { await runOtc(); } catch (err) { console.error('BACKTEST_ERR OTC:', err.message); }
         console.log('BACKTEST_END');

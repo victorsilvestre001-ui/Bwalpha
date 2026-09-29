@@ -299,6 +299,8 @@ runMigrations().then(() => {
             [{ label: 'EURUSD', td: 'EUR/USD' }, { label: 'XAUUSD', td: 'XAU/USD' }, { label: 'EURJPY', td: 'EUR/JPY' }],
             (label) => require('./marketRoutes').fetchIntradayCandles(label, 'M1', 40),
         );
+        // Fotos do candle ao vivo no segundo do pedido do sinal, para o backtest (m1Snapshots.js).
+        require('./m1Snapshots').start();
         checkoutRoutes.checkStripeSetup();
         // Teste: coleta de candles do OTC da Exnova para backtest (desligado sem EXNOVA_COLLECT=1).
         require('./exnovaCollector').start();
