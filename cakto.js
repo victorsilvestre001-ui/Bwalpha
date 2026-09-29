@@ -32,8 +32,12 @@ async function applyGrant(email, active, orderId) {
     return r.rowCount;
 }
 
-const PAID = /approved|paid|aprovad|purchase_complete|compra_aprovada/i;
+// Decide pelo nome do evento: só "compra aprovada" libera; reembolso/chargeback tiram.
+// (Pix/boleto gerado, compra recusada etc. são ignorados, qualquer que seja o status.)
+const PAID_EVENTS = new Set(['purchase_approved']);
 const REVOKED = /refund|reembols|chargeback|estorn|charge_back/i;
+// Os testes da Cakto usam e-mails fictícios (@example.com): nunca vira VIP.
+const isTestEmail = (email) => /@example\.(com|org|net)$/i.test(email);
 
 router.post('/', express.json({ limit: '500kb' }), async (req, res) => {
     const body = req.body || {};
@@ -51,11 +55,15 @@ router.post('/', express.json({ limit: '500kb' }), async (req, res) => {
     const orderId = data.id ? String(data.id) : (data.refId || null);
     console.log(`Cakto: evento=${event} status=${status} pedido=${orderId} email=${email.replace(/^(.{2}).*@/, '$1***@')}`);
     if (!email) return res.json({ received: true, ignored: 'sem e-mail' });
+    if (isTestEmail(email)) {
+        console.log('Cakto: evento de teste recebido e validado (e-mail fictício, nada foi alterado)');
+        return res.json({ received: true, test: true });
+    }
     try {
-        if (REVOKED.test(event) || REVOKED.test(status)) {
+        if (REVOKED.test(event)) {
             await applyGrant(email, false, orderId);
             console.log('Cakto: VIP removido (reembolso/chargeback)');
-        } else if (PAID.test(event) || PAID.test(status)) {
+        } else if (PAID_EVENTS.has(event)) {
             const n = await applyGrant(email, true, orderId);
             console.log(`Cakto: VIP liberado ✅ (${n} conta(s))`);
         }
@@ -65,5 +73,9 @@ router.post('/', express.json({ limit: '500kb' }), async (req, res) => {
         res.status(500).json({ error: 'Erro ao processar evento' });
     }
 });
+
+// Limpa liberações criadas por eventos de teste antigos (e-mails fictícios).
+pool.query(`DELETE FROM vip_grants WHERE email ~* '@example\\.(com|org|net)$'`)
+    .catch((err) => console.error('Cakto: limpeza de testes falhou:', err.message));
 
 module.exports = { router, caktoCheckoutUrl };
