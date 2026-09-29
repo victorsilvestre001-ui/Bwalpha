@@ -865,6 +865,21 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
         closed = closed.filter((c) => c.time < bucketStart);
     }
     const liveSource = forming && forming.source ? forming.source : undefined;
+    // Candle da corretora: os fechados também vêm dela (mesmo gráfico do cliente), se o histórico
+    // dela estiver completo até o minuto anterior; senão fica o da fonte de dados + complemento.
+    if (liveSource === 'exnova') {
+        const ex = getLiveClosed(SIGNAL_PAIRS[pairLabel].td, 'exnova').filter((c) => c.time < bucketStart);
+        // Maior trecho contínuo (até 99 candles) terminando no minuto anterior.
+        let tail = [];
+        if (ex.length && ex[ex.length - 1].time === bucketStart - M1_MS) {
+            tail = [ex[ex.length - 1]];
+            for (let i = ex.length - 2; i >= 0 && tail.length < 99 && tail[0].time - ex[i].time === M1_MS; i--) tail.unshift(ex[i]);
+        }
+        if (tail.length >= 60) {
+            const firstEx = tail[0].time;
+            closed = [...closed.filter((c) => c.time < firstEx), ...tail].slice(-99);
+        }
+    }
     // A API REST às vezes entrega os candles fechados com alguns minutos de atraso: completa
     // os minutos que faltam com os montados pelo streaming, para a leitura não usar o passado.
     if (closed.length) {

@@ -62,6 +62,40 @@ function makeStore(name) {
 const td = makeStore('twelvedata');
 const finnhub = makeStore('finnhub');
 
+// ---- Exnova (a corretora): o coletor (exnovaCollector.js) recebe o próprio candle M1 da corretora
+// a cada atualização (abertura, máxima, mínima e fechamento já prontos), então não precisa montar
+// pelos preços nem ter acompanhado desde o começo do minuto.
+const exnova = (() => {
+    const candles = {}, history = {};
+    const status = { name: 'exnova', connected: false, lastTickAt: null };
+    function pushClosed(symbol, c) {
+        const h = (history[symbol] ||= []);
+        if (h.length && h[h.length - 1].time >= c.time) {
+            if (h[h.length - 1].time === c.time) h[h.length - 1] = c;
+            return;
+        }
+        h.push(c);
+        if (h.length > 150) h.shift();
+    }
+    function onCandle(symbol, c) {
+        const cur = candles[symbol];
+        if (cur && cur.time > c.time) return;
+        if (cur && cur.time < c.time) pushClosed(symbol, { time: cur.time, open: cur.open, high: cur.high, low: cur.low, close: cur.close });
+        candles[symbol] = { ...c, updates: cur && cur.time === c.time ? cur.updates + 1 : 1 };
+        status.connected = true;
+        status.lastTickAt = Date.now();
+    }
+    function getLiveM1(symbol, bucketStart, nowMs = Date.now()) {
+        const c = candles[symbol];
+        if (!c || c.time !== bucketStart || c.updates < 3 || nowMs - status.lastTickAt > 15_000) return null;
+        return { time: c.time, open: c.open, high: c.high, low: c.low, close: c.close, ticks: c.updates };
+    }
+    // Candles fechados gravados no banco (ao reiniciar o servidor), para a leitura já ter o gráfico.
+    function seed(symbol, list) { for (const c of list) pushClosed(symbol, c); }
+    const getLiveClosed = (symbol) => (history[symbol] || []).slice();
+    return { onCandle, getLiveM1, getLiveClosed, seed, history, status };
+})();
+
 // ---- Twelve Data ----
 function connect(symbols) {
     const key = process.env.TWELVE_DATA_API_KEY;
@@ -146,8 +180,10 @@ function connectFinnhub(map) {
 // O candle atual e os fechados vêm sempre da mesma fonte, para a leitura não misturar preços.
 function pickSource(symbol, bucketStart, nowMs) {
     // A Finnhub só entra como reserva com FINNHUB_FALLBACK=1 (em avaliação na auditoria).
-    const order = process.env.LIVE_SOURCE === 'finnhub' ? [finnhub, td]
-        : process.env.FINNHUB_FALLBACK === '1' ? [td, finnhub] : [td];
+    // LIVE_SOURCE=exnova: lê o candle da própria corretora (reserva: Twelve Data).
+    const order = process.env.LIVE_SOURCE === 'exnova' ? [exnova, td]
+        : process.env.LIVE_SOURCE === 'finnhub' ? [finnhub, td]
+            : process.env.FINNHUB_FALLBACK === '1' ? [td, finnhub] : [td];
     for (const s of order) {
         const c = s.getLiveM1(symbol, bucketStart, nowMs);
         if (c) return { store: s, candle: c };
@@ -158,7 +194,7 @@ const getLiveM1 = (symbol, bucketStart, nowMs) => {
     const p = pickSource(symbol, bucketStart, nowMs);
     return p ? { ...p.candle, source: p.store.status.name } : null;
 };
-const getLiveClosed = (symbol, source) => (source === 'finnhub' ? finnhub : source === 'twelvedata' ? td
+const getLiveClosed = (symbol, source) => (source === 'exnova' ? exnova : source === 'finnhub' ? finnhub : source === 'twelvedata' ? td
     : (process.env.LIVE_SOURCE === 'finnhub' ? finnhub : td)).getLiveClosed(symbol);
 
 // Auditoria: a cada 30 min compara, minuto a minuto, a direção dos candles de cada fonte ao vivo
@@ -200,4 +236,4 @@ function startFeedAudit(pairs, fetchRest) {
     setInterval(run, 30 * 60_000);
 }
 
-module.exports = { connect, connectFinnhub, getLiveM1, getLiveClosed, startFeedAudit, status: td.status, stores: { td, finnhub } };
+module.exports = { connect, connectFinnhub, getLiveM1, getLiveClosed, startFeedAudit, status: td.status, stores: { td, finnhub, exnova } };

@@ -52,6 +52,32 @@ function findActives(init, wanted) {
     return found;
 }
 
+// Pares do mercado aberto que também alimentam a leitura do sinal (LIVE_SOURCE=exnova).
+const LIVE_SYMBOLS = { EURUSD: 'EUR/USD', EURJPY: 'EUR/JPY', XAUUSD: 'XAU/USD' };
+function feedLive(active, c) {
+    const sym = LIVE_SYMBOLS[active];
+    if (!sym) return;
+    require('./liveCandles').stores.exnova.onCandle(sym, {
+        time: Number(c.from) * 1000, open: Number(c.open), high: Number(c.max), low: Number(c.min), close: Number(c.close),
+    });
+}
+
+async function seedLive() {
+    for (const [active, sym] of Object.entries(LIVE_SYMBOLS)) {
+        try {
+            const { rows } = await pool.query(
+                `SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 AND time > NOW() - INTERVAL '3 hours' ORDER BY time`, [active]);
+            // O último pode ser o minuto atual (ainda aberto): fica de fora.
+            const cur = Math.floor(Date.now() / 60_000) * 60_000;
+            require('./liveCandles').stores.exnova.seed(sym, rows
+                .map((r) => ({ time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }))
+                .filter((c) => c.time < cur));
+        } catch (err) {
+            console.error('Exnova: erro ao carregar candles para a leitura', err.message);
+        }
+    }
+}
+
 async function saveCandle(active, c) {
     const t = new Date(Number(c.from) * 1000);
     await pool.query(
@@ -140,6 +166,7 @@ async function connect() {
         } else if (m.name === 'candle-generated' && m.msg && byId[m.msg.active_id] && m.msg.size === 60) {
             if (!state.firstLogged?.[m.msg.active_id]) (state.firstLogged ||= {})[m.msg.active_id] = true, console.log(`Exnova OTC: primeiro candle ${byId[m.msg.active_id]} ${JSON.stringify({ from: m.msg.from, open: m.msg.open, close: m.msg.close, min: m.msg.min, max: m.msg.max })}`);
             try {
+                feedLive(byId[m.msg.active_id], m.msg);
                 await saveCandle(byId[m.msg.active_id], m.msg);
                 state.saved++;
                 if (state.saved === 1 || state.saved % 500 === 0) console.log(`Exnova OTC: ${state.saved} atualizações de candle gravadas`);
@@ -171,6 +198,7 @@ async function start() {
     } catch (err) {
         return console.error('Exnova OTC: erro ao criar a tabela:', err.message);
     }
+    await seedLive();
     connect();
 }
 
