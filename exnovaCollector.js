@@ -116,9 +116,29 @@ async function connect() {
         } else if (m.name === 'initialization-data') {
             const ids = findActives(m.msg, wanted);
             console.log(`Exnova OTC: ativos encontrados ${JSON.stringify(ids)} (pedidos: ${wanted.join(',')})`);
+            // Pedidos sem id na lista: mostra nomes parecidos e usa os ids conhecidos da plataforma
+            // (EXNOVA_ACTIVE_IDS, ex.: "EURUSD:1,EURJPY:4,XAUUSD:74"); o 1º candle de cada um vai
+            // para o log para conferir pelo preço que é o ativo certo.
+            const missing = wanted.filter((n) => !ids[n]);
+            if (missing.length) {
+                const names = new Set();
+                const walk = (node) => {
+                    if (!node || typeof node !== 'object') return;
+                    if (typeof node.name === 'string' && node.id != null && missing.some((w) => node.name.toUpperCase().includes(w.replace(/-OTC$/, '').slice(0, 6)))) {
+                        names.add(`${node.name}:${node.id}`);
+                    }
+                    for (const v of Object.values(node)) if (v && typeof v === 'object') walk(v);
+                };
+                walk(m.msg);
+                console.log(`Exnova OTC: sem id para ${missing.join(',')}; nomes parecidos: ${[...names].slice(0, 30).join(' ') || '-'}`);
+                const known = Object.fromEntries((process.env.EXNOVA_ACTIVE_IDS || 'EURUSD:1,EURJPY:4,XAUUSD:74').split(',')
+                    .map((x) => x.trim().split(':')).filter(([n, id]) => n && id && missing.includes(n.toUpperCase()))
+                    .map(([n, id]) => [n.toUpperCase(), Number(id)]));
+                Object.assign(ids, known);
+            }
             if (Object.keys(ids).length) { clearTimeout(fallback); subscribe(ids); }
         } else if (m.name === 'candle-generated' && m.msg && byId[m.msg.active_id] && m.msg.size === 60) {
-            if (state.saved === 0) console.log(`Exnova OTC: primeiro candle ${byId[m.msg.active_id]} ${JSON.stringify({ from: m.msg.from, open: m.msg.open, close: m.msg.close, min: m.msg.min, max: m.msg.max })}`);
+            if (!state.firstLogged?.[m.msg.active_id]) (state.firstLogged ||= {})[m.msg.active_id] = true, console.log(`Exnova OTC: primeiro candle ${byId[m.msg.active_id]} ${JSON.stringify({ from: m.msg.from, open: m.msg.open, close: m.msg.close, min: m.msg.min, max: m.msg.max })}`);
             try {
                 await saveCandle(byId[m.msg.active_id], m.msg);
                 state.saved++;
