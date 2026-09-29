@@ -141,10 +141,23 @@ function connectFinnhub(map) {
     open();
 }
 
-// Fonte usada nos sinais: Twelve Data (padrão) ou Finnhub (LIVE_SOURCE=finnhub).
-const active = () => (process.env.LIVE_SOURCE === 'finnhub' ? finnhub : td);
-const getLiveM1 = (symbol, bucketStart, nowMs) => active().getLiveM1(symbol, bucketStart, nowMs);
-const getLiveClosed = (symbol) => active().getLiveClosed(symbol);
+// Fonte usada nos sinais: Twelve Data (padrão) ou Finnhub (LIVE_SOURCE=finnhub). Se a principal
+// não tiver o candle ao vivo do ativo (ex.: EURJPY no plano grátis da Twelve Data), usa a outra.
+// O candle atual e os fechados vêm sempre da mesma fonte, para a leitura não misturar preços.
+function pickSource(symbol, bucketStart, nowMs) {
+    const order = process.env.LIVE_SOURCE === 'finnhub' ? [finnhub, td] : [td, finnhub];
+    for (const s of order) {
+        const c = s.getLiveM1(symbol, bucketStart, nowMs);
+        if (c) return { store: s, candle: c };
+    }
+    return null;
+}
+const getLiveM1 = (symbol, bucketStart, nowMs) => {
+    const p = pickSource(symbol, bucketStart, nowMs);
+    return p ? { ...p.candle, source: p.store.status.name } : null;
+};
+const getLiveClosed = (symbol, source) => (source === 'finnhub' ? finnhub : source === 'twelvedata' ? td
+    : (process.env.LIVE_SOURCE === 'finnhub' ? finnhub : td)).getLiveClosed(symbol);
 
 // Auditoria: a cada 30 min compara, minuto a minuto, a direção dos candles de cada fonte ao vivo
 // com os candles oficiais da API REST e entre si. Liga com FEED_AUDIT=1.

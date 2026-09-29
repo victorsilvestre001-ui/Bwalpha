@@ -826,11 +826,12 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
             closed = closed.filter((c) => c.time < bucketStart);
         }
     }
+    const liveSource = forming && forming.source ? forming.source : undefined;
     // A API REST às vezes entrega os candles fechados com alguns minutos de atraso: completa
     // os minutos que faltam com os montados pelo streaming, para a leitura não usar o passado.
     if (closed.length) {
         const lastRest = closed[closed.length - 1].time;
-        const extra = getLiveClosed(SIGNAL_PAIRS[pairLabel].td).filter((c) => c.time > lastRest && c.time < bucketStart);
+        const extra = getLiveClosed(SIGNAL_PAIRS[pairLabel].td, liveSource).filter((c) => c.time > lastRest && c.time < bucketStart);
         if (extra.length) closed = [...closed, ...extra];
     }
     const lastClosedTime = closed.length ? closed[closed.length - 1].time : 0;
@@ -885,7 +886,7 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
         candleAtual: { bodyRatio: m1.bodyRatio ?? null, bodyVsAvg: m1.bodyVsAvg ?? null },
     };
     const fmt = (c) => `${new Date(c.time).toISOString().slice(11, 16)} ${c.open}/${c.high}/${c.low}/${c.close}`;
-    console.log(`M1 ${pairLabel} ${result.direction} ${result.confidence} leitura=${result.leitura} ticks=${forming.ticks ?? 'rest'} atual=[${fmt(forming)}] fechados=[${closed.slice(-3).map(fmt).join(' | ')}]`);
+    console.log(`M1 ${pairLabel} ${result.direction} ${result.confidence} leitura=${result.leitura} fonte=${forming.source || 'rest'} ticks=${forming.ticks ?? '-'} atual=[${fmt(forming)}] fechados=[${closed.slice(-3).map(fmt).join(' | ')}]`);
     m1Cache[pairLabel] = { bucketStart, at: nowMs, result };
     return result;
 }
