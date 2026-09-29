@@ -322,17 +322,9 @@ export default function AdminPage() {
                 title="Aviso: mercado aberto"
                 load={api.marketOpenCampaign}
                 send={api.sendMarketOpenCampaign}
-                describe={() => "Avisa todas as contas que o mercado está aberto. VIP: abrir o painel · free com teste: usar os 3 sinais grátis · free sem teste: conhecer o VIP. Pode enviar uma vez por dia."}
+                describe={() => "Avisa todas as contas que o mercado está aberto. VIP: abrir o painel · free: conhecer o VIP. Pode enviar uma vez por dia."}
                 confirmText={(i) => `Enviar o aviso de mercado aberto para ${i.eligible} conta(s) agora?`}
                 sentLabel="conta(s) já receberam hoje."
-              />
-              <CampaignCard
-                title="Aviso: teste grátis de 3 sinais"
-                load={api.trialCampaign}
-                send={api.sendTrialCampaign}
-                describe={() => "Avisa por e-mail as contas free que ainda não usaram nenhum sinal que o teste de 3 sinais grátis está liberado."}
-                confirmText={(i) => `Enviar o aviso do teste grátis para ${i.eligible} conta(s) agora?`}
-                sentLabel="conta(s) já receberam o aviso."
               />
               <PixReminderCard />
 
