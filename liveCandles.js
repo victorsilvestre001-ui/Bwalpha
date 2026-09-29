@@ -163,8 +163,8 @@ const getLiveClosed = (symbol, source) => (source === 'finnhub' ? finnhub : sour
 // com os candles oficiais da API REST e entre si. Liga com FEED_AUDIT=1.
 function startFeedAudit(pairs, fetchRest) {
     if (process.env.FEED_AUDIT !== '1') return;
-    const compare = (a, b) => {
-        const byTime = new Map(b.map((c) => [c.time, c]));
+    const compare = (a, b, shift = 0) => {
+        const byTime = new Map(b.map((c) => [c.time + shift, c]));
         let n = 0, same = 0;
         for (const c of a) {
             const r = byTime.get(c.time);
@@ -183,6 +183,8 @@ function startFeedAudit(pairs, fetchRest) {
                 const tdLive = td.getLiveClosed(sym), fhLive = finnhub.getLiveClosed(sym);
                 const ticks = fhLive.length ? Math.round(fhLive.reduce((s, c) => s + (c.ticks || 0), 0) / fhLive.length) : 0;
                 console.log(`AUDITORIA fonte ${label}: twelve_ao_vivo×oficial ${compare(tdLive, rest)} | finnhub×oficial ${compare(fhLive, rest)} | finnhub×twelve_ao_vivo ${compare(fhLive, tdLive)} | finnhub ~${ticks} preços/min`);
+                // Diagnóstico de horário: se a Finnhub estiver deslocada 1 minuto, o acordo sobe nesse deslocamento.
+                console.log(`AUDITORIA deslocamento ${label}: finnhub×oficial -1min ${compare(fhLive, rest, -M1_MS)} | 0 ${compare(fhLive, rest)} | +1min ${compare(fhLive, rest, M1_MS)}`);
             } catch (err) {
                 console.error(`AUDITORIA fonte ${label}: erro`, err.message);
             }
