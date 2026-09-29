@@ -242,9 +242,10 @@ registerCampaign('/market-open-campaign', {
     notReady: () => (!process.env.RESEND_API_KEY ? 'Envio de e-mail não configurado (RESEND_API_KEY).' : null),
 });
 
-// Resultados do dia (imagem do histórico M1 de 28/09): uma vez por conta.
+// Resultados (imagem do histórico M1 de 28/09: 8 WIN em 9): uma vez por conta. O nome da campanha
+// mudou, então quem recebeu o aviso anterior (4 WIN) recebe este também.
 registerCampaign('/results-campaign', {
-    campaign: () => 'resultados-m1-2809',
+    campaign: () => 'resultados-m1-2809-9sinais',
     where: `u.plan <> 'owner'`,
     send: sendResultsEmail,
     notReady: () => (!process.env.RESEND_API_KEY ? 'Envio de e-mail não configurado (RESEND_API_KEY).' : null),

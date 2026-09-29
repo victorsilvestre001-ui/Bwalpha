@@ -222,14 +222,17 @@ async function sendResultsEmail(name, email, account = {}) {
             : (offer ? couponBlock(offer, 'Condição especial') : button(`${FRONTEND_URL}/dashboard`, 'Conhecer o VIP'));
     return sendEmail({
         to: email,
-        subject: '📊 Como foram os sinais M1 de hoje na TradeOn AI',
+        subject: '📊 Sinais M1 de 28/09: 8 WIN em 9 análises',
         html: layout(`
-            <h1 style="color: #00F0A8; font-size: 22px; margin-bottom: 8px;">${firstName ? `${escapeHtml(firstName)}, olha` : 'Olha'} o histórico de hoje 📊</h1>
+            <h1 style="color: #00F0A8; font-size: 22px; margin-bottom: 8px;">${firstName ? `${escapeHtml(firstName)}, olha` : 'Olha'} o resultado dos sinais M1 📊</h1>
             <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">
-                Atualizamos a leitura do M1: agora a IA acompanha o <strong>candle ao vivo</strong> no Ouro e no EURUSD.
-                Hoje foram 4 sinais conferidos no histórico, os 4 com WIN.
+                No dia 28/09 foram <strong>9 análises no M1</strong> (EURUSD e Ouro) conferidas no histórico:
+                <strong style="color: #00F0A8;">8 WIN</strong> e <strong style="color: #FF8FA3;">1 RED</strong>, <strong>89% de acerto</strong>.
             </p>
-            <img src="${FRONTEND_URL}/email/historico-m1-2809.jpg" alt="Histórico de sinais M1 de 28/09" width="432" style="display: block; width: 100%; max-width: 432px; margin: 20px auto; border-radius: 12px;">
+            <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">
+                A IA lê o candle ao vivo e mostra a direção, a confiança, a pressão compradora/vendedora e agora também a <strong>volatilidade</strong> do mercado.
+            </p>
+            <img src="${FRONTEND_URL}/email/historico-m1-2809-9sinais.jpg" alt="Histórico de sinais M1 de 28/09: 8 WIN e 1 RED" width="520" style="display: block; width: 100%; max-width: 520px; margin: 20px auto; border-radius: 12px;">
             <p style="font-size: 14px; line-height: 1.6; color: #9AA6C3;">
                 Cada sinal mostra o horário de entrada, a expiração e a confiança, e o resultado é conferido automaticamente, com os acertos e os erros.
             </p>
