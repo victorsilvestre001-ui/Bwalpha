@@ -263,6 +263,41 @@ function lateralStretch(closed, f, { L, faixa, estica, rompe }) {
     if (rompe && !(body > 0 ? f.close > hi : f.close < lo)) return null; // não rompeu a faixa
     return body > 0 ? 'COMPRA' : 'VENDA';
 }
+// Estratégia "queda/alta forte + candle de correção com pavio": os últimos T candles fecharam um
+// movimento forte (saldo >= m × tamanho médio, maioria na mesma cor); o candle atual é de correção
+// (cor contrária) e deixou pavio. corr_segue = próximo candle na direção da correção (reversão);
+// corr_retoma = próximo candle volta para a direção do movimento. Pavio: inf = do lado do
+// movimento (ex.: embaixo numa queda, rejeitou a mínima), sup = do outro lado, qq = qualquer.
+function correcaoComPavio(closed, f, { T, m, pavio }) {
+    if (closed.length < T + 20) return null;
+    const base = closed.slice(-(T + 20), -T);
+    const avgRange = base.reduce((a, c) => a + (c.high - c.low), 0) / base.length;
+    if (!(avgRange > 0)) return null;
+    const mov = closed.slice(-T);
+    const saldo = mov[mov.length - 1].close - mov[0].open;
+    if (Math.abs(saldo) < m * avgRange) return null;
+    const trend = saldo > 0 ? 'COMPRA' : 'VENDA';
+    if (mov.filter((c) => color(c) === trend).length < Math.ceil(T * 0.6)) return null;
+    if (color(f) !== opp(trend)) return null; // o atual não é de correção
+    const range = f.high - f.low;
+    if (!(range > 0)) return null;
+    const up = f.high - Math.max(f.open, f.close), dn = Math.min(f.open, f.close) - f.low;
+    const ladoMov = trend === 'VENDA' ? dn : up, ladoOposto = trend === 'VENDA' ? up : dn;
+    if (pavio === 'inf' && ladoMov < 0.3 * range) return null;
+    if (pavio === 'sup' && ladoOposto < 0.3 * range) return null;
+    if (pavio === 'qq' && Math.max(up, dn) < 0.3 * range) return null;
+    return trend;
+}
+for (const T of [4, 6]) {
+    for (const m of [2, 3]) {
+        for (const pavio of ['inf', 'sup', 'qq']) {
+            const tag = `T${T}_m${m}_${pavio}_m1`;
+            const opts = { T, m, pavio };
+            STRATEGIES[`corr_segue_${tag}`] = ({ closed, formingNow }) => opp(correcaoComPavio(closed, formingNow, opts));
+            STRATEGIES[`corr_retoma_${tag}`] = ({ closed, formingNow }) => correcaoComPavio(closed, formingNow, opts);
+        }
+    }
+}
 for (const L of [5, 8]) {
     for (const faixa of [2, 3]) {
         for (const estica of [1.5, 2, 3]) {
@@ -564,9 +599,9 @@ async function run() {
     }
     if (process.env.BACKTEST_SOURCE === 'lateral') {
         // Estratégia lateralização + esticada: OTC (Exnova), fotos do candle ao vivo e histórico M1.
-        process.env.BACKTEST_OTC_FILTER ||= '^lat_';
-        process.env.BACKTEST_SNAP_FILTER ||= '^(lat_|producao_m1_sempre)';
-        process.env.BACKTEST_FILTER ||= '^(lat_|producao_m1_sempre)';
+        process.env.BACKTEST_OTC_FILTER ||= '^(lat_|corr_)';
+        process.env.BACKTEST_SNAP_FILTER ||= '^(lat_|corr_|producao_m1_sempre)';
+        process.env.BACKTEST_FILTER ||= '^(lat_|corr_|producao_m1_sempre)';
         try { await runOtc(); } catch (err) { console.error('BACKTEST_ERR OTC:', err.message); }
         try { await runSnap(); } catch (err) { console.error('BACKTEST_ERR SNAP:', err.message); }
     }
