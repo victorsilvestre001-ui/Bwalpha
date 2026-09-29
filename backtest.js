@@ -245,6 +245,37 @@ const STRATEGIES = {
     },
 };
 
+// Estratégia "lateralização + esticada": os últimos L candles andam de lado (a faixa total é
+// pequena), aí o candle atual dá uma esticada (corpo grande, rompendo a faixa) e a entrada é
+// CONTRA ele no próximo candle. Também mede o "segue" (a favor da esticada) para comparar.
+// Nome: lat_{contra|segue}_L{5|8}_f{faixa}_e{esticada}{_rompe}_m1.
+function lateralStretch(closed, f, { L, faixa, estica, rompe }) {
+    if (closed.length < L + 20) return null;
+    const base = closed.slice(-(L + 20), -L);
+    const avgRange = base.reduce((a, c) => a + (c.high - c.low), 0) / base.length;
+    const avgBody = base.reduce((a, c) => a + Math.abs(c.close - c.open), 0) / base.length;
+    if (!(avgRange > 0) || !(avgBody > 0)) return null;
+    const lat = closed.slice(-L);
+    const hi = Math.max(...lat.map((c) => c.high)), lo = Math.min(...lat.map((c) => c.low));
+    if (hi - lo > faixa * avgRange) return null; // não está lateral
+    const body = f.close - f.open;
+    if (Math.abs(body) < estica * avgBody) return null; // sem esticada
+    if (rompe && !(body > 0 ? f.close > hi : f.close < lo)) return null; // não rompeu a faixa
+    return body > 0 ? 'COMPRA' : 'VENDA';
+}
+for (const L of [5, 8]) {
+    for (const faixa of [2, 3]) {
+        for (const estica of [1.5, 2, 3]) {
+            for (const rompe of [false, true]) {
+                const tag = `L${L}_f${faixa}_e${String(estica).replace('.', '')}${rompe ? '_rompe' : ''}_m1`;
+                const opts = { L, faixa, estica, rompe };
+                STRATEGIES[`lat_contra_${tag}`] = ({ closed, formingNow }) => opp(lateralStretch(closed, formingNow, opts));
+                STRATEGIES[`lat_segue_${tag}`] = ({ closed, formingNow }) => lateralStretch(closed, formingNow, opts);
+            }
+        }
+    }
+}
+
 // ---- Price action: cada padrão sozinho, lido no fim do candle (como o M1 de produção) ----
 // O candle "em formação" (quase fechado) é o candle do padrão; o alvo é o candle seguinte.
 const body = (c) => Math.abs(c.close - c.open);
@@ -531,6 +562,14 @@ async function run() {
         console.log('BACKTEST_END');
         return;
     }
+    if (process.env.BACKTEST_SOURCE === 'lateral') {
+        // Estratégia lateralização + esticada: OTC (Exnova), fotos do candle ao vivo e histórico M1.
+        process.env.BACKTEST_OTC_FILTER ||= '^lat_';
+        process.env.BACKTEST_SNAP_FILTER ||= '^(lat_|producao_m1_sempre)';
+        process.env.BACKTEST_FILTER ||= '^(lat_|producao_m1_sempre)';
+        try { await runOtc(); } catch (err) { console.error('BACKTEST_ERR OTC:', err.message); }
+        try { await runSnap(); } catch (err) { console.error('BACKTEST_ERR SNAP:', err.message); }
+    }
     if (process.env.BACKTEST_SOURCE === 'snap') {
         try { await runSnap(); } catch (err) { console.error('BACKTEST_ERR SNAP:', err.message); }
         console.log('BACKTEST_END');
@@ -541,7 +580,7 @@ async function run() {
         console.log('BACKTEST_END');
         return;
     }
-    await dbStats();
+    if (process.env.BACKTEST_SOURCE !== 'lateral') await dbStats();
     if (process.env.BACKTEST_ONLY_DB === '1') { console.log('BACKTEST_END'); return; }
     const plan = [['M1', parseInt(process.env.BACKTEST_M1_PAGES, 10) || 3], ['M5', parseInt(process.env.BACKTEST_M5_PAGES, 10) || 2]];
     for (const pair of Object.keys(SIGNAL_PAIRS)) {
