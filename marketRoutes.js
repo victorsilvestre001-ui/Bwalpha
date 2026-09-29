@@ -703,6 +703,13 @@ function computeM1Signal(closed, forming, technical) {
     const follow0 = computeCandleFollowSignal(closed, forming);
     if (FRACO_INDICADORES() && technical && technical.indicadores && !(follow0.direction && !detectPinBar(forming))) {
         const ind = technical.indicadores;
+        // Pressão forte (compradores ou vendedores claramente no controle nos últimos candles) vem
+        // primeiro: os indicadores (médias, MACD, RSI) atrasam e, logo depois de uma queda ou alta
+        // rápida, ainda apontam para o lado antigo. Sem pressão clara, vale a votação dos indicadores.
+        const pr = computePressao(closed, forming);
+        if (pr && pr.lado) {
+            return { direction: pr.lado, confidence: pr.lado === ind.direcao ? 'Média' : 'Baixa', bodyRatio: follow0.bodyRatio ?? null, leitura: 'pressao' };
+        }
         return { direction: ind.direcao, confidence: ind.confianca === 'Alta' ? 'Média' : 'Baixa', bodyRatio: follow0.bodyRatio ?? null, leitura: 'indicadores' };
     }
     if (PINBAR_INVERTIDO) {

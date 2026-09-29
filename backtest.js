@@ -190,6 +190,16 @@ const STRATEGIES = {
     fraco_indicadores: ({ sig, closed, formingNow }) => (!detectPinBar(formingNow) && computeCandleFollowSignal(closed, formingNow).direction ? null : sig.indicadores.direcao),
     fraco_indicadores_fortes: ({ sig, closed, formingNow }) => (!detectPinBar(formingNow) && computeCandleFollowSignal(closed, formingNow).direction ? null
         : sig.indicadores.confianca !== 'Baixa' ? sig.indicadores.direcao : null),
+    fraco_pressao_ou_indicadores: ({ sig, closed, formingNow }) => {
+        if (!detectPinBar(formingNow) && computeCandleFollowSignal(closed, formingNow).direction) return null;
+        const pr = computePressao(closed, formingNow);
+        return pr && pr.lado ? pr.lado : sig.indicadores.direcao;
+    },
+    fraco_pressao: ({ closed, formingNow }) => {
+        if (!detectPinBar(formingNow) && computeCandleFollowSignal(closed, formingNow).direction) return null;
+        const pr = computePressao(closed, formingNow);
+        return pr && pr.lado ? pr.lado : null;
+    },
     forte_concorda_indicadores_m1: ({ sig, closed, formingNow }) => {
         const d = detectPinBar(formingNow) ? null : computeCandleFollowSignal(closed, formingNow).direction;
         return d && d === sig.indicadores.direcao ? d : null;
