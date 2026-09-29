@@ -145,7 +145,9 @@ function connectFinnhub(map) {
 // não tiver o candle ao vivo do ativo (ex.: EURJPY no plano grátis da Twelve Data), usa a outra.
 // O candle atual e os fechados vêm sempre da mesma fonte, para a leitura não misturar preços.
 function pickSource(symbol, bucketStart, nowMs) {
-    const order = process.env.LIVE_SOURCE === 'finnhub' ? [finnhub, td] : [td, finnhub];
+    // A Finnhub só entra como reserva com FINNHUB_FALLBACK=1 (em avaliação na auditoria).
+    const order = process.env.LIVE_SOURCE === 'finnhub' ? [finnhub, td]
+        : process.env.FINNHUB_FALLBACK === '1' ? [td, finnhub] : [td];
     for (const s of order) {
         const c = s.getLiveM1(symbol, bucketStart, nowMs);
         if (c) return { store: s, candle: c };
