@@ -63,7 +63,11 @@ async function saveCandle(active, c) {
 }
 
 async function connect() {
-    const wanted = (process.env.EXNOVA_ACTIVES || 'EURUSD-OTC').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
+    // Além dos OTC, grava os pares do mercado aberto que o site analisa: o histórico confere o
+    // WIN/RED por eles (analysesRoutes.js). EXNOVA_JUDGE_ACTIVES="" desliga.
+    const judge = (process.env.EXNOVA_JUDGE_ACTIVES ?? 'EURUSD,EURJPY,XAUUSD').split(',');
+    const wanted = [...new Set([...(process.env.EXNOVA_ACTIVES || 'EURUSD-OTC').split(','), ...judge]
+        .map((s) => s.trim().toUpperCase()).filter(Boolean))];
     let ssid;
     try {
         ssid = await login();
