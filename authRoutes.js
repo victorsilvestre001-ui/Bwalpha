@@ -5,7 +5,8 @@ const rateLimit = require('express-rate-limit');
 const pool = require('./db');
 const { authMiddleware, OWNER_EMAIL } = require('./authMiddleware');
 const { applyPendingGrant } = require('./kiwifyWebhook');
-const { sendWelcomeEmail } = require('./mailer');
+const crypto = require('crypto');
+const { sendWelcomeEmail, sendPasswordResetEmail } = require('./mailer');
 const { cleanCpf, isValidCpf, CPF_TAKEN } = require('./cpf');
 
 // Limita tentativas de login/cadastro por IP, pra dificultar força bruta de senha.
@@ -246,6 +247,87 @@ router.patch('/profile', authMiddleware, async (req, res) => {
         if (err.code === '23505') return res.status(409).json({ error: CPF_TAKEN });
         console.error(err);
         res.status(500).json({ error: 'Erro ao atualizar perfil' });
+    }
+});
+
+// ---- Esqueci minha senha ----
+// O link leva um código aleatório; no banco fica só o hash dele. Vale 1 hora e uma vez só.
+const RESET_TTL_MIN = 60;
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.tradeonia.com.br';
+const sha256 = (v) => crypto.createHash('sha256').update(v).digest('hex');
+let resetTableReady = null;
+function ensureResetTable() {
+    resetTableReady ||= pool.query(`CREATE TABLE IF NOT EXISTS password_resets (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash CHAR(64) NOT NULL UNIQUE,
+        expires_at TIMESTAMPTZ NOT NULL,
+        used_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+    )`).catch((err) => { resetTableReady = null; throw err; });
+    return resetTableReady;
+}
+
+const forgotEmailLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: 3,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => `forgot:${normalizeEmail(req.body?.email) || 'vazio'}`,
+    message: { error: 'Já enviamos alguns e-mails para esta conta. Confira sua caixa de entrada e o spam, ou tente de novo em 1 hora.' },
+});
+
+router.post('/forgot-password', authLimiter, forgotEmailLimiter, async (req, res) => {
+    const email = normalizeEmail(req.body?.email);
+    // A resposta é sempre a mesma, exista a conta ou não (não revela quem é cliente).
+    const done = () => res.json({ ok: true });
+    if (!EMAIL_RE.test(email)) return done();
+    try {
+        await ensureResetTable();
+        const { rows } = await pool.query('SELECT id, name, email FROM users WHERE LOWER(email) = $1 ORDER BY id LIMIT 1', [email]);
+        if (!rows.length) {
+            console.log('Nova senha: pedido para e-mail sem conta');
+            return done();
+        }
+        const user = rows[0];
+        const token = crypto.randomBytes(32).toString('hex');
+        await pool.query('DELETE FROM password_resets WHERE user_id = $1 AND used_at IS NULL', [user.id]);
+        await pool.query(
+            `INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES ($1, $2, NOW() + INTERVAL '${RESET_TTL_MIN} minutes')`,
+            [user.id, sha256(token)]);
+        const r = await sendPasswordResetEmail(user.name, user.email, `${FRONTEND_URL}/auth/nova-senha?token=${token}`);
+        console.log(`Nova senha: link enviado para o usuário ${user.id} (${r.ok ? 'ok' : 'falhou'})`);
+        done();
+    } catch (err) {
+        console.error('Erro no pedido de nova senha:', err.message);
+        res.status(500).json({ error: 'Não foi possível enviar agora. Tente novamente em instantes.' });
+    }
+});
+
+router.post('/reset-password', authLimiter, async (req, res) => {
+    const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
+    const { password } = req.body || {};
+    if (!/^[a-f0-9]{64}$/.test(token)) return res.status(400).json({ error: 'Link inválido. Peça um novo em "Esqueci minha senha".' });
+    if (typeof password !== 'string' || password.length < PASSWORD_MIN) {
+        return res.status(400).json({ error: `A senha deve ter pelo menos ${PASSWORD_MIN} caracteres.` });
+    }
+    if (password.length > PASSWORD_MAX) return res.status(400).json({ error: `A senha pode ter no máximo ${PASSWORD_MAX} caracteres.` });
+    try {
+        await ensureResetTable();
+        const passwordHash = await bcrypt.hash(password, 10);
+        const { rows } = await pool.query(
+            `UPDATE password_resets SET used_at = NOW()
+             WHERE token_hash = $1 AND used_at IS NULL AND expires_at > NOW()
+             RETURNING user_id`, [sha256(token)]);
+        if (!rows.length) return res.status(400).json({ error: 'Este link expirou ou já foi usado. Peça um novo em "Esqueci minha senha".' });
+        const userId = rows[0].user_id;
+        const upd = await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2 RETURNING email', [passwordHash, userId]);
+        await pool.query('DELETE FROM password_resets WHERE user_id = $1 AND used_at IS NULL', [userId]);
+        console.log(`Nova senha: usuário ${userId} trocou a senha`);
+        res.json({ ok: true, email: upd.rows[0]?.email });
+    } catch (err) {
+        console.error('Erro ao trocar a senha:', err.message);
+        res.status(500).json({ error: 'Não foi possível trocar a senha agora. Tente novamente.' });
     }
 });
 

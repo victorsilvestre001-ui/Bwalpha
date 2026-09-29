@@ -2,7 +2,23 @@
 // conta(s) parecida(s) (sem senha). Útil quando um cliente não consegue entrar.
 const pool = require('./db');
 
+// USER_EMAIL_FIX=<e-mail errado>><e-mail certo>: corrige um e-mail digitado errado no cadastro
+// (só se o certo ainda não tiver conta). Pode ficar ligado: depois da troca não faz mais nada.
+async function fixEmail() {
+    const [from, to] = (process.env.USER_EMAIL_FIX || '').split('>').map((x) => x.trim().toLowerCase());
+    if (!from || !to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return;
+    try {
+        const taken = await pool.query('SELECT id FROM users WHERE LOWER(email) = $1', [to]);
+        if (taken.rows.length) return console.log(`USER_EMAIL_FIX: ${to} já tem conta (id ${taken.rows[0].id}), nada a fazer`);
+        const r = await pool.query('UPDATE users SET email = $1 WHERE LOWER(email) = $2 RETURNING id', [to, from]);
+        console.log(`USER_EMAIL_FIX: ${r.rows.length ? `conta ${r.rows[0].id} agora é ${to}` : `${from} não encontrado`}`);
+    } catch (err) {
+        console.error('USER_EMAIL_FIX erro:', err.message);
+    }
+}
+
 async function run() {
+    await fixEmail();
     const q = (process.env.USER_LOOKUP || '').trim().toLowerCase();
     if (!q) return;
     const key = q.split('@')[0].replace(/[^a-z0-9]/g, '').slice(0, 12) || q;

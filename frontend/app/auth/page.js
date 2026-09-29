@@ -29,6 +29,8 @@ function AuthForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [forgot, setForgot] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
   const wantsVip = params.get("plan") === "vip";
 
   useEffect(() => {
@@ -57,13 +59,65 @@ function AuthForm() {
       if (mode === "register") track("CompleteRegistration");
       router.push(wantsVip ? "/dashboard?upgrade=1" : "/dashboard");
     } catch (err) {
-      setError(err.message || "Não foi possível conectar ao servidor.");
+      if (mode === "login" && err.status === 401) {
+        setError("E-mail ou senha incorretos. Confira se o e-mail está igual ao do cadastro ou toque em \"Esqueci minha senha\".");
+      } else {
+        setError(err.message || "Não foi possível conectar ao servidor.");
+      }
     } finally {
       setLoading(false);
     }
   }
 
   const isLogin = mode === "login";
+
+  async function handleForgot(e) {
+    e.preventDefault();
+    setError("");
+    if (!email) { setError("Digite o e-mail da sua conta."); return; }
+    setLoading(true);
+    try {
+      await api.forgotPassword(email.trim());
+      setForgotSent(true);
+    } catch (err) {
+      setError(err.message || "Não foi possível conectar ao servidor.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (forgot) {
+    return (
+      <div className="panel panel-glow grad-border w-full max-w-md p-8 md:p-10">
+        <div className="flex justify-center"><Logo size={36} /></div>
+        <h1 className="mt-8 font-display text-2xl font-bold text-mist">Esqueci minha senha</h1>
+        {forgotSent ? (
+          <>
+            <p className="mt-3 text-sm leading-relaxed text-mist-dim">
+              Se existir uma conta com <strong className="text-mist">{email.trim()}</strong>, enviamos um link para criar uma nova senha. Confira a caixa de entrada e o <strong className="text-mist">spam</strong>. O link vale por 1 hora.
+            </p>
+            <p className="mt-3 text-xs text-mist-faint">Não chegou? Confira se o e-mail está escrito igual ao do cadastro.</p>
+          </>
+        ) : (
+          <>
+            <p className="mt-1 text-sm text-mist-dim">Digite o e-mail do cadastro e enviamos um link para criar uma nova senha.</p>
+            <form onSubmit={handleForgot} className="mt-7 space-y-3">
+              <Field icon={Mail}>
+                <input className="input !pl-11" type="email" placeholder="seu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+              </Field>
+              {error && <p className="rounded-lg border border-ember/30 bg-ember/10 px-3 py-2 text-sm text-ember-soft">{error}</p>}
+              <button type="submit" disabled={loading} className="btn-primary mt-2 w-full !py-3.5">
+                {loading ? <Loader2 size={16} className="animate-spin" /> : <>Enviar link <ArrowRight size={16} /></>}
+              </button>
+            </form>
+          </>
+        )}
+        <button type="button" onClick={() => { setForgot(false); setForgotSent(false); setError(""); }} className="mt-6 flex w-full items-center justify-center gap-2 text-sm text-mist-dim hover:text-mist">
+          <ArrowLeft size={14} /> Voltar para o login
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="panel panel-glow grad-border w-full max-w-md p-8 md:p-10">
@@ -115,6 +169,14 @@ function AuthForm() {
             {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
         </Field>
+
+        {isLogin && (
+          <div className="flex justify-end">
+            <button type="button" onClick={() => { setForgot(true); setError(""); }} className="text-xs text-mist-dim underline-offset-2 hover:text-mist hover:underline">
+              Esqueci minha senha
+            </button>
+          </div>
+        )}
 
         {error && <p className="rounded-lg border border-ember/30 bg-ember/10 px-3 py-2 text-sm text-ember-soft">{error}</p>}
 

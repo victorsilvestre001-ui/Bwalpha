@@ -241,4 +241,22 @@ async function sendResultsEmail(name, email, account = {}) {
     });
 }
 
-module.exports = { sendEmail, sendPixReminderEmail, sendResultsEmail, sendWelcomeEmail, sendCouponEmail, sendTrialEmail, sendMarketOpenEmail, escapeHtml };
+// E-mail com o link para criar uma nova senha (vale por 1 hora, uso único).
+async function sendPasswordResetEmail(name, email, url) {
+    const result = await sendEmail({
+        to: email,
+        subject: 'Crie uma nova senha na TradeOn AI',
+        html: layout(`
+            <h1 style="color: #00F0A8; font-size: 22px; margin-bottom: 8px;">Olá, ${escapeHtml(name || '')}!</h1>
+            <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">
+                Recebemos um pedido para criar uma nova senha na conta <strong>${escapeHtml(email)}</strong>.
+                Clique no botão abaixo para escolher a nova senha. O link vale por <strong>1 hora</strong>.
+            </p>
+            ${button(url, 'Criar nova senha')}`,
+            'Se você não pediu isso, ignore este e-mail: sua senha continua a mesma.'),
+    });
+    if (!result.ok) console.error('Erro ao enviar e-mail de nova senha:', result.error);
+    return result;
+}
+
+module.exports = { sendEmail, sendPasswordResetEmail, sendPixReminderEmail, sendResultsEmail, sendWelcomeEmail, sendCouponEmail, sendTrialEmail, sendMarketOpenEmail, escapeHtml };
