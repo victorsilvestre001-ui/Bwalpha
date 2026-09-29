@@ -861,6 +861,20 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
     // Indicadores seguem calculados (inclusive o BwAlpha), mas a decisão do M1 é a leitura do candle atual.
     const technical = computeTechnicalSignal(closed, forming);
     let m1 = computeM1Signal(closed, forming, technical);
+    // Tamanho mínimo: o corpo do candle atual precisa ser pelo menos M1_MIN_BODY_VS_AVG × a média
+    // dos corpos dos últimos 20 candles (backtest: 1,0× levou o EURUSD de ~71% para ~75%).
+    const minBody = Number(process.env.M1_MIN_BODY_VS_AVG ?? 1.0);
+    if (minBody > 0) {
+        const recent = closed.slice(-20);
+        const avgBody = recent.reduce((a, c) => a + Math.abs(c.close - c.open), 0) / Math.max(recent.length, 1);
+        const body = Math.abs(forming.close - forming.open);
+        if (avgBody > 0 && body < minBody * avgBody) {
+            const result = { pair: pairLabel, timeframe: 'M1', noEntry: true, reason: 'O candle atual está sem força (movimento pequeno). Melhor esperar o próximo.' };
+            console.log(`M1 ${pairLabel} sem entrada: candle pequeno (corpo ${(body / avgBody).toFixed(2)}× a média) atual=[${forming.open}/${forming.high}/${forming.low}/${forming.close}]`);
+            m1Cache[pairLabel] = { bucketStart, at: nowMs, result };
+            return result;
+        }
+    }
     if (m1.leitura === 'doji' && process.env.M1_DOJI_SINAL !== '1') {
         // Candle sem corpo: não há leitura de força, seria cara ou coroa. Melhor esperar.
         const result = { pair: pairLabel, timeframe: 'M1', noEntry: true, reason: 'O candle atual está sem direção (doji). Melhor esperar o próximo.' };
