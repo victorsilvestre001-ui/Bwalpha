@@ -147,7 +147,7 @@ async function sendMarketOpenEmail(name, email, account = {}) {
     const firstName = String(name || '').trim().split(/\s+/)[0];
     const hi = firstName ? `${escapeHtml(firstName)}, o` : 'O';
     const vip = account.plan === 'vip' || account.plan === 'owner';
-    const trialLeft = !vip && !account.trial_expired && (account.signals_used || 0) < (parseInt(process.env.FREE_TRIAL_SIGNALS, 10) || 3);
+    const trialLeft = !vip && !account.trial_expired && (account.signals_used || 0) < (parseInt(process.env.FREE_TRIAL_SIGNALS ?? '0', 10) || 0);
     const offer = !vip && !trialLeft ? couponOffer(name, email) : null;
 
     const body = vip
@@ -213,7 +213,7 @@ async function sendPixReminderEmail(name, email) {
 async function sendResultsEmail(name, email, account = {}) {
     const firstName = String(name || '').trim().split(/\s+/)[0];
     const vip = account.plan === 'vip' || account.plan === 'owner';
-    const trialLeft = !vip && !account.trial_expired && (account.signals_used || 0) < (parseInt(process.env.FREE_TRIAL_SIGNALS, 10) || 3);
+    const trialLeft = !vip && !account.trial_expired && (account.signals_used || 0) < (parseInt(process.env.FREE_TRIAL_SIGNALS ?? '0', 10) || 0);
     const offer = !vip && !trialLeft ? couponOffer(name, email) : null;
     const cta = vip
         ? button(`${FRONTEND_URL}/dashboard`, 'Abrir o painel')

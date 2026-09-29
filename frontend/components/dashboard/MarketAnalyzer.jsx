@@ -195,10 +195,10 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
           ) : (
             <div className="grad-border mt-6 rounded-xl bg-void-deep/70 p-4 text-center">
               <div className="flex items-center justify-center gap-2 font-display text-sm font-semibold text-mist">
-                <Lock size={15} className="text-neon" /> {quota ? "Seu teste grátis acabou" : "Sinais exclusivos para VIP"}
+                <Lock size={15} className="text-neon" /> {quota?.limit > 0 ? "Seu teste grátis acabou" : "Sinais exclusivos para VIP"}
               </div>
               <p className="mt-1 text-xs text-mist-dim">
-                {quota
+                {quota?.limit > 0
                   ? `Você já usou os ${quota.limit} sinais grátis do seu primeiro dia. Com o VIP os sinais são ilimitados, com contagem de entrada e histórico de Win/Red.`
                   : "Ative o VIP para receber o sinal do próximo candle, a contagem de entrada e o histórico de Win/Red."}
               </p>

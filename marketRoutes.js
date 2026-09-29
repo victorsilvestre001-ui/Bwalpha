@@ -1062,10 +1062,10 @@ const signalLimiter = rateLimit({
     message: { error: 'Muitas análises seguidas. Aguarde um minuto.' },
 });
 
-// Plano free: 3 sinais grátis só no primeiro dia de uso (o dia, em Brasília, do primeiro sinal).
+// Plano free: sinais grátis só no primeiro dia de uso (o dia, em Brasília, do primeiro sinal).
 // Conta só os sinais com entrada, que são os salvos no histórico.
-// Quantidade ajustável pela variável FREE_TRIAL_SIGNALS no Railway (padrão: 3).
-const FREE_TRIAL_SIGNALS = Math.max(0, parseInt(process.env.FREE_TRIAL_SIGNALS, 10) || 3);
+// Quantidade pela variável FREE_TRIAL_SIGNALS no Railway (padrão: 0 = sinais só no VIP).
+const FREE_TRIAL_SIGNALS = Math.max(0, parseInt(process.env.FREE_TRIAL_SIGNALS ?? '0', 10) || 0);
 
 async function freeTrialStatus(userId) {
     const { rows } = await pool.query(
@@ -1103,7 +1103,9 @@ async function requireSignalAccess(req, res, next) {
         const quota = await signalQuota(req.user.id);
         if (!quota.vip && quota.remaining <= 0) {
             return res.status(403).json({
-                error: `Seu teste grátis de ${FREE_TRIAL_SIGNALS} sinais já foi usado. Assine o VIP para sinais ilimitados.`,
+                error: FREE_TRIAL_SIGNALS > 0
+                    ? `Seu teste grátis de ${FREE_TRIAL_SIGNALS} sinais já foi usado. Assine o VIP para sinais ilimitados.`
+                    : 'Os sinais da IA são exclusivos do VIP. Ative o VIP para liberar.',
                 vipRequired: true,
                 freeLimitReached: true,
             });
