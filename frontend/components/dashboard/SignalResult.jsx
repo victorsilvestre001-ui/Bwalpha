@@ -26,6 +26,36 @@ function PressureBar({ pressao }) {
   );
 }
 
+// Volatilidade do mercado agora (candles recentes x tamanho típico).
+const VOL_STYLE = {
+  baixa: { dot: "bg-mist-faint", box: "border-void-line bg-void-deep/60", title: "text-mist-dim", bars: 1 },
+  normal: { dot: "bg-neon", box: "border-neon/30 bg-neon/5", title: "text-neon", bars: 2 },
+  alta: { dot: "bg-volt", box: "border-volt/40 bg-volt/10", title: "text-volt-soft", bars: 3 },
+  extrema: { dot: "bg-ember", box: "border-ember/40 bg-ember/10", title: "text-ember-soft", bars: 4 },
+};
+
+function VolatilityCard({ vol }) {
+  if (!vol) return null;
+  const st = VOL_STYLE[vol.nivel] || VOL_STYLE.normal;
+  return (
+    <div className={`rounded-xl border p-4 ${st.box}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className={`h-2 w-2 rounded-full ${st.dot} ${vol.nivel === "alta" || vol.nivel === "extrema" ? "animate-pulse" : ""}`} />
+          <span className="font-mono text-[11px] uppercase tracking-wider text-mist-faint">Volatilidade</span>
+        </div>
+        <div className="flex items-end gap-0.5" aria-hidden="true">
+          {[1, 2, 3, 4].map((i) => (
+            <span key={i} className={`w-1.5 rounded-sm ${i <= st.bars ? st.dot : "bg-void-line"}`} style={{ height: 4 + i * 3 }} />
+          ))}
+        </div>
+      </div>
+      <div className={`mt-1.5 font-display text-sm font-semibold ${st.title}`}>{vol.titulo}</div>
+      <p className="mt-0.5 text-xs leading-relaxed text-mist-dim">{vol.texto}</p>
+    </div>
+  );
+}
+
 export default function SignalResult({ result, timing, onRetry }) {
   if (result.noEntry) {
     return (
@@ -36,6 +66,7 @@ export default function SignalResult({ result, timing, onRetry }) {
         </div>
         <p className="mt-2 text-sm text-mist-dim">{result.reason || "Sem um sinal confiável neste candle."}</p>
         {result.pressao && <div className="mt-4"><PressureBar pressao={result.pressao} /></div>}
+        {result.volatilidade && <div className="mt-3"><VolatilityCard vol={result.volatilidade} /></div>}
         {onRetry && (
           <button onClick={onRetry} className="btn-ghost mt-4 w-full !py-3">
             <RefreshCw size={15} /> Analisar o próximo candle
@@ -67,6 +98,8 @@ export default function SignalResult({ result, timing, onRetry }) {
       {timing && <CandleTimer direction={result.direction} timeframe={result.timeframe} {...timing} />}
 
       <PressureBar pressao={result.pressao} />
+
+      <VolatilityCard vol={result.volatilidade} />
 
       {result.candlePatterns?.length > 0 && (
         <div className="flex flex-wrap gap-2">

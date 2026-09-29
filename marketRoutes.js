@@ -797,6 +797,26 @@ function computePressao(closed, forming) {
     };
 }
 
+// Volatilidade agora: tamanho médio (máxima - mínima) dos últimos 5 candles fechados em relação
+// ao tamanho típico (mediana) dos últimos 60. Só informativo: não muda a direção do sinal.
+function computeVolatilidade(closed) {
+    const ranges = closed.slice(-60).map((c) => c.high - c.low).filter((r) => r > 0);
+    if (ranges.length < 20) return null;
+    const sorted = [...ranges].sort((a, b) => a - b);
+    const tipico = sorted[Math.floor(sorted.length / 2)];
+    const agora = ranges.slice(-5).reduce((a, r) => a + r, 0) / 5;
+    if (!(tipico > 0)) return null;
+    const ratio = agora / tipico;
+    const nivel = ratio < 0.6 ? 'baixa' : ratio < 1.4 ? 'normal' : ratio < 2.5 ? 'alta' : 'extrema';
+    const TXT = {
+        baixa: ['Mercado lento', 'Candles pequenos: o preço está andando pouco. Os sinais ficam menos confiáveis, opere com cautela.'],
+        normal: ['Volatilidade boa para operar', 'O mercado está se movendo num ritmo normal.'],
+        alta: ['Mercado volátil', 'Movimentos fortes agora: bom momento para operar, mas use gestão e uma entrada menor.'],
+        extrema: ['Volatilidade extrema', 'Movimento muito acima do normal (possível notícia). Risco alto: cuidado ao operar.'],
+    };
+    return { nivel, ratio: +ratio.toFixed(2), titulo: TXT[nivel][0], texto: TXT[nivel][1] };
+}
+
 // Pressão forte manda: se a leitura do candle deu o lado contrário (ex.: VENDA com os
 // compradores empurrando), o sinal vai a favor da pressão.
 // Pressão forte a favor da leitura confirma a entrada: confiança Alta.
@@ -927,6 +947,7 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
         ritmo: m1.ritmo || null,
         chinesaConfirma: m1.chinesa || null,
         pressao,
+        volatilidade: computeVolatilidade(closed),
         candleAtual: { bodyRatio: m1.bodyRatio ?? null, bodyVsAvg: m1.bodyVsAvg ?? null },
     };
     const fmt = (c) => `${new Date(c.time).toISOString().slice(11, 16)} ${c.open}/${c.high}/${c.low}/${c.close}`;
@@ -955,6 +976,7 @@ async function getTechnicalSignal(pairLabel, timeframeLabel) {
     let result = { pair: pairLabel, timeframe: timeframeLabel, ...computeTechnicalSignal(candles, forming) };
     if (RITMO_DIA()) result = applyRitmo(candles, timeframeLabel, result);
     result.pressao = computePressao(candles, forming);
+    result.volatilidade = computeVolatilidade(candles);
     if (PRESSAO_FILTRO()) result = applyPressao(result, result.pressao);
 
     technicalCache[cacheKey] = result;
@@ -1173,5 +1195,5 @@ router.get('/history', authMiddleware, async (req, res) => {
 module.exports = {
     router, getQuotes, getIndicators, getEconomicSnapshot, getNews, getHistory, fetchIntradayCandles, TIMEFRAME_MINUTES,
     computeTechnicalSignal, computeCandleFollowSignal, computeM1Signal, getM1Signal, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, isMarketOpen,
-    emaSeries, rsiLast, macdHistogramLast, detectCandlePatterns, detectPinBar, getChinesaStrategySignal, getBwalphaIndicator, applyRitmo, computePressao, applyPressao, applyChinesa,
+    emaSeries, rsiLast, macdHistogramLast, detectCandlePatterns, detectPinBar, getChinesaStrategySignal, getBwalphaIndicator, applyRitmo, computePressao, applyPressao, applyChinesa, computeVolatilidade,
 };
