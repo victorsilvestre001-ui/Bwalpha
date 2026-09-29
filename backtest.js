@@ -451,8 +451,60 @@ async function runSnap() {
     }
 }
 
+// Estudo de padrões (patterns.js): monta a tabela com os primeiros 70% dos candles e testa nos
+// últimos 30% (dias que o estudo não viu). Compara com a regra atual do M1 no mesmo período.
+async function runPadroes() {
+    const P = require('./patterns');
+    const pages = parseInt(process.env.BACKTEST_M1_PAGES, 10) || 4;
+    const pairs = (process.env.BACKTEST_PAIRS || 'EURUSD,XAUUSD,EURJPY').split(',');
+    for (const pair of pairs) {
+        const candles = (await fetchLongHistory(pair, 'M1', pages)).filter((c) => isMarketOpen(new Date(c.time)));
+        const cut = Math.floor(candles.length * 0.7);
+        console.log(`BACKTEST_PADROES ${pair} candles=${candles.length} de=${candles[0] && new Date(candles[0].time).toISOString()} teste_desde=${candles[cut] && new Date(candles[cut].time).toISOString()}`);
+        // Alvos do período de teste + a regra atual.
+        const tests = [];
+        for (let k = Math.max(cut, WINDOW); k < candles.length - 1; k++) {
+            const f = candles[k], next = candles[k + 1];
+            if (next.time - f.time !== 60_000 || f.time - candles[k - WINDOW].time !== WINDOW * 60_000 || next.close === next.open) continue;
+            const closed = candles.slice(k - WINDOW, k);
+            const up = next.close > next.open;
+            const prod = computeM1Signal(closed, f, computeTechnicalSignal(closed, f)).direction;
+            tests.push({ closed, f, up, prod });
+        }
+        const acc = (list) => (list.length ? +(list.filter((x) => x).length / list.length * 100).toFixed(1) : null);
+        const prodRes = tests.map((t) => (t.prod === 'COMPRA') === t.up);
+        console.log(`BACKTEST_PADROES_BASE ${pair} regra_atual n=${tests.length} acerto=${acc(prodRes)}%`);
+        const rows = [];
+        for (const variant of Object.keys(P.KEYS)) {
+            const table = P.buildTable(candles, variant, 60_000, 0, cut);
+            const keys = tests.map((t) => P.keyFor(variant, t.closed, t.f));
+            for (const minN of [30, 60, 120]) {
+                for (const minWr of [0.55, 0.58, 0.62]) {
+                    const hit = [], combo = [], agree = [];
+                    tests.forEach((t, i) => {
+                        const r = P.lookup(table, keys[i], minN, minWr);
+                        if (r) hit.push((r.direction === 'COMPRA') === t.up);
+                        const d = r ? r.direction : t.prod;
+                        combo.push((d === 'COMPRA') === t.up);
+                        if (r && r.direction === t.prod) agree.push((t.prod === 'COMPRA') === t.up);
+                    });
+                    rows.push([variant, minN, minWr, hit.length, acc(hit), +(hit.length / Math.max(tests.length, 1) * 100).toFixed(1), acc(combo), agree.length, acc(agree), table.size]);
+                }
+            }
+        }
+        rows.sort((a, b) => (b[4] ?? 0) - (a[4] ?? 0));
+        // [chave, minN, minAcerto, n_padrao, acerto_padrao%, cobertura%, acerto_padrao_senao_regra%, n_concordam, acerto_concordam%, padroes_na_tabela]
+        console.log(`BACKTEST_PADROES_TOP ${pair} ${JSON.stringify(rows)}`);
+    }
+}
+
 async function run() {
     console.log('BACKTEST_START');
+    if (process.env.BACKTEST_SOURCE === 'padroes') {
+        try { await runPadroes(); } catch (err) { console.error('BACKTEST_ERR PADROES:', err.message); }
+        console.log('BACKTEST_END');
+        return;
+    }
     if (process.env.BACKTEST_SOURCE === 'snap') {
         try { await runSnap(); } catch (err) { console.error('BACKTEST_ERR SNAP:', err.message); }
         console.log('BACKTEST_END');
