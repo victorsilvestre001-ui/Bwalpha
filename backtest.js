@@ -187,6 +187,17 @@ const STRATEGIES = {
     pin_invertido_m1: ({ formingNow }) => { const p = detectPinBar(formingNow); return p ? opp(p) : null; },
     pin_segue_m1: ({ formingNow }) => detectPinBar(formingNow),
     forte_m1: ({ closed, formingNow }) => (detectPinBar(formingNow) ? null : computeCandleFollowSignal(closed, formingNow).direction),
+    fraco_indicadores: ({ sig, closed, formingNow }) => (!detectPinBar(formingNow) && computeCandleFollowSignal(closed, formingNow).direction ? null : sig.indicadores.direcao),
+    fraco_indicadores_fortes: ({ sig, closed, formingNow }) => (!detectPinBar(formingNow) && computeCandleFollowSignal(closed, formingNow).direction ? null
+        : sig.indicadores.confianca !== 'Baixa' ? sig.indicadores.direcao : null),
+    forte_concorda_indicadores_m1: ({ sig, closed, formingNow }) => {
+        const d = detectPinBar(formingNow) ? null : computeCandleFollowSignal(closed, formingNow).direction;
+        return d && d === sig.indicadores.direcao ? d : null;
+    },
+    forte_discorda_indicadores_m1: ({ sig, closed, formingNow }) => {
+        const d = detectPinBar(formingNow) ? null : computeCandleFollowSignal(closed, formingNow).direction;
+        return d && d !== sig.indicadores.direcao ? d : null;
+    },
     fraco_chinesa: (ctx) => (computeCandleFollowSignal(ctx.closed, ctx.formingNow).direction ? null : STRATEGIES.chinesa(ctx)),
     fraco_tecnico: ({ closed, formingNow }) => {
         if (computeCandleFollowSignal(closed, formingNow).direction) return null;
@@ -412,7 +423,7 @@ async function runOtc() {
 
 // Backtest com as fotos do candle ao vivo (m1Snapshots.js) e os candles oficiais (fechados e alvo).
 async function runSnap() {
-    const filter = new RegExp(process.env.BACKTEST_SNAP_FILTER || '^(producao_m1|fraco_|pin_|forte_m1|chinesa|ultimo_candle|contra_ultimo|tendencia_ema|pressao_m1$|atual$)');
+    const filter = new RegExp(process.env.BACKTEST_SNAP_FILTER || '^(producao_m1|fraco_|pin_|forte_|chinesa|ultimo_candle|contra_ultimo|tendencia_ema|pressao_m1$|atual$)');
     const minN = parseInt(process.env.BACKTEST_MIN_N, 10) || 30;
     const pages = parseInt(process.env.BACKTEST_M1_PAGES, 10) || 2;
     for (const pair of ['EURUSD', 'XAUUSD']) {

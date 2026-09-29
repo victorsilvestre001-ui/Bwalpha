@@ -634,6 +634,8 @@ function computeTechnicalSignal(candles, forming) {
               }
             : null,
         bwalpha,
+        // Votação só dos indicadores (EMA 9/21, MACD, RSI, padrões de candle e BwAlpha).
+        indicadores: { direcao: confluenceDirection, compra: bullVotes, venda: bearVotes, confianca: confluenceConfidence },
         direction,
         confidence,
     };
@@ -692,7 +694,17 @@ function detectPinBar(c) {
 // Desliga com M1_PINBAR_INVERTIDO=0.
 const PINBAR_INVERTIDO = process.env.M1_PINBAR_INVERTIDO !== '0';
 
+// Candle atual sem força clara (fraco, pin bar ou doji): a direção vem dos indicadores
+// (EMA 9/21, MACD, RSI, padrões de candle e BwAlpha), para o sinal bater com o que eles mostram.
+// Nos sinais reais essas leituras do candle ficaram perto de 50%. Desliga com M1_FRACO_INDICADORES=0.
+const FRACO_INDICADORES = () => process.env.M1_FRACO_INDICADORES !== '0';
+
 function computeM1Signal(closed, forming, technical) {
+    const follow0 = computeCandleFollowSignal(closed, forming);
+    if (FRACO_INDICADORES() && technical && technical.indicadores && !(follow0.direction && !detectPinBar(forming))) {
+        const ind = technical.indicadores;
+        return { direction: ind.direcao, confidence: ind.confianca === 'Alta' ? 'Média' : 'Baixa', bodyRatio: follow0.bodyRatio ?? null, leitura: 'indicadores' };
+    }
     if (PINBAR_INVERTIDO) {
         const pin = detectPinBar(forming);
         if (pin) return { direction: pin === 'COMPRA' ? 'VENDA' : 'COMPRA', confidence: 'Média', leitura: 'pinbar_invertido' };
@@ -893,6 +905,15 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
     }
     if (RITMO_DIA()) m1 = applyRitmo(closed, 'M1', m1);
     if (CHINESA_M1()) m1 = applyChinesa(m1, closed, forming);
+    // Candle forte: a confiança também olha os indicadores. Chinesa e indicadores a favor -> Alta;
+    // os dois contra -> Baixa; divididos -> Média.
+    if (m1.leitura === 'forte' && technical.indicadores && FRACO_INDICADORES()) {
+        const indOk = technical.indicadores.direcao === m1.direction;
+        const chOk = m1.chinesa ? m1.chinesa.concorda : null;
+        const a = [indOk, chOk].filter((x) => x !== null);
+        const pro = a.filter(Boolean).length;
+        m1 = { ...m1, confidence: pro === a.length ? 'Alta' : pro === 0 ? 'Baixa' : 'Média', indicadoresConfirmam: indOk };
+    }
     const pressao = computePressao(closed, forming);
     if (PRESSAO_FILTRO()) m1 = applyPressao(m1, pressao);
     const result = {
