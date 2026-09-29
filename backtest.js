@@ -109,6 +109,14 @@ const STRATEGIES = {
     // Regra que está em produção no M1 (mesma função da rota /signal).
     producao_m1: ({ closed, formingNow }) => computeCandleFollowSignal(closed, formingNow).direction,
     producao_m1_sempre: ({ sig, closed, formingNow }) => computeM1Signal(closed, formingNow, sig).direction,
+    // Tamanho mínimo do candle atual (corpo em relação à média dos últimos 20): candle
+    // minúsculo é ruído. Testa vários limites: só entra quando o corpo >= k × média.
+    ...Object.fromEntries([0.3, 0.5, 0.7, 1.0, 1.3].map((k) => [`tamanho_${String(k).replace('.', '')}_m1`, ({ sig, closed, formingNow }) => {
+        const recent = closed.slice(-20);
+        const avg = recent.reduce((a, c) => a + Math.abs(c.close - c.open), 0) / Math.max(recent.length, 1);
+        if (!(avg > 0) || Math.abs(formingNow.close - formingNow.open) < k * avg) return null;
+        return computeM1Signal(closed, formingNow, sig).direction;
+    }])),
     // Estratégia Chinesa como confirmação: acerto quando concorda x quando discorda do M1.
     chinesa_concorda_m1: ({ sig, closed, formingNow }) => {
         const r = applyChinesa(computeM1Signal(closed, formingNow, sig), closed, formingNow);
