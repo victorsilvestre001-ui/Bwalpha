@@ -818,13 +818,12 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
     const allCandles = await fetchIntradayCandles(pairLabel, 'M1');
     if (!allCandles || allCandles.length < 40) return null;
     let { closed, forming } = splitFormingCandle(allCandles, M1_MS, nowMs);
-    if (!forming || forming.time !== bucketStart) {
-        // A API REST não traz o candle em formação: usa o montado pelo streaming (WebSocket).
-        const live = getLiveM1(SIGNAL_PAIRS[pairLabel].td, bucketStart, nowMs);
-        if (live) {
-            forming = live;
-            closed = closed.filter((c) => c.time < bucketStart);
-        }
+    // Sempre prefere o candle montado pelo streaming (WebSocket): quando a API REST traz o candle
+    // em formação, ele costuma estar incompleto (às vezes só com a abertura).
+    const live = getLiveM1(SIGNAL_PAIRS[pairLabel].td, bucketStart, nowMs);
+    if (live) {
+        forming = live;
+        closed = closed.filter((c) => c.time < bucketStart);
     }
     const liveSource = forming && forming.source ? forming.source : undefined;
     // A API REST às vezes entrega os candles fechados com alguns minutos de atraso: completa
