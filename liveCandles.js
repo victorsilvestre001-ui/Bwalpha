@@ -89,9 +89,40 @@ function getLiveM1(symbol, bucketStart, nowMs = Date.now()) {
     return { time: c.time, open: c.open, high: c.high, low: c.low, close: c.close, ticks: c.ticks };
 }
 
+// Auditoria da fonte: a cada 30 min compara os candles montados ao vivo com os candles oficiais
+// da API REST (mesmo minuto) e registra quantos têm a mesma direção. Liga com FEED_AUDIT=1.
+// `fetchRest(symbolLabel)` devolve os últimos candles M1 da API REST.
+function startFeedAudit(pairs, fetchRest) {
+    if (process.env.FEED_AUDIT !== '1') return;
+    const run = async () => {
+        for (const { label, td } of pairs) {
+            try {
+                const rest = await fetchRest(label);
+                if (!rest) continue;
+                const byTime = new Map(rest.map((c) => [c.time, c]));
+                let n = 0, same = 0, diffSum = 0;
+                for (const c of history[td] || []) {
+                    const r = byTime.get(c.time);
+                    if (!r) continue;
+                    const dl = Math.sign(c.close - c.open), dr = Math.sign(r.close - r.open);
+                    if (dl === 0 || dr === 0) continue;
+                    n++;
+                    if (dl === dr) same++;
+                    diffSum += Math.abs(c.close - r.close);
+                }
+                if (n) console.log(`AUDITORIA fonte ${label}: ${same}/${n} candles com a mesma direção (${Math.round(same / n * 100)}%), diferença média no fechamento ${(diffSum / n).toPrecision(3)}`);
+            } catch (err) {
+                console.error(`AUDITORIA fonte ${label}: erro`, err.message);
+            }
+        }
+    };
+    setTimeout(run, 20 * 60_000);
+    setInterval(run, 30 * 60_000);
+}
+
 // Candles fechados montados pelo streaming, para cobrir os minutos que a API REST ainda não entregou.
 function getLiveClosed(symbol) {
     return (history[symbol] || []).slice();
 }
 
-module.exports = { connect, getLiveM1, getLiveClosed, status };
+module.exports = { connect, getLiveM1, getLiveClosed, startFeedAudit, status };

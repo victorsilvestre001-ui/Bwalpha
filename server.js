@@ -292,6 +292,11 @@ runMigrations().then(() => {
         setInterval(resolvePendingAnalyses, 60 * 1000);
         // Streaming de preços da Twelve Data: monta o candle M1 em formação para os sinais.
         require('./liveCandles').connect(['EUR/USD', 'EUR/JPY', 'XAU/USD']);
+        // Auditoria: compara o candle ao vivo com o oficial (FEED_AUDIT=1).
+        require('./liveCandles').startFeedAudit(
+            [{ label: 'EURUSD', td: 'EUR/USD' }, { label: 'XAUUSD', td: 'XAU/USD' }],
+            (label) => require('./marketRoutes').fetchIntradayCandles(label, 'M1', 40),
+        );
         checkoutRoutes.checkStripeSetup();
         // Teste: coleta de candles do OTC da Exnova para backtest (desligado sem EXNOVA_COLLECT=1).
         require('./exnovaCollector').start();
