@@ -3,9 +3,10 @@
 // o acerto real e o do teste se separam. Com estas fotos, o backtest (BACKTEST_SOURCE=snap)
 // testa as regras com exatamente o que o sinal viu. Desliga com M1_SNAPSHOTS=0.
 const pool = require('./db');
-const { stores } = require('./liveCandles');
+const { getLiveM1 } = require('./liveCandles');
 
-const PAIRS = { EURUSD: 'EUR/USD', XAUUSD: 'XAU/USD' };
+// Mesma fonte que o sinal usa (LIVE_SOURCE, ex.: exnova), para o teste ver o que o sinal viu.
+const PAIRS = { EURUSD: 'EUR/USD', XAUUSD: 'XAU/USD', EURJPY: 'EUR/JPY' };
 const SNAP_SECOND = 47;
 const KEEP_DAYS = 21;
 
@@ -30,7 +31,7 @@ function start() {
             if (minute === lastMinute || new Date(now).getUTCSeconds() < SNAP_SECOND) return;
             lastMinute = minute;
             for (const [pair, sym] of Object.entries(PAIRS)) {
-                const c = stores.td.getLiveM1(sym, minute, now);
+                const c = getLiveM1(sym, minute, now);
                 if (!c) continue;
                 try {
                     await pool.query(

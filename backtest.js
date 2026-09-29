@@ -502,7 +502,7 @@ async function runSnap() {
     const filter = new RegExp(process.env.BACKTEST_SNAP_FILTER || '^(producao_m1|fraco_|pin_|forte_|chinesa|ultimo_candle|contra_ultimo|tendencia_ema|pressao_m1$|atual$)');
     const minN = parseInt(process.env.BACKTEST_MIN_N, 10) || 30;
     const pages = parseInt(process.env.BACKTEST_M1_PAGES, 10) || 2;
-    for (const pair of ['EURUSD', 'XAUUSD']) {
+    for (const pair of (process.env.BACKTEST_PAIRS || 'EURUSD,XAUUSD').split(',')) {
         const { rows } = await pool.query('SELECT time, open, high, low, close FROM m1_snapshots WHERE pair = $1 ORDER BY time', [pair]);
         const snaps = new Map(rows.map((r) => [new Date(r.time).getTime(), { time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }]));
         const candles = await fetchLongHistory(pair, 'M1', pages);
