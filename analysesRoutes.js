@@ -17,7 +17,34 @@ function judge(direction, open, close) {
     return (direction === 'COMPRA') === up ? 'win' : 'loss';
 }
 
-const MAX_CANDLES = 5000; // limite de uma chamada da Twelve Data
+const MAX_CANDLES = 5000;
+
+// Candles M1 da corretora gravados pelo coletor da Exnova (exnovaCollector.js). No M5 junta 5 de M1.
+// JUDGE_SOURCE=twelve volta a conferir só pela fonte de dados.
+async function brokerCandles(pair, timeframe, fromMs) {
+    if (process.env.JUDGE_SOURCE === 'twelve') return null;
+    try {
+        const { rows } = await pool.query(
+            `SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 AND time >= $2 ORDER BY time`,
+            [pair, new Date(fromMs - 5 * 60_000)]);
+        if (!rows.length) return null;
+        const m1 = rows.map((r) => ({ time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }));
+        const tfMs = TIMEFRAME_MINUTES[timeframe] * 60_000;
+        if (tfMs === 60_000) return new Map(m1.map((c) => [c.time, c]));
+        const out = new Map();
+        const byTime = new Map(m1.map((c) => [c.time, c]));
+        for (const c of m1) {
+            if (c.time % tfMs !== 0) continue;
+            const parts = [];
+            for (let t = c.time; t < c.time + tfMs; t += 60_000) if (byTime.has(t)) parts.push(byTime.get(t));
+            if (parts.length !== tfMs / 60_000) continue; // falta minuto: usa a fonte de dados
+            out.set(c.time, { time: c.time, open: parts[0].open, close: parts[parts.length - 1].close });
+        }
+        return out;
+    } catch (err) {
+        return null; // tabela ainda não existe (coletor desligado)
+    }
+} // limite de uma chamada da Twelve Data
 let resolving = null;
 let lastResolve = 0;
 
@@ -59,19 +86,24 @@ async function resolvePendingAnalyses() {
                 if (!candles) continue;
 
                 const byTime = new Map(candles.map((c) => [c.time, c]));
+                // Candles da corretora (Exnova, coletados em otc_candles com o nome do ativo): quando
+                // existe o candle da corretora, o WIN/RED segue ele, que é o que o cliente vê no gráfico.
+                const broker = await brokerCandles(pair, timeframe, oldest);
                 const firstTime = candles.length ? candles[0].time : Infinity;
 
                 for (const a of items) {
                     const entryMs = new Date(a.entry_time).getTime();
-                    const c = byTime.get(entryMs);
+                    const b = broker && broker.get(entryMs);
+                    const bClosed = b && Date.now() - new Date(a.expiry_time).getTime() > 20_000;
+                    const c = bClosed ? b : byTime.get(entryMs);
                     // O candle de entrada só está fechado de verdade quando o seguinte já existe na
                     // fonte (ou 3 min depois da expiração). Antes disso o "fechamento" pode ser um
                     // preço de alguns segundos antes do fim e trocar WIN por RED.
-                    const closed = byTime.has(entryMs + tfMs) || Date.now() - new Date(a.expiry_time).getTime() > 3 * 60 * 1000;
+                    const closed = bClosed || byTime.has(entryMs + tfMs) || Date.now() - new Date(a.expiry_time).getTime() > 3 * 60 * 1000;
                     if (c && closed) {
                         const result = judge(a.direction, c.open, c.close);
                         if (a.result && a.result !== result) {
-                            console.log(`Análise ${a.id} reconferida: ${a.result} -> ${result} (${pair} ${timeframe})`);
+                            console.log(`Análise ${a.id} reconferida: ${a.result} -> ${result} (${pair} ${timeframe}${bClosed ? ', corretora' : ''})`);
                         }
                         await pool.query(
                             `UPDATE analyses SET open_price = $1, close_price = $2, result = $3, resolved_at = NOW() WHERE id = $4`,
