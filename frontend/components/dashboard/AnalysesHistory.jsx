@@ -10,6 +10,8 @@ const LAST_N = 10;
 const RESULT = {
   win: { label: "WIN", cls: "border-neon/40 bg-neon/10 text-neon" },
   loss: { label: "RED", cls: "border-ember/40 bg-ember/10 text-ember-soft" },
+  // Candle praticamente parado: o resultado depende do preço de cada corretora.
+  draw: { label: "EMPATE", cls: "border-void-line bg-white/5 text-mist-dim" },
 };
 
 function hhmm(iso) {
@@ -119,7 +121,7 @@ export default function AnalysesHistory() {
           </ul>
         )}
         <p className="mt-4 text-xs text-mist-faint">
-          O resultado é conferido no candle de entrada: WIN quando o candle fecha a favor do sinal, RED quando fecha contra.
+          O resultado é conferido no candle de entrada: WIN quando o candle fecha a favor do sinal, RED quando fecha contra e EMPATE quando o candle fica praticamente parado (nessa faixa o preço varia de corretora para corretora).
         </p>
       </div>
       <BankrollSimulator />

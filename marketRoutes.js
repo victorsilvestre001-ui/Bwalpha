@@ -860,6 +860,13 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
     // Indicadores seguem calculados (inclusive o BwAlpha), mas a decisão do M1 é a leitura do candle atual.
     const technical = computeTechnicalSignal(closed, forming);
     let m1 = computeM1Signal(closed, forming, technical);
+    if (m1.leitura === 'doji' && process.env.M1_DOJI_SINAL !== '1') {
+        // Candle sem corpo: não há leitura de força, seria cara ou coroa. Melhor esperar.
+        const result = { pair: pairLabel, timeframe: 'M1', noEntry: true, reason: 'O candle atual está sem direção (doji). Melhor esperar o próximo.' };
+        console.log(`M1 ${pairLabel} sem entrada: doji atual=[${forming.open}/${forming.high}/${forming.low}/${forming.close}]`);
+        m1Cache[pairLabel] = { bucketStart, at: nowMs, result };
+        return result;
+    }
     if (RITMO_DIA()) m1 = applyRitmo(closed, 'M1', m1);
     if (CHINESA_M1()) m1 = applyChinesa(m1, closed, forming);
     const pressao = computePressao(closed, forming);

@@ -7,8 +7,12 @@ const router = express.Router();
 
 // Resultado de cada análise: olha o candle de entrada (abre em entry_time e fecha em
 // expiry_time). COMPRA ganha se fechou acima da abertura; VENDA se fechou abaixo.
+// Candle praticamente parado (diferença menor que ~0,15 pip no EURUSD) conta como empate:
+// nessa faixa o preço de cada corretora varia e o WIN/RED dela pode ser o oposto do nosso.
+const DRAW_TOLERANCE = Number(process.env.DRAW_TOLERANCE || 1.5e-5);
 function judge(direction, open, close) {
-    if (close === open) return 'draw';
+    open = Number(open); close = Number(close);
+    if (Math.abs(close - open) <= Math.abs(open) * DRAW_TOLERANCE) return 'draw';
     const up = close > open;
     return (direction === 'COMPRA') === up ? 'win' : 'loss';
 }
@@ -94,7 +98,7 @@ const FILTERS = {
     win: `AND result = 'win'`,
     loss: `AND result = 'loss'`,
     pending: `AND result IS NULL`,
-    decided: `AND result IN ('win', 'loss')`,
+    decided: `AND result IN ('win', 'loss', 'draw')`,
     all: '',
 };
 
@@ -148,5 +152,27 @@ router.get('/', authMiddleware, async (req, res) => {
         res.status(500).json({ error: 'Erro ao buscar o histórico de análises' });
     }
 });
+
+// Reaplica a regra de empate aos sinais já conferidos nas últimas 48h (usa os preços gravados).
+async function rejudgeRecent() {
+    try {
+        const { rows } = await pool.query(
+            `SELECT id, direction, open_price, close_price, result FROM analyses
+             WHERE result IN ('win', 'loss') AND open_price IS NOT NULL AND close_price IS NOT NULL
+               AND expiry_time > NOW() - INTERVAL '48 hours'`);
+        let changed = 0;
+        for (const a of rows) {
+            const r = judge(a.direction, a.open_price, a.close_price);
+            if (r !== a.result) {
+                await pool.query('UPDATE analyses SET result = $1 WHERE id = $2', [r, a.id]);
+                changed++;
+            }
+        }
+        if (changed) console.log(`Regra de empate: ${changed} sinal(is) das últimas 48h reconferido(s)`);
+    } catch (err) {
+        console.error('Erro ao reconferir empates:', err.message);
+    }
+}
+setTimeout(rejudgeRecent, 10_000);
 
 module.exports = { router, resolvePendingAnalyses, judge };
