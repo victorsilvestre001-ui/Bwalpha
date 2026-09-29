@@ -271,10 +271,51 @@ async function fetchTwelveDataCandles(pair, interval, outputsize = 100) {
         }));
 }
 
+// Reserva: candles da corretora (Exnova) gravados pelo coletor em otc_candles. Usada quando a
+// Twelve Data falha (ex.: limite diário de créditos acabou). M5/M15 são montados juntando os M1.
+async function fetchExnovaCandles(pairLabel, timeframeLabel, outputsize = 100) {
+    if (process.env.EXNOVA_FALLBACK === '0') return null;
+    const tfMin = TIMEFRAME_MINUTES[timeframeLabel];
+    if (!tfMin) return null;
+    try {
+        const { rows } = await pool.query(
+            `SELECT time, open, high, low, close FROM otc_candles
+             WHERE active = $1 AND time > NOW() - ($2::int * INTERVAL '1 minute') ORDER BY time`,
+            [pairLabel, Math.min(outputsize, 5000) * tfMin + tfMin]);
+        const m1 = rows.map((r) => ({ time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }));
+        if (tfMin === 1) return m1.length ? m1.slice(-outputsize) : null;
+        const tfMs = tfMin * 60_000, out = [];
+        for (const c of m1) {
+            const b = Math.floor(c.time / tfMs) * tfMs;
+            const last = out[out.length - 1];
+            if (last && last.time === b) {
+                last.high = Math.max(last.high, c.high); last.low = Math.min(last.low, c.low); last.close = c.close;
+            } else out.push({ time: b, open: c.open, high: c.high, low: c.low, close: c.close });
+        }
+        return out.length ? out.slice(-outputsize) : null;
+    } catch {
+        return null;
+    }
+}
+
+const exnovaFallbackLog = {};
 async function fetchIntradayCandles(pairLabel, timeframeLabel, outputsize = 100) {
     const pair = SIGNAL_PAIRS[pairLabel];
     const interval = SIGNAL_INTERVALS[timeframeLabel];
-    if (TD_KEY()) return fetchTwelveDataCandles(pair, interval, outputsize);
+    if (TD_KEY()) {
+        const td = await fetchTwelveDataCandles(pair, interval, outputsize).catch(() => null);
+        if (td && td.length >= Math.min(40, outputsize)) return td;
+        const ex = await fetchExnovaCandles(pairLabel, timeframeLabel, outputsize);
+        if (ex && ex.length >= Math.min(40, outputsize)) {
+            const k = `${pairLabel}_${timeframeLabel}`;
+            if (!(Date.now() - (exnovaFallbackLog[k] || 0) < 10 * 60_000)) {
+                exnovaFallbackLog[k] = Date.now();
+                console.log(`Candles ${pairLabel} ${timeframeLabel}: Twelve Data indisponível, usando os da Exnova (${ex.length})`);
+            }
+            return ex;
+        }
+        return td;
+    }
     if (pair.from === 'XAU') {
         console.error('XAUUSD precisa da variável TWELVE_DATA_API_KEY configurada.');
         return null;
