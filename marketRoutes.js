@@ -881,6 +881,16 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
         m1Cache[pairLabel] = { bucketStart, at: nowMs, result };
         return result;
     }
+    // Sinais reais desde a troca para o candle ao vivo (28-29/09): no EURUSD a leitura "forte"
+    // acertou 86% (31/36), já "fraco" 36% e "pinbar_invertido" 44%. Nos pares listados em
+    // M1_SO_FORTE_PARES só a leitura "forte" dá entrada (vazio desliga).
+    const soForte = (process.env.M1_SO_FORTE_PARES ?? 'EURUSD,EURJPY').split(',').map((x) => x.trim()).filter(Boolean);
+    if (soForte.includes(pairLabel) && m1.leitura !== 'forte') {
+        const result = { pair: pairLabel, timeframe: 'M1', noEntry: true, reason: 'O candle atual não tem uma direção clara de força. Melhor esperar o próximo.' };
+        console.log(`M1 ${pairLabel} sem entrada: leitura ${m1.leitura} (só forte) atual=[${forming.open}/${forming.high}/${forming.low}/${forming.close}]`);
+        m1Cache[pairLabel] = { bucketStart, at: nowMs, result };
+        return result;
+    }
     if (RITMO_DIA()) m1 = applyRitmo(closed, 'M1', m1);
     if (CHINESA_M1()) m1 = applyChinesa(m1, closed, forming);
     const pressao = computePressao(closed, forming);
