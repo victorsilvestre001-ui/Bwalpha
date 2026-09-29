@@ -448,6 +448,32 @@ async function runSnap() {
             .sort((a, b) => b[2] - a[2]);
         // [estratégia, amostras, acerto %, 1ª metade, 2ª metade, cobertura %]
         console.log(`BACKTEST_SNAP_TOP ${pair} ${JSON.stringify(ranked)}`);
+        // Estudo de padrões com as fotos: tabela montada só com candles de antes da 1ª foto.
+        try {
+            const P = require('./patterns');
+            const firstSnap = rows.length ? new Date(rows[0].time).getTime() : Infinity;
+            const cutIdx = candles.findIndex((c) => c.time >= firstSnap);
+            const trainEnd = cutIdx < 0 ? candles.length : cutIdx;
+            for (const [minN, minWr] of [[30, 0.62], [30, 0.58], [60, 0.62]]) {
+                const table = P.buildTable(candles, 'fw', 60_000, 0, trainEnd);
+                const hit = [], combo = [], base = [];
+                for (let k = Math.max(trainEnd, WINDOW); k < candles.length - 1; k++) {
+                    const snap = snaps.get(candles[k].time), next = candles[k + 1];
+                    if (!snap || next.time - candles[k].time !== 60_000 || next.close === next.open) continue;
+                    const closed = candles.slice(k - WINDOW, k);
+                    const up = next.close > next.open;
+                    const prod = computeM1Signal(closed, snap, computeTechnicalSignal(closed, snap)).direction;
+                    const r = P.lookup(table, P.keyFor('fw', closed, snap), minN, minWr);
+                    base.push((prod === 'COMPRA') === up);
+                    if (r) hit.push((r.direction === 'COMPRA') === up);
+                    combo.push(((r ? r.direction : prod) === 'COMPRA') === up);
+                }
+                const acc = (l) => (l.length ? +(l.filter(Boolean).length / l.length * 100).toFixed(1) : null);
+                console.log(`BACKTEST_SNAP_PADRAO ${pair} fw minN=${minN} minWr=${minWr} regra=${base.length}/${acc(base)}% padrao=${hit.length}/${acc(hit)}% padrao_senao_regra=${combo.length}/${acc(combo)}%`);
+            }
+        } catch (err) {
+            console.error('BACKTEST_SNAP_PADRAO erro', err.message);
+        }
     }
 }
 
