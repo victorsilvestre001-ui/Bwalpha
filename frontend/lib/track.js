@@ -21,6 +21,19 @@ export function setConsent(value) {
   if (value === "all") loadTrackers();
 }
 
+// Correspondência avançada da Meta: e-mail e id da conta (o Pixel criptografa com SHA-256
+// no navegador antes de enviar). Melhora a qualidade da correspondência dos eventos.
+let userData = null;
+export function identify(user) {
+  if (!user?.email) return;
+  const next = { em: String(user.email).trim().toLowerCase(), ...(user.id ? { external_id: String(user.id) } : {}) };
+  if (userData && userData.em === next.em) return;
+  userData = next;
+  if (loaded && window.fbq && META_PIXEL_ID) {
+    try { window.fbq("init", META_PIXEL_ID, userData); } catch {}
+  }
+}
+
 let loaded = false;
 function addScript(src) {
   const s = document.createElement("script");
@@ -38,7 +51,7 @@ export function loadTrackers() {
     fbq.push = fbq; fbq.loaded = true; fbq.version = "2.0"; fbq.queue = [];
     window.fbq = fbq; window._fbq = fbq;
     addScript("https://connect.facebook.net/en_US/fbevents.js");
-    window.fbq("init", META_PIXEL_ID);
+    window.fbq("init", META_PIXEL_ID, userData || undefined);
     window.fbq("track", "PageView");
   }
 

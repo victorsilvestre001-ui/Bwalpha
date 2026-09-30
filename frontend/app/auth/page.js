@@ -7,7 +7,7 @@ import { Mail, Lock, User, Eye, EyeOff, ArrowRight, ArrowLeft, Loader2, Contact 
 import Logo from "@/components/Logo";
 import { api, setSession } from "@/lib/api";
 import { formatCpf, isValidCpf } from "@/lib/cpf";
-import { track } from "@/lib/track";
+import { identify, track } from "@/lib/track";
 
 function Field({ icon: Icon, children }) {
   return (
@@ -56,6 +56,7 @@ function AuthForm() {
     try {
       const data = mode === "login" ? await api.login(email, password) : await api.register(name, email, password, cpf);
       setSession(data.token, data.user);
+      identify(data.user || { email });
       if (mode === "register") track("CompleteRegistration");
       router.push(wantsVip ? "/dashboard?upgrade=1" : "/dashboard");
     } catch (err) {

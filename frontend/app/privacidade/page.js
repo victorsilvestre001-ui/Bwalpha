@@ -34,7 +34,7 @@ export default function Privacidade() {
         <li><strong>Kiwify</strong>: pagamentos.</li>
         <li><strong>Anthropic</strong>: processamento das mensagens enviadas ao assistente de IA.</li>
         <li><strong>Resend</strong>: envio de e-mails.</li>
-        <li><strong>Meta</strong> e <strong>Google</strong>: medição de anúncios, somente se você aceitar os cookies de marketing.</li>
+        <li><strong>Meta</strong> e <strong>Google</strong>: medição de anúncios, somente se você aceitar os cookies de marketing. Para a Meta, seu e-mail é enviado criptografado (hash SHA-256), nunca em texto aberto.</li>
       </ul>
       <p>Alguns desses fornecedores ficam fora do Brasil (principalmente nos Estados Unidos). A transferência internacional é feita para executar o serviço que você contratou, com fornecedores que adotam medidas de proteção de dados.</p>
 

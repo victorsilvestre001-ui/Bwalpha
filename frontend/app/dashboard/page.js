@@ -10,7 +10,7 @@ import ChatAssistant from "@/components/dashboard/ChatAssistant";
 import AnalysesHistory from "@/components/dashboard/AnalysesHistory";
 import Profile from "@/components/dashboard/Profile";
 import { api, getSessionUser, clearSession } from "@/lib/api";
-import { track } from "@/lib/track";
+import { identify, track } from "@/lib/track";
 
 const TITLES = {
   analise: ["Análise de mercado", "Escolha o ativo e o timeframe e deixe a IA ler o gráfico."],
@@ -31,6 +31,7 @@ function Dashboard() {
     const u = getSessionUser();
     if (!u) { router.replace("/auth"); return; }
     setUser(u);
+    identify(u);
     api.me().then((me) => setUser((cur) => ({ ...cur, ...me }))).catch((err) => {
       if (err.status === 401) { clearSession(); router.replace("/auth"); }
     });
