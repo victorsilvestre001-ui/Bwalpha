@@ -50,6 +50,11 @@ router.post('/', express.json({ limit: '500kb' }), async (req, res) => {
     const orderId = data.purchase?.transaction ? String(data.purchase.transaction) : null;
     console.log(`Hotmart: evento=${event} status=${data.purchase?.status || '-'} transação=${orderId} email=${email.replace(/^(.{2}).*@/, '$1***@')}`);
     if (!email) return res.json({ received: true, ignored: 'sem e-mail' });
+    // O botão "Enviar teste" da Hotmart usa e-mails fictícios: valida o hottok e não mexe em nada.
+    if (/@example\.(com|org|net)$/i.test(email)) {
+        console.log('Hotmart: evento de teste recebido e validado (e-mail fictício, nada foi alterado)');
+        return res.json({ received: true, test: true });
+    }
     try {
         if (REVOKED_EVENTS.has(event)) {
             await applyGrant(email, false, orderId);
