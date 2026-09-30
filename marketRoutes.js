@@ -1127,7 +1127,21 @@ const signalLimiter = rateLimit({
 // Quantidade pela variável FREE_TRIAL_SIGNALS no Railway (padrão: 0 = sinais só no VIP).
 const FREE_TRIAL_SIGNALS = Math.max(0, parseInt(process.env.FREE_TRIAL_SIGNALS ?? '0', 10) || 0);
 
+// Plano free diário: FREE_DAILY_SIGNALS análises por dia (em Brasília) para toda conta sem VIP.
+// Padrão 1. Com 0, volta ao teste grátis do primeiro dia acima.
+const FREE_DAILY_SIGNALS = Math.max(0, parseInt(process.env.FREE_DAILY_SIGNALS ?? '1', 10) || 0);
+
 async function freeTrialStatus(userId) {
+    if (FREE_DAILY_SIGNALS > 0) {
+        const { rows } = await pool.query(
+            `SELECT COUNT(*)::int AS used FROM analyses
+             WHERE user_id = $1
+               AND (requested_at AT TIME ZONE 'America/Sao_Paulo')::date = (NOW() AT TIME ZONE 'America/Sao_Paulo')::date`,
+            [userId]
+        );
+        const { used } = rows[0];
+        return { used, remaining: Math.max(0, FREE_DAILY_SIGNALS - used), expired: false, daily: true, limit: FREE_DAILY_SIGNALS };
+    }
     const { rows } = await pool.query(
         `SELECT COUNT(*)::int AS used,
                 BOOL_OR((requested_at AT TIME ZONE 'America/Sao_Paulo')::date
@@ -1136,7 +1150,7 @@ async function freeTrialStatus(userId) {
         [userId]
     );
     const { used, started_before_today: expired } = rows[0];
-    return { used, remaining: expired ? 0 : Math.max(0, FREE_TRIAL_SIGNALS - used), expired: !!expired };
+    return { used, remaining: expired ? 0 : Math.max(0, FREE_TRIAL_SIGNALS - used), expired: !!expired, daily: false, limit: FREE_TRIAL_SIGNALS };
 }
 
 async function signalQuota(userId) {
@@ -1146,7 +1160,7 @@ async function signalQuota(userId) {
     // O teste grátis é um por CPF: conta antiga sem CPF precisa cadastrar antes de usar.
     const { rows } = await pool.query('SELECT cpf FROM users WHERE id = $1', [userId]);
     const cpfRequired = !rows[0]?.cpf;
-    return { vip: false, limit: FREE_TRIAL_SIGNALS, used: Math.min(trial.used, FREE_TRIAL_SIGNALS), remaining: trial.remaining, started: trial.used > 0, expired: trial.expired, cpfRequired };
+    return { vip: false, limit: trial.limit, used: Math.min(trial.used, trial.limit), remaining: trial.remaining, started: trial.used > 0, expired: trial.expired, daily: trial.daily, cpfRequired };
 }
 
 router.get('/signal-quota', authMiddleware, async (req, res) => {
@@ -1163,7 +1177,9 @@ async function requireSignalAccess(req, res, next) {
         const quota = await signalQuota(req.user.id);
         if (!quota.vip && quota.remaining <= 0) {
             return res.status(403).json({
-                error: FREE_TRIAL_SIGNALS > 0
+                error: quota.daily
+                    ? `Você já usou ${quota.limit === 1 ? 'sua análise grátis' : `suas ${quota.limit} análises grátis`} de hoje. Volte amanhã ou ative o VIP para análises ilimitadas.`
+                    : FREE_TRIAL_SIGNALS > 0
                     ? `Seu teste grátis de ${FREE_TRIAL_SIGNALS} sinais já foi usado. Assine o VIP para sinais ilimitados.`
                     : 'Os sinais da IA são exclusivos do VIP. Ative o VIP para liberar.',
                 vipRequired: true,

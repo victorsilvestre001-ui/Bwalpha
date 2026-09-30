@@ -44,9 +44,9 @@ function CpfGate({ onDone }) {
   return (
     <form onSubmit={submit} className="grad-border mt-6 rounded-xl bg-void-deep/70 p-4">
       <div className="flex items-center gap-2 font-display text-sm font-semibold text-mist">
-        <Gift size={15} className="text-neon" /> Libere seus sinais grátis
+        <Gift size={15} className="text-neon" /> Libere sua análise grátis diária
       </div>
-      <p className="mt-1 text-xs text-mist-dim">O teste grátis é um por pessoa. Cadastre seu CPF para liberar (não pode ser alterado depois).</p>
+      <p className="mt-1 text-xs text-mist-dim">A análise grátis é uma por pessoa. Cadastre seu CPF para liberar (não pode ser alterado depois).</p>
       <div className="mt-3 flex gap-2">
         <input className="input" value={cpf} onChange={(e) => setCpf(formatCpf(e.target.value))} placeholder="000.000.000-00" inputMode="numeric" />
         <button type="submit" disabled={saving} className="btn-primary !px-5">
@@ -186,7 +186,7 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
               {!isVip && quota && (
                 <div className="mt-3 flex items-center justify-between gap-3 text-xs">
                   <span className="flex items-center gap-1.5 text-mist-dim">
-                    <Gift size={13} className="text-neon" /> {quota.started ? `${quota.remaining} de ${quota.limit} sinais grátis (só hoje)` : `${quota.limit} sinais grátis no seu primeiro dia`}
+                    <Gift size={13} className="text-neon" /> {quota.daily ? (quota.limit === 1 ? "1 análise grátis por dia" : `${quota.remaining} de ${quota.limit} análises grátis hoje`) : quota.started ? `${quota.remaining} de ${quota.limit} sinais grátis (só hoje)` : `${quota.limit} sinais grátis no seu primeiro dia`}
                   </span>
                   <button onClick={onUpgrade} disabled={upgrading} className="font-semibold text-neon hover:underline">Ilimitado no VIP</button>
                 </div>
@@ -195,10 +195,12 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
           ) : (
             <div className="grad-border mt-6 rounded-xl bg-void-deep/70 p-4 text-center">
               <div className="flex items-center justify-center gap-2 font-display text-sm font-semibold text-mist">
-                <Lock size={15} className="text-neon" /> {quota?.limit > 0 ? "Seu teste grátis acabou" : "Sinais exclusivos para VIP"}
+                <Lock size={15} className="text-neon" /> {quota?.daily ? "Análise grátis de hoje usada" : quota?.limit > 0 ? "Seu teste grátis acabou" : "Sinais exclusivos para VIP"}
               </div>
               <p className="mt-1 text-xs text-mist-dim">
-                {quota?.limit > 0
+                {quota?.daily
+                  ? "Amanhã você ganha uma nova análise grátis. Com o VIP as análises são ilimitadas, com contagem de entrada, pressão e volatilidade."
+                  : quota?.limit > 0
                   ? `Você já usou os ${quota.limit} sinais grátis do seu primeiro dia. Com o VIP os sinais são ilimitados, com contagem de entrada, pressão e volatilidade.`
                   : "Ative o VIP para receber o sinal do próximo candle, a contagem de entrada, a pressão e a volatilidade."}
               </p>

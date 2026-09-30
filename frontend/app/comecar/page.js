@@ -26,7 +26,7 @@ const FEATURES = [
 const FAQ = [
   ["A TradeOn AI é uma corretora?", "Não. A TradeOn AI é uma ferramenta de análise e educação. Ela não executa operações e não guarda dinheiro."],
   ["Garante lucro?", "Não. Nenhuma ferramenta garante resultado. As leituras são apoio à decisão, e operar envolve risco de perda."],
-  ["Preciso pagar para conhecer?", "Não. Você cria a conta grátis e conhece o painel com gráfico em tempo real. Os sinais da IA são do VIP, com pagamento único, sem mensalidade."]
+  ["Preciso pagar para conhecer?", "Não. Você cria a conta grátis e conhece o painel com gráfico em tempo real. Você também ganha 1 análise da IA por dia. No VIP as análises são ilimitadas, com pagamento único, sem mensalidade."]
 ];
 
 export default function Comecar() {
