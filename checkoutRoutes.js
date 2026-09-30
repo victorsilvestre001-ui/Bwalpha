@@ -3,6 +3,7 @@ const pool = require('./db');
 const { authMiddleware } = require('./authMiddleware');
 const { createVipCheckout } = require('./asaas');
 const { caktoCheckoutUrl } = require('./cakto');
+const { perfectpayCheckoutUrl } = require('./perfectpay');
 
 const router = express.Router();
 
@@ -13,6 +14,7 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.tradeonia.com.br';
 // Provedor do checkout: PAYMENT_PROVIDER=stripe usa o Stripe (Pix + cartão, pagamento único);
 // senão, com KIWIFY_CHECKOUT_URL configurada, usa a Kiwify.
 function provider() {
+    if (process.env.PAYMENT_PROVIDER === 'perfectpay') return 'perfectpay';
     if (process.env.PAYMENT_PROVIDER === 'cakto') return 'cakto';
     if (process.env.PAYMENT_PROVIDER === 'asaas') return 'asaas';
     if (process.env.PAYMENT_PROVIDER === 'stripe') return 'stripe';
@@ -52,6 +54,7 @@ router.post('/create-session', authMiddleware, async (req, res) => {
         const user = rows[0] || req.user;
         if (provider() === 'kiwify') return res.json({ url: kiwifyCheckoutUrl(user) });
         if (provider() === 'cakto') return res.json({ url: caktoCheckoutUrl(user) });
+        if (provider() === 'perfectpay') return res.json({ url: perfectpayCheckoutUrl(user) });
         if (provider() === 'asaas') {
             try {
                 return res.json({ url: await createVipCheckout(req.user.id) });

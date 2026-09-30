@@ -14,6 +14,7 @@ const stripeWebhook = require('./stripeWebhook');
 const { router: kiwifyWebhook } = require('./kiwifyWebhook');
 const { router: asaasWebhook } = require('./asaas');
 const { router: caktoWebhook } = require('./cakto');
+const { router: perfectpayWebhook } = require('./perfectpay');
 const { router: marketRoutes } = require('./marketRoutes');
 const { router: telegramRoutes, setupWebhook } = require('./telegramRoutes');
 const marketAnalysisRoutes = require('./marketAnalysisRoutes');
@@ -60,6 +61,7 @@ app.use('/api/stripe/webhook', stripeWebhook);
 app.use('/api/kiwify/webhook', kiwifyWebhook);
 app.use('/api/asaas/webhook', asaasWebhook);
 app.use('/api/cakto/webhook', caktoWebhook);
+app.use('/api/perfectpay/webhook', perfectpayWebhook);
 
 // Limite geral por IP para toda a API (proteção contra robôs e ataques de volume).
 app.use('/api', rateLimit({
