@@ -31,6 +31,14 @@ async function sendEmail({ to, subject, html, replyTo }) {
 function couponOffer(name, email) {
     const coupon = process.env.SIGNUP_COUPON;
     if (!coupon) return null;
+    // Hotmart: o link do checkout já leva o e-mail e aplica o cupom (parâmetro offDiscount).
+    if (process.env.PAYMENT_PROVIDER === 'hotmart' && process.env.HOTMART_CHECKOUT_URL) {
+        const url = new URL(process.env.HOTMART_CHECKOUT_URL);
+        url.searchParams.set('email', email);
+        if (name) url.searchParams.set('name', name);
+        url.searchParams.set('offDiscount', coupon);
+        return { coupon, discount: process.env.SIGNUP_COUPON_DISCOUNT || '15%', url: url.toString() };
+    }
     if ((process.env.PAYMENT_PROVIDER && process.env.PAYMENT_PROVIDER !== 'kiwify') || !process.env.KIWIFY_CHECKOUT_URL) {
         return { coupon, discount: process.env.SIGNUP_COUPON_DISCOUNT || '15%', url: `${FRONTEND_URL}/dashboard?upgrade=1` };
     }
