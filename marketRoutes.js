@@ -1012,11 +1012,13 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
     }
     const pressao = computePressao(closed, forming);
     if (PRESSAO_FILTRO()) m1 = applyPressao(m1, pressao);
-    // TESTE (pedido do dono): mercado lateral -> o sinal vai CONTRA a votação dos indicadores.
-    // Marcado como leitura 'lateral_contra' para medir o acerto no histórico. Desliga com LATERAL_CONTRA=0.
+    // Mercado lateral junto com as outras leituras: a lateralização não vira o sinal sozinha.
+    // Só vale quando o candle/pressão (m1) já aponta contra os indicadores: aí o sinal segue e fica
+    // marcado 'lateral_confirma' para medir. Se m1 concorda com os indicadores, fica como está.
+    // (O teste de ir contra sempre deu 5 WIN x 10 RED em 30/09.) Desliga com LATERAL_CONTRA=0.
     if (process.env.LATERAL_CONTRA !== '0' && technical.indicadores && isLateral(closed)) {
         const contra = technical.indicadores.direcao === 'COMPRA' ? 'VENDA' : 'COMPRA';
-        m1 = { ...m1, direction: contra, confidence: 'Média', leitura: 'lateral_contra' };
+        if (m1.direction === contra) m1 = { ...m1, leitura: 'lateral_confirma' };
     }
     const result = {
         ...technical,
