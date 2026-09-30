@@ -6,7 +6,8 @@ import Logo from "@/components/Logo";
 export const TABS = [
   { id: "analise", label: "Análise", icon: LineChart },
   { id: "assistente", label: "Assistente IA", icon: Bot },
-  { id: "historico", label: "Histórico", icon: History },
+  // Histórico: só o dono vê (os clientes não têm mais essa aba).
+  { id: "historico", label: "Histórico", icon: History, ownerOnly: true },
   { id: "perfil", label: "Perfil", icon: UserRound }
 ];
 
@@ -36,7 +37,7 @@ export default function Sidebar({ user, tab, onChangeTab, onLogout }) {
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-void-line bg-void-raised/80 p-5 backdrop-blur-xl lg:flex">
         <Logo href="/dashboard" />
         <nav className="mt-10 flex flex-1 flex-col gap-1">
-          {TABS.map((t) => {
+          {TABS.filter((t) => !t.ownerOnly || user?.plan === "owner").map((t) => {
             const active = tab === t.id;
             return (
               <button
@@ -89,7 +90,7 @@ export default function Sidebar({ user, tab, onChangeTab, onLogout }) {
 
       {/* Mobile bottom nav */}
       <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-void-line bg-void/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
-        {TABS.map((t) => {
+        {TABS.filter((t) => !t.ownerOnly || user?.plan === "owner").map((t) => {
           const active = tab === t.id;
           return (
             <button key={t.id} onClick={() => onChangeTab(t.id)} className={`flex flex-col items-center gap-1 py-2.5 text-[11px] ${active ? "text-neon" : "text-mist-faint"}`}>

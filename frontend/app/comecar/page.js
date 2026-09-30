@@ -8,7 +8,7 @@ import { CompanyLine } from "@/components/legal/LegalPage";
 // análise e educação: sem corretora, sem link de afiliado e sem promessa de ganho.
 export const metadata = {
   title: "TradeOn AI | Análise de mercado com IA",
-  description: "Leitura técnica com inteligência artificial para EURUSD, EURJPY e Ouro. Indicadores, histórico transparente e simulador de banca. Crie sua conta grátis.",
+  description: "Leitura técnica com inteligência artificial para EURUSD, EURJPY e Ouro. Indicadores, pressão e volatilidade do mercado. Crie sua conta grátis.",
   robots: { index: false, follow: true }
 };
 
@@ -17,7 +17,7 @@ const SIGNUP = "/auth?mode=register";
 const FEATURES = [
   { icon: Brain, title: "Leitura técnica com IA", text: "Médias móveis, RSI, MACD e padrões de candle combinados em uma leitura objetiva, com nível de confiança." },
   { icon: LineChart, title: "Gráfico em tempo real", text: "EURUSD, EURJPY e Ouro (XAUUSD) em 1 e 5 minutos, direto no painel." },
-  { icon: History, title: "Histórico transparente", text: "Cada leitura fica registrada e é conferida no fechamento do candle. Você vê acertos e erros." },
+  { icon: History, title: "Pressão e volatilidade", text: "Veja quem está no controle do candle e se o mercado está lento, normal ou volátil." },
   { icon: Calculator, title: "Simulador de banca", text: "Teste capital, valor por operação, meta e limite de perda numa banca fictícia, sem dinheiro real." },
   { icon: Bot, title: "Assistente de IA", text: "Tire dúvidas sobre indicadores e gestão de risco e envie prints do gráfico para análise." },
   { icon: ShieldCheck, title: "Gestão de risco em primeiro lugar", text: "Ferramentas para você acompanhar sua taxa de acerto real antes de arriscar." }
@@ -52,7 +52,7 @@ export default function Comecar() {
               Entenda o mercado em <span className="grad-text">segundos</span>, não em horas.
             </h1>
             <p className="mt-5 max-w-xl text-base leading-relaxed text-mist-dim md:text-lg">
-              A TradeOn AI junta os principais indicadores técnicos e uma leitura de inteligência artificial para EURUSD, EURJPY e Ouro, com histórico transparente de cada leitura.
+              A TradeOn AI junta os principais indicadores técnicos e uma leitura de inteligência artificial para EURUSD, EURJPY e Ouro, com pressão e volatilidade do mercado em tempo real.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link href={SIGNUP} className="btn-primary !px-7 !py-3.5">Criar conta grátis <ArrowRight size={16} /></Link>
@@ -130,7 +130,7 @@ export default function Comecar() {
             <div className="mt-2 font-display text-3xl font-bold grad-text">Acesso total</div>
             <div className="mt-1 text-xs text-mist-faint">pagamento único · sem mensalidade</div>
             <ul className="mt-5 space-y-2 text-sm text-mist-dim">
-              {["Leituras da IA em 1 e 5 minutos", "Histórico e taxa de acerto", "Simulador de banca", "Assistente de IA ilimitado", "Pague uma vez, acesso a tudo"].map((t) => <li key={t} className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-neon" />{t}</li>)}
+              {["Leituras da IA em 1 e 5 minutos", "Pressão e volatilidade do mercado", "Assistente de IA ilimitado", "Pague uma vez, acesso a tudo"].map((t) => <li key={t} className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-neon" />{t}</li>)}
             </ul>
           </div>
         </div>

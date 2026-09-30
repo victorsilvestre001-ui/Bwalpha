@@ -86,7 +86,7 @@ function Dashboard() {
 
         {tab === "analise" && <MarketAnalyzer isVip={isPaid(user)} onUpgrade={handleUpgrade} upgrading={upgrading} />}
         {tab === "assistente" && <ChatAssistant onUpgrade={() => setTab("perfil")} />}
-        {tab === "historico" && <AnalysesHistory />}
+        {tab === "historico" && user?.plan === "owner" && <AnalysesHistory />}
         {tab === "perfil" && <Profile user={user} onUserChange={setUser} onUpgrade={handleUpgrade} upgrading={upgrading} />}
       </div>
     </main>

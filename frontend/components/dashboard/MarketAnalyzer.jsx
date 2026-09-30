@@ -199,8 +199,8 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
               </div>
               <p className="mt-1 text-xs text-mist-dim">
                 {quota?.limit > 0
-                  ? `Você já usou os ${quota.limit} sinais grátis do seu primeiro dia. Com o VIP os sinais são ilimitados, com contagem de entrada e histórico de Win/Red.`
-                  : "Ative o VIP para receber o sinal do próximo candle, a contagem de entrada e o histórico de Win/Red."}
+                  ? `Você já usou os ${quota.limit} sinais grátis do seu primeiro dia. Com o VIP os sinais são ilimitados, com contagem de entrada, pressão e volatilidade.`
+                  : "Ative o VIP para receber o sinal do próximo candle, a contagem de entrada, a pressão e a volatilidade."}
               </p>
               <button onClick={onUpgrade} disabled={upgrading} className="btn-primary mt-4 w-full !py-3.5">
                 {upgrading ? <Loader2 size={16} className="animate-spin" /> : <><Crown size={16} /> Quero ser VIP</>}
