@@ -845,6 +845,19 @@ function computePressao(closed, forming) {
     };
 }
 
+// Mercado lateral: os últimos 10 candles fechados ficaram numa faixa estreita (máxima - mínima até
+// 3× o tamanho médio de um candle nos 30 anteriores) e quase sem saldo (fechamento perto da abertura).
+function isLateral(closed, n = 10) {
+    if (closed.length < n + 30) return false;
+    const base = closed.slice(-(n + 30), -n);
+    const avg = base.reduce((a, c) => a + (c.high - c.low), 0) / base.length;
+    if (!(avg > 0)) return false;
+    const lat = closed.slice(-n);
+    const faixa = Math.max(...lat.map((c) => c.high)) - Math.min(...lat.map((c) => c.low));
+    const saldo = Math.abs(lat[lat.length - 1].close - lat[0].open);
+    return faixa <= 3 * avg && saldo <= avg;
+}
+
 // Volatilidade agora: tamanho médio (máxima - mínima) dos últimos 5 candles fechados em relação
 // ao tamanho típico (mediana) dos últimos 60. Só informativo: não muda a direção do sinal.
 function computeVolatilidade(closed) {
@@ -999,6 +1012,12 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
     }
     const pressao = computePressao(closed, forming);
     if (PRESSAO_FILTRO()) m1 = applyPressao(m1, pressao);
+    // TESTE (pedido do dono): mercado lateral -> o sinal vai CONTRA a votação dos indicadores.
+    // Marcado como leitura 'lateral_contra' para medir o acerto no histórico. Desliga com LATERAL_CONTRA=0.
+    if (process.env.LATERAL_CONTRA !== '0' && technical.indicadores && isLateral(closed)) {
+        const contra = technical.indicadores.direcao === 'COMPRA' ? 'VENDA' : 'COMPRA';
+        m1 = { ...m1, direction: contra, confidence: 'Média', leitura: 'lateral_contra' };
+    }
     const result = {
         ...technical,
         pair: pairLabel,
@@ -1260,5 +1279,5 @@ router.get('/history', authMiddleware, async (req, res) => {
 module.exports = {
     router, getQuotes, getIndicators, getEconomicSnapshot, getNews, getHistory, fetchIntradayCandles, TIMEFRAME_MINUTES,
     computeTechnicalSignal, computeCandleFollowSignal, computeM1Signal, getM1Signal, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, isMarketOpen,
-    emaSeries, rsiLast, macdHistogramLast, detectCandlePatterns, detectPinBar, getChinesaStrategySignal, getBwalphaIndicator, applyRitmo, computePressao, applyPressao, applyChinesa, computeVolatilidade,
+    emaSeries, rsiLast, macdHistogramLast, detectCandlePatterns, detectPinBar, getChinesaStrategySignal, getBwalphaIndicator, applyRitmo, computePressao, applyPressao, applyChinesa, computeVolatilidade, isLateral,
 };
