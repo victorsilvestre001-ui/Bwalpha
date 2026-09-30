@@ -244,6 +244,33 @@ async function sendResultsEmail(name, email, account = {}) {
     });
 }
 
+// Novidade: 1 análise grátis por dia para contas sem VIP (FREE_DAILY_SIGNALS).
+async function sendDailyFreeEmail(name, email) {
+    const firstName = String(name || '').trim().split(/\s+/)[0];
+    const n = Math.max(1, parseInt(process.env.FREE_DAILY_SIGNALS ?? '1', 10) || 1);
+    const qtd = n === 1 ? '1 análise da IA por dia' : `${n} análises da IA por dia`;
+    return sendEmail({
+        to: email,
+        subject: `🎁 Novidade: ${qtd} grátis na TradeOn AI`,
+        html: layout(`
+            <h1 style="color: #00F0A8; font-size: 22px; margin-bottom: 8px;">${firstName ? `${escapeHtml(firstName)}, sua` : 'Sua'} conta ganhou ${qtd} 🎁</h1>
+            <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">
+                A partir de hoje, toda conta da TradeOn AI tem <strong>${qtd}, grátis</strong>. Todo dia a análise é renovada à meia-noite (horário de Brasília).
+            </p>
+            <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">Como usar:</p>
+            <ol style="font-size: 14px; line-height: 1.8; color: #E7ECF7; padding-left: 18px;">
+                <li>Entre no painel e escolha <strong>EURUSD, EURJPY ou Ouro</strong> e o tempo (M1 ou M5).</li>
+                <li>Toque em <strong>Analisar com IA</strong>.</li>
+                <li>Veja a direção, a confiança, o horário de entrada, a pressão e a volatilidade do mercado.</li>
+            </ol>
+            <p style="font-size: 14px; line-height: 1.6; color: #9AA6C3;">Se a IA não encontrar entrada, a análise não é gasta: você pode tentar de novo.</p>
+            ${button(`${FRONTEND_URL}/dashboard`, 'Fazer minha análise de hoje')}
+            <p style="font-size: 13px; line-height: 1.6; color: #9AA6C3; margin-top: 20px;">Quer análises ilimitadas? O <strong>VIP</strong> é pagamento único, sem mensalidade.</p>
+            <p style="font-size: 12px; line-height: 1.6; color: #5B6788; margin-top: 12px;">Confiança não é garantia. Opere com gestão e só com o que pode perder.</p>`,
+            'Você recebeu este e-mail porque tem uma conta na TradeOn AI. Conteúdo educativo; operar envolve risco.'),
+    });
+}
+
 // E-mail com o link para criar uma nova senha (vale por 1 hora, uso único).
 async function sendPasswordResetEmail(name, email, url) {
     const result = await sendEmail({
@@ -262,4 +289,4 @@ async function sendPasswordResetEmail(name, email, url) {
     return result;
 }
 
-module.exports = { sendEmail, sendPasswordResetEmail, sendPixReminderEmail, sendResultsEmail, sendWelcomeEmail, sendCouponEmail, sendTrialEmail, sendMarketOpenEmail, escapeHtml };
+module.exports = { sendEmail, sendDailyFreeEmail, sendPasswordResetEmail, sendPixReminderEmail, sendResultsEmail, sendWelcomeEmail, sendCouponEmail, sendTrialEmail, sendMarketOpenEmail, escapeHtml };

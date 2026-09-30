@@ -311,6 +311,14 @@ export default function AdminPage() {
 
             <section className="grid gap-4 lg:grid-cols-2">
               <CampaignCard
+                title="Aviso: 1 análise grátis por dia"
+                load={api.dailyFreeCampaign}
+                send={api.sendDailyFreeCampaign}
+                describe={() => "Avisa as contas sem VIP que agora ganham 1 análise da IA por dia, com o passo a passo para usar. Uma vez por conta."}
+                confirmText={(i) => `Enviar o aviso da análise grátis diária para ${i.eligible} conta(s) agora?`}
+                sentLabel="conta(s) já receberam."
+              />
+              <CampaignCard
                 title="Aviso: resultados M1 (8 WIN em 9)"
                 load={api.resultsCampaign}
                 send={api.sendResultsCampaign}

@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const pool = require('./db');
 const { authMiddleware } = require('./authMiddleware');
-const { sendCouponEmail, sendTrialEmail, sendMarketOpenEmail, sendPixReminderEmail, sendResultsEmail } = require('./mailer');
+const { sendCouponEmail, sendTrialEmail, sendMarketOpenEmail, sendPixReminderEmail, sendResultsEmail, sendDailyFreeEmail } = require('./mailer');
 
 const router = express.Router();
 
@@ -248,6 +248,14 @@ registerCampaign('/results-campaign', {
     campaign: () => 'resultados-m1-2809-9sinais',
     where: `u.plan <> 'owner'`,
     send: sendResultsEmail,
+    notReady: () => (!process.env.RESEND_API_KEY ? 'Envio de e-mail não configurado (RESEND_API_KEY).' : null),
+});
+
+// Novidade da análise grátis diária: uma vez por conta sem VIP.
+registerCampaign('/daily-free-campaign', {
+    campaign: () => 'analise-gratis-diaria',
+    where: `u.plan = 'free'`,
+    send: sendDailyFreeEmail,
     notReady: () => (!process.env.RESEND_API_KEY ? 'Envio de e-mail não configurado (RESEND_API_KEY).' : null),
 });
 
