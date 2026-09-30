@@ -89,11 +89,11 @@ export default function Sidebar({ user, tab, onChangeTab, onLogout }) {
       </header>
 
       {/* Mobile bottom nav */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-void-line bg-void/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 flex justify-around border-t border-void-line bg-void/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
         {TABS.filter((t) => !t.ownerOnly || user?.plan === "owner").map((t) => {
           const active = tab === t.id;
           return (
-            <button key={t.id} onClick={() => onChangeTab(t.id)} className={`flex flex-col items-center gap-1 py-2.5 text-[11px] ${active ? "text-neon" : "text-mist-faint"}`}>
+            <button key={t.id} onClick={() => onChangeTab(t.id)} className={`flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] ${active ? "text-neon" : "text-mist-faint"}`}>
               <t.icon size={20} />
               {t.label.split(" ")[0]}
             </button>
