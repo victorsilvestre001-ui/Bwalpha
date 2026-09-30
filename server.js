@@ -15,6 +15,7 @@ const { router: kiwifyWebhook } = require('./kiwifyWebhook');
 const { router: asaasWebhook } = require('./asaas');
 const { router: caktoWebhook } = require('./cakto');
 const { router: perfectpayWebhook } = require('./perfectpay');
+const { router: hotmartWebhook } = require('./hotmart');
 const { router: marketRoutes } = require('./marketRoutes');
 const { router: telegramRoutes, setupWebhook } = require('./telegramRoutes');
 const marketAnalysisRoutes = require('./marketAnalysisRoutes');
@@ -62,6 +63,7 @@ app.use('/api/kiwify/webhook', kiwifyWebhook);
 app.use('/api/asaas/webhook', asaasWebhook);
 app.use('/api/cakto/webhook', caktoWebhook);
 app.use('/api/perfectpay/webhook', perfectpayWebhook);
+app.use('/api/hotmart/webhook', hotmartWebhook);
 
 // Limite geral por IP para toda a API (proteção contra robôs e ataques de volume).
 app.use('/api', rateLimit({
