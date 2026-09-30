@@ -590,8 +590,49 @@ async function runPadroes() {
     }
 }
 
+// Estudo por horário (pedido do dono): nos horários de pouco fluxo, ir CONTRA os indicadores dá mais
+// acerto que seguir? Usa os candles reais da Exnova guardados (otc_candles, ativos EURUSD/XAUUSD/EURJPY).
+// Para cada minuto: indicadores com 99 fechados + o candle atual; resultado = cor do candle seguinte.
+async function runHorario() {
+    const pairs = (process.env.BACKTEST_PAIRS || 'EURUSD,XAUUSD,EURJPY').split(',');
+    const total = {};
+    const add = (b, h, key, ok) => { b[h] ||= { n: 0, seg: 0, prod: 0 }; if (key === 'n') b[h].n++; else if (ok) b[h][key]++; };
+    for (const pair of pairs) {
+        const { rows } = await pool.query('SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 ORDER BY time', [pair]);
+        const candles = rows.slice(0, -1).map((r) => ({ time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }));
+        const byHour = {};
+        for (let k = WINDOW; k < candles.length - 1; k++) {
+            const cur = candles[k], next = candles[k + 1];
+            if (next.time - cur.time !== 60_000 || cur.time - candles[k - WINDOW].time !== WINDOW * 60_000) continue;
+            if (next.close === next.open) continue;
+            const closed = candles.slice(k - WINDOW, k);
+            const tech = computeTechnicalSignal(closed, cur);
+            const ind = tech.indicadores?.direcao;
+            if (ind !== 'COMPRA' && ind !== 'VENDA') continue;
+            const up = next.close > next.open;
+            const prod = computeM1Signal(closed, cur, tech).direction;
+            const h = new Date(cur.time).getUTCHours();
+            for (const b of [byHour, total]) {
+                add(b, h, 'n');
+                add(b, h, 'seg', (ind === 'COMPRA') === up);
+                add(b, h, 'prod', prod === 'COMPRA' || prod === 'VENDA' ? (prod === 'COMPRA') === up : false);
+            }
+        }
+        const fmt = (b) => Object.keys(b).sort((a, c) => a - c).map((h) => [+h, b[h].n, +(b[h].seg / b[h].n * 100).toFixed(1), +((b[h].n - b[h].seg) / b[h].n * 100).toFixed(1), +(b[h].prod / b[h].n * 100).toFixed(1)]);
+        // [hora UTC, amostras, seguir indicadores %, contra indicadores %, sinal atual %]
+        console.log(`BACKTEST_HORARIO ${pair} candles=${candles.length} de=${candles[0] && new Date(candles[0].time).toISOString()} ${JSON.stringify(fmt(byHour))}`);
+    }
+    const fmtT = Object.keys(total).sort((a, c) => a - c).map((h) => [+h, total[h].n, +(total[h].seg / total[h].n * 100).toFixed(1), +((total[h].n - total[h].seg) / total[h].n * 100).toFixed(1), +(total[h].prod / total[h].n * 100).toFixed(1)]);
+    console.log(`BACKTEST_HORARIO TOTAL ${JSON.stringify(fmtT)}`);
+}
+
 async function run() {
     console.log('BACKTEST_START');
+    if (process.env.BACKTEST_SOURCE === 'horario') {
+        try { await runHorario(); } catch (err) { console.error('BACKTEST_ERR HORARIO:', err.message); }
+        console.log('BACKTEST_END');
+        return;
+    }
     if (process.env.BACKTEST_SOURCE === 'padroes') {
         try { await runPadroes(); } catch (err) { console.error('BACKTEST_ERR PADROES:', err.message); }
         console.log('BACKTEST_END');
