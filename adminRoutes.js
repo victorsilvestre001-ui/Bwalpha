@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const pool = require('./db');
 const { authMiddleware } = require('./authMiddleware');
-const { sendCouponEmail, sendTrialEmail, sendMarketOpenEmail, sendPixReminderEmail, sendResultsEmail, sendDailyFreeEmail } = require('./mailer');
+const { sendCouponEmail, sendTrialEmail, sendMarketOpenEmail, sendPixReminderEmail, sendResultsEmail, sendDailyFreeEmail, sendNewCheckoutEmail } = require('./mailer');
 
 const router = express.Router();
 
@@ -257,6 +257,15 @@ registerCampaign('/daily-free-campaign', {
     where: `u.plan = 'free'`,
     send: sendDailyFreeEmail,
     notReady: () => (!process.env.RESEND_API_KEY ? 'Envio de e-mail não configurado (RESEND_API_KEY).' : null),
+});
+
+// Novo link de pagamento (Hotmart) com o cupom aplicado: uma vez por conta sem VIP.
+registerCampaign('/new-checkout-campaign', {
+    campaign: () => 'novo-link-pagamento-hotmart',
+    where: `u.plan = 'free'`,
+    send: sendNewCheckoutEmail,
+    notReady: () => (!process.env.RESEND_API_KEY ? 'Envio de e-mail não configurado (RESEND_API_KEY).' : null),
+    info: () => ({ coupon: process.env.SIGNUP_COUPON || null, discount: process.env.SIGNUP_COUPON_DISCOUNT || null }),
 });
 
 // Lembrete de Pix/boleto não pago para um e-mail específico (dono digita no painel).

@@ -25,6 +25,16 @@ async function sendEmail({ to, subject, html, replyTo }) {
     }
 }
 
+// Link do checkout da Hotmart com e-mail/nome preenchidos e, se houver, o cupom já aplicado (offDiscount).
+function hotmartLink(name, email, withCoupon = true) {
+    if (process.env.PAYMENT_PROVIDER !== 'hotmart' || !process.env.HOTMART_CHECKOUT_URL) return null;
+    const url = new URL(process.env.HOTMART_CHECKOUT_URL);
+    if (email) url.searchParams.set('email', email);
+    if (name) url.searchParams.set('name', name);
+    if (withCoupon && process.env.SIGNUP_COUPON) url.searchParams.set('offDiscount', process.env.SIGNUP_COUPON);
+    return url.toString();
+}
+
 // Cupom do VIP (criado na Kiwify). Sem SIGNUP_COUPON, os e-mails saem sem cupom.
 // Com o Stripe, o link leva ao painel (o botão de VIP abre o checkout) e o cupom é digitado
 // no campo "código promocional" do pagamento.
@@ -32,13 +42,8 @@ function couponOffer(name, email) {
     const coupon = process.env.SIGNUP_COUPON;
     if (!coupon) return null;
     // Hotmart: o link do checkout já leva o e-mail e aplica o cupom (parâmetro offDiscount).
-    if (process.env.PAYMENT_PROVIDER === 'hotmart' && process.env.HOTMART_CHECKOUT_URL) {
-        const url = new URL(process.env.HOTMART_CHECKOUT_URL);
-        url.searchParams.set('email', email);
-        if (name) url.searchParams.set('name', name);
-        url.searchParams.set('offDiscount', coupon);
-        return { coupon, discount: process.env.SIGNUP_COUPON_DISCOUNT || '15%', url: url.toString() };
-    }
+    const hm = hotmartLink(name, email);
+    if (hm) return { coupon, discount: process.env.SIGNUP_COUPON_DISCOUNT || '15%', url: hm };
     if ((process.env.PAYMENT_PROVIDER && process.env.PAYMENT_PROVIDER !== 'kiwify') || !process.env.KIWIFY_CHECKOUT_URL) {
         return { coupon, discount: process.env.SIGNUP_COUPON_DISCOUNT || '15%', url: `${FRONTEND_URL}/dashboard?upgrade=1` };
     }
@@ -178,11 +183,11 @@ async function sendMarketOpenEmail(name, email, account = {}) {
     });
 }
 
-// Lembrete para quem gerou o Pix (ou boleto) na Kiwify e não concluiu o pagamento.
+// Lembrete para quem gerou o Pix (ou boleto) e não concluiu o pagamento (link da Hotmart, ou Kiwify).
 async function sendPixReminderEmail(name, email) {
     const firstName = String(name || '').trim().split(/\s+/)[0];
-    let checkout = `${FRONTEND_URL}/dashboard?upgrade=1`;
-    if ((!process.env.PAYMENT_PROVIDER || process.env.PAYMENT_PROVIDER === 'kiwify') && process.env.KIWIFY_CHECKOUT_URL) {
+    let checkout = hotmartLink(name, email) || `${FRONTEND_URL}/dashboard?upgrade=1`;
+    if (process.env.PAYMENT_PROVIDER !== 'hotmart' && (!process.env.PAYMENT_PROVIDER || process.env.PAYMENT_PROVIDER === 'kiwify') && process.env.KIWIFY_CHECKOUT_URL) {
         const url = new URL(process.env.KIWIFY_CHECKOUT_URL);
         url.searchParams.set('email', email);
         if (name) url.searchParams.set('name', name);
@@ -213,6 +218,43 @@ async function sendPixReminderEmail(name, email) {
                 Teve alguma dificuldade? É só responder este e-mail que a gente te ajuda.
             </p>`,
             'Você recebeu este e-mail porque iniciou uma compra na TradeOn AI. Se já pagou, pode ignorar. Conteúdo educativo; operar envolve risco.'),
+        replyTo: process.env.SUPPORT_EMAIL || 'tradeonia@gmail.com',
+    });
+}
+
+// Aviso: o pagamento do VIP mudou para um novo link (Hotmart), já com o cupom de desconto aplicado.
+async function sendNewCheckoutEmail(name, email) {
+    const firstName = String(name || '').trim().split(/\s+/)[0];
+    const link = hotmartLink(name, email) || `${FRONTEND_URL}/dashboard?upgrade=1`;
+    const coupon = process.env.SIGNUP_COUPON;
+    const discount = process.env.SIGNUP_COUPON_DISCOUNT || '20%';
+    return sendEmail({
+        to: email,
+        subject: coupon ? `🔗 Novo link do VIP TradeOn AI + ${discount} OFF para você` : '🔗 Novo link de pagamento do VIP TradeOn AI',
+        html: layout(`
+            <h1 style="color: #00F0A8; font-size: 22px; margin-bottom: 8px;">${firstName ? `${escapeHtml(firstName)}, mudamos` : 'Mudamos'} o link de pagamento do VIP 🔗</h1>
+            <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">
+                O pagamento do <strong>VIP da TradeOn AI</strong> agora é feito por um novo link, mais rápido e seguro, com <strong>Pix, cartão ou boleto</strong>.
+                Se você tentou pagar antes e não conseguiu, agora já está funcionando.
+            </p>
+            ${coupon ? `<div style="margin-top: 20px; padding: 20px; border: 1px dashed #00F0A8; border-radius: 10px; background: rgba(0,240,168,0.06); text-align: center;">
+                <p style="margin: 0; font-size: 14px; color: #9AA6C3;">Presente pela mudança</p>
+                <p style="margin: 6px 0 0; font-size: 20px; font-weight: 700; color: #E7ECF7;">${escapeHtml(discount)} OFF no VIP</p>
+                <p style="margin: 10px 0 0; font-family: 'Courier New', monospace; font-size: 24px; font-weight: 700; letter-spacing: 3px; color: #00F0A8;">${escapeHtml(coupon)}</p>
+                <p style="margin: 8px 0 0; font-size: 13px; color: #9AA6C3;">O cupom já vai aplicado no botão abaixo.</p>
+            </div>` : ''}
+            <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7; margin-top: 20px;">Com o VIP você tem:</p>
+            <ul style="font-size: 14px; line-height: 1.8; color: #E7ECF7; padding-left: 18px;">
+                <li>Análises da IA <strong>ilimitadas</strong> em EURUSD, EURJPY e Ouro (M1 e M5)</li>
+                <li>Direção, confiança, horário de entrada, pressão e volatilidade</li>
+                <li>Assistente de IA ilimitado</li>
+                <li><strong>Pagamento único</strong>, sem mensalidade</li>
+            </ul>
+            ${button(link, coupon ? 'Ativar VIP com desconto' : 'Ativar meu VIP')}
+            <p style="font-size: 13px; line-height: 1.6; color: #9AA6C3; margin-top: 16px;">
+                Compre com este mesmo e-mail (<strong>${escapeHtml(email)}</strong>) para o VIP ser liberado na sua conta automaticamente.
+            </p>`,
+            'Você recebeu este e-mail porque tem uma conta na TradeOn AI. Conteúdo educativo; operar envolve risco.'),
         replyTo: process.env.SUPPORT_EMAIL || 'tradeonia@gmail.com',
     });
 }
@@ -297,4 +339,4 @@ async function sendPasswordResetEmail(name, email, url) {
     return result;
 }
 
-module.exports = { sendEmail, sendDailyFreeEmail, sendPasswordResetEmail, sendPixReminderEmail, sendResultsEmail, sendWelcomeEmail, sendCouponEmail, sendTrialEmail, sendMarketOpenEmail, escapeHtml };
+module.exports = { sendEmail, sendDailyFreeEmail, sendNewCheckoutEmail, sendPasswordResetEmail, sendPixReminderEmail, sendResultsEmail, sendWelcomeEmail, sendCouponEmail, sendTrialEmail, sendMarketOpenEmail, escapeHtml };

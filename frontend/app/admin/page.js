@@ -311,6 +311,14 @@ export default function AdminPage() {
 
             <section className="grid gap-4 lg:grid-cols-2">
               <CampaignCard
+                title="Aviso: novo link de pagamento + cupom"
+                load={api.newCheckoutCampaign}
+                send={api.sendNewCheckoutCampaign}
+                describe={(i) => `Avisa as contas sem VIP que o pagamento mudou para o novo link (Hotmart), com o cupom ${i?.coupon || ""} (${i?.discount || ""} OFF) já aplicado no botão. Uma vez por conta.`}
+                confirmText={(i) => `Enviar o aviso do novo link de pagamento para ${i.eligible} conta(s) agora?`}
+                sentLabel="conta(s) já receberam."
+              />
+              <CampaignCard
                 title="Aviso: 1 análise grátis por dia"
                 load={api.dailyFreeCampaign}
                 send={api.sendDailyFreeCampaign}
