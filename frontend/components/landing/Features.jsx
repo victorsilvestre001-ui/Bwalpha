@@ -1,12 +1,12 @@
-import { Brain, Timer, History, MessageSquareText, Gauge, ShieldCheck } from "lucide-react";
+import { Brain, ListChecks, History, MessageSquareText, Gauge, ShieldCheck } from "lucide-react";
 import Reveal from "@/components/Reveal";
 
 const FEATURES = [
   { icon: Brain, title: "Motor de confluência", text: "EMA 9/21, RSI 14, MACD e padrões de candle votam juntos para chegar a uma direção objetiva.", accent: "text-neon" },
-  { icon: Timer, title: "Horário de entrada", text: "Cada sinal vem com o horário de entrada no próximo candle e uma contagem sincronizada com o servidor.", accent: "text-volt" },
-  { icon: Gauge, title: "Nível de confiança", text: "Cada sinal vem classificado como Alta, Média ou Baixa confiança, para você decidir com clareza.", accent: "text-pulse-soft" },
+  { icon: ListChecks, title: "Histórico conferido", text: "Cada análise fica registrada e é conferida automaticamente quando o candle fecha: acertos e erros, sem filtro.", accent: "text-volt" },
+  { icon: Gauge, title: "Nível de confiança", text: "Cada análise vem classificada como Alta, Média ou Baixa confiança, para você decidir com clareza.", accent: "text-pulse-soft" },
   { icon: MessageSquareText, title: "Assistente de IA", text: "Tire dúvidas de trading, envie prints do gráfico e receba análise em linguagem simples.", accent: "text-neon" },
-  { icon: History, title: "Pressão e volatilidade", text: "Veja quem está no controle (compradores ou vendedores) e se o mercado está lento, normal ou volátil antes de entrar.", accent: "text-volt" },
+  { icon: History, title: "Pressão e volatilidade", text: "Veja quem está no controle (compradores ou vendedores) e se o mercado está lento, normal ou volátil antes de decidir.", accent: "text-volt" },
   { icon: ShieldCheck, title: "Gráfico integrado", text: "Gráfico em tempo real direto no painel, sem trocar de aba enquanto você analisa.", accent: "text-pulse-soft" }
 ];
 

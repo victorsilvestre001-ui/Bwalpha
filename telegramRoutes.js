@@ -18,16 +18,13 @@ async function postSignalToTelegram(signal) {
         timeZone: 'America/Sao_Paulo',
     });
     const timeframe = signal.timeframe || 'M1';
-    const affiliateLink =
-        'https://exnova.com/lp/start-trading/?aff=830021&aff_model=revenue&afftrack=BwAlpha';
-
     const text =
-        `📈 TradeOn AI Signals\n\n` +
+        `📈 TradeOn AI · Análise\n\n` +
         `${emoji} ${acao}\n` +
         `📊 Ativo: ${signal.pair}\n` +
         `⏱ Timeframe: ${timeframe}\n` +
-        `🎯 Entrada: ${agora}\n\n` +
-        `🚀 Execute este sinal pela plataforma: ${affiliateLink}\n\n` +
+        `🕒 Horário: ${agora}\n\n` +
+        `⚠️ Conteúdo educativo. Operar envolve risco.\n\n` +
         `Responda esta mensagem com "green" ou "red" pra fechar o sinal.`;
 
     try {

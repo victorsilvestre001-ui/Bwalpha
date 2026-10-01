@@ -21,7 +21,7 @@ const PLANS = [
     cta: "Quero ser VIP",
     href: "/auth?mode=register&plan=vip",
     highlight: true,
-    items: ["Tudo do plano Free", "Análises da IA ilimitadas (EURUSD, EURJPY e Ouro, M1 e M5)", "Contagem do próximo candle + pressão e volatilidade", "Assistente de IA ilimitado", "Pague uma vez e tenha acesso a tudo"]
+    items: ["Tudo do plano Free", "Análises da IA ilimitadas (EURUSD, EURJPY e Ouro, M1 e M5)", "Leitura de pressão e volatilidade + histórico completo", "Assistente de IA ilimitado", "Pague uma vez e tenha acesso a tudo"]
   }
 ];
 
