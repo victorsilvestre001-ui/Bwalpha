@@ -5,7 +5,7 @@ import { Sparkles, AlertTriangle, Lock, Crown, Loader2, Info, Gift } from "lucid
 import { api, updateSessionUser } from "@/lib/api";
 import { formatCpf, isValidCpf } from "@/lib/cpf";
 import { ASSETS, ASSET_LIST } from "@/lib/assets";
-import TradingViewWidget from "./TradingViewWidget";
+import LiveChart from "./LiveChart";
 import AnalyzingOverlay from "./AnalyzingOverlay";
 import CandleWatch from "./CandleWatch";
 import SignalResult from "./SignalResult";
@@ -223,7 +223,7 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
       </div>
 
       <div className="panel h-[460px] overflow-hidden p-1 md:h-[620px] xl:h-auto xl:min-h-[640px]">
-        <TradingViewWidget pair={pair} timeframe={timeframe} />
+        <LiveChart pair={pair} timeframe={timeframe} />
       </div>
     </div>
   );
