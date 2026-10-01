@@ -1098,6 +1098,21 @@ router.get('/public-quotes', async (req, res) => {
 
 // Horário do servidor (UTC em ms) para o site corrigir o relógio do aparelho do usuário,
 // que pode estar adiantado ou atrasado em relação ao horário da corretora.
+// Candles para o gráfico do painel: os mesmos da Exnova que a IA lê (inclui o candle em formação).
+const chartCache = {};
+router.get('/candles', authMiddleware, async (req, res) => {
+    const pair = String(req.query.pair || 'EURUSD').toUpperCase();
+    const tf = req.query.tf === 'M5' ? 'M5' : 'M1';
+    if (!SIGNAL_PAIRS[pair]) return res.status(400).json({ error: 'Par inválido' });
+    const key = `${pair}:${tf}`, now = Date.now();
+    if (chartCache[key] && now - chartCache[key].at < 1000) return res.json(chartCache[key].body);
+    const candles = await fetchExnovaCandles(pair, tf, tf === 'M5' ? 120 : 150);
+    if (!candles || !candles.length) return res.status(503).json({ error: 'Gráfico indisponível no momento' });
+    const body = { pair, tf, source: 'exnova', candles: candles.map((c) => ({ time: Math.floor(c.time / 1000), open: c.open, high: c.high, low: c.low, close: c.close })) };
+    chartCache[key] = { at: now, body };
+    res.json(body);
+});
+
 router.get('/time', (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.json({ now: Date.now() });

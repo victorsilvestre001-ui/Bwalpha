@@ -74,6 +74,7 @@ export const api = {
   sendResultsCampaign: () => request("/api/admin/results-campaign", { method: "POST" }),
   pixReminder: (email) => request("/api/admin/pix-reminder", { method: "POST", body: { email } }),
   signalQuota: () => request("/api/market/signal-quota"),
+  chartCandles: (pair, tf) => request(`/api/market/candles?pair=${encodeURIComponent(pair)}&tf=${encodeURIComponent(tf)}`),
   support: (payload) => request("/api/support", { method: "POST", body: payload, auth: false }),
   signal: (pair, timeframe) => request("/api/market/signal", { method: "POST", body: { pair, timeframe } }),
   analyses: (status = "all", limit = 100) => request(`/api/analyses?status=${encodeURIComponent(status)}&limit=${limit}`),
