@@ -1,7 +1,9 @@
 // Rastreamento de anúncios (Meta Pixel e Google Ads). Nada é carregado antes de a
 // pessoa aceitar os cookies de marketing, e nada roda se os IDs não estiverem configurados.
-// ID público do Pixel da Meta (conjunto de dados "TradeOn AI Site"); pode ser trocado pela variável de ambiente.
-const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID || "1856706728826047";
+// IDs públicos dos Pixels da Meta: "TradeOn AI Site" e o da conta de anúncios 1699797761329078.
+// Podem ser trocados pela variável de ambiente (separados por vírgula). O fbq("track") manda para todos.
+const META_PIXEL_IDS = (process.env.NEXT_PUBLIC_META_PIXEL_ID || "1856706728826047,2784557928605608")
+  .split(",").map((id) => id.trim()).filter(Boolean);
 const GOOGLE_ADS_ID = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID || ""; // formato AW-XXXXXXXXX
 const GADS_LABELS = {
   CompleteRegistration: process.env.NEXT_PUBLIC_GADS_SIGNUP_LABEL || "",
@@ -10,7 +12,7 @@ const GADS_LABELS = {
 };
 
 export const CONSENT_KEY = "tradeon_consent"; // "all" | "essential"
-export const trackingConfigured = Boolean(META_PIXEL_ID || GOOGLE_ADS_ID);
+export const trackingConfigured = Boolean(META_PIXEL_IDS.length || GOOGLE_ADS_ID);
 
 export function getConsent() {
   try { return localStorage.getItem(CONSENT_KEY); } catch { return null; }
@@ -29,8 +31,8 @@ export function identify(user) {
   const next = { em: String(user.email).trim().toLowerCase(), ...(user.id ? { external_id: String(user.id) } : {}) };
   if (userData && userData.em === next.em) return;
   userData = next;
-  if (loaded && window.fbq && META_PIXEL_ID) {
-    try { window.fbq("init", META_PIXEL_ID, userData); } catch {}
+  if (loaded && window.fbq) {
+    for (const id of META_PIXEL_IDS) { try { window.fbq("init", id, userData); } catch {} }
   }
 }
 
@@ -46,12 +48,12 @@ export function loadTrackers() {
   if (loaded || typeof window === "undefined" || getConsent() !== "all") return;
   loaded = true;
 
-  if (META_PIXEL_ID && !window.fbq) {
+  if (META_PIXEL_IDS.length && !window.fbq) {
     const fbq = function () { fbq.callMethod ? fbq.callMethod.apply(fbq, arguments) : fbq.queue.push(arguments); };
     fbq.push = fbq; fbq.loaded = true; fbq.version = "2.0"; fbq.queue = [];
     window.fbq = fbq; window._fbq = fbq;
     addScript("https://connect.facebook.net/en_US/fbevents.js");
-    window.fbq("init", META_PIXEL_ID, userData || undefined);
+    for (const id of META_PIXEL_IDS) window.fbq("init", id, userData || undefined);
     window.fbq("track", "PageView");
   }
 
