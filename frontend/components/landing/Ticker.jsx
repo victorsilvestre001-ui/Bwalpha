@@ -22,7 +22,8 @@ export default function Ticker() {
     ...quotes.map((q) => ({ k: q.label, v: q.rate ? q.rate.toFixed(assetDigits(q.label)) : "—" })),
     { k: "Mercado", v: open == null ? "—" : open ? "ABERTO" : "FECHADO" },
     { k: "Timeframes", v: "M1 · M5" },
-    { k: "Engine", v: "TradeOn AI v2" }
+    { k: "Leitura", v: "5+ indicadores" },
+    { k: "Histórico", v: "conferido" }
   ];
   const loop = [...items, ...items, ...items, ...items];
 

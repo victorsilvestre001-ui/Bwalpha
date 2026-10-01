@@ -1,39 +1,77 @@
 "use client";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, Sparkles, TrendingUp, Activity, Zap } from "lucide-react";
+import { ArrowRight, LineChart, Check } from "lucide-react";
 
-const BARS = [38, 52, 44, 61, 57, 70, 64, 78, 73, 86, 80, 92];
+// Candles determinísticos para o mockup (sem aleatoriedade, o servidor e o navegador desenham igual).
+const CANDLES = (() => {
+  const out = [];
+  let price = 60;
+  for (let i = 0; i < 34; i++) {
+    const drift = Math.sin(i / 4) * 2.2 + 0.9;
+    const open = price;
+    const close = open + drift + (i % 3 === 0 ? -2.6 : 0.4);
+    const high = Math.max(open, close) + 1.6 + (i % 4) * 0.4;
+    const low = Math.min(open, close) - 1.4 - (i % 5) * 0.3;
+    out.push({ open, close, high, low });
+    price = close;
+  }
+  return out;
+})();
 
-function SignalPreview() {
+function ema(values, period) {
+  const k = 2 / (period + 1);
+  let prev = values[0];
+  return values.map((v) => (prev = v * k + prev * (1 - k)));
+}
+
+function ChartPreview() {
+  const W = 520, H = 210, pad = 8;
+  const lo = Math.min(...CANDLES.map((c) => c.low)), hi = Math.max(...CANDLES.map((c) => c.high));
+  const y = (v) => pad + (H - 2 * pad) * (1 - (v - lo) / (hi - lo));
+  const step = W / CANDLES.length;
+  const x = (i) => step * i + step / 2;
+  const closes = CANDLES.map((c) => c.close);
+  const line = (vals) => vals.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
+
   return (
-    <div className="panel panel-glow grad-border relative overflow-hidden p-6">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-24 animate-scan bg-gradient-to-b from-neon/10 to-transparent" />
+    <div className="panel panel-glow grad-border relative overflow-hidden p-5 md:p-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 font-mono text-xs text-mist-dim">
-          <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-neon opacity-60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-neon" /></span>
-          ANÁLISE AO VIVO
+          <span className="h-2 w-2 rounded-full bg-neon" />
+          PAINEL DE ANÁLISE
         </div>
-        <span className="rounded-md bg-void-deep px-2 py-1 font-mono text-[11px] text-mist-dim">EURUSD · M5</span>
+        <span className="rounded-md bg-void-deep px-2 py-1 font-mono text-[11px] text-mist-dim">XAUUSD · M5</span>
       </div>
 
-      <div className="mt-6 flex h-32 items-end gap-1.5">
-        {BARS.map((h, i) => (
-          <motion.div
-            key={i}
-            className="flex-1 rounded-t-md bg-gradient-to-t from-volt/30 to-neon/80"
-            initial={{ height: 0 }}
-            animate={{ height: `${h}%` }}
-            transition={{ duration: 0.9, delay: 0.4 + i * 0.05, ease: [0.22, 1, 0.36, 1] }}
-          />
+      <svg viewBox={`0 0 ${W} ${H}`} className="mt-4 h-44 w-full md:h-52" preserveAspectRatio="none" aria-hidden="true">
+        {[0.25, 0.5, 0.75].map((f) => (
+          <line key={f} x1="0" x2={W} y1={H * f} y2={H * f} stroke="#1B2440" strokeWidth="1" />
         ))}
+        {CANDLES.map((c, i) => {
+          const up = c.close >= c.open;
+          const color = up ? "#00F0A8" : "#FF4D6D";
+          const top = y(Math.max(c.open, c.close)), bot = y(Math.min(c.open, c.close));
+          return (
+            <g key={i}>
+              <line x1={x(i)} x2={x(i)} y1={y(c.high)} y2={y(c.low)} stroke={color} strokeWidth="1.2" />
+              <rect x={x(i) - step * 0.3} y={top} width={step * 0.6} height={Math.max(bot - top, 1.5)} fill={color} rx="1" />
+            </g>
+          );
+        })}
+        <path d={line(ema(closes, 9))} fill="none" stroke="#3D8BFF" strokeWidth="2" />
+        <path d={line(ema(closes, 21))} fill="none" stroke="#9B5CFF" strokeWidth="2" opacity="0.85" />
+      </svg>
+      <div className="mt-2 flex gap-4 font-mono text-[10px] text-mist-faint">
+        <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-volt" />EMA 9</span>
+        <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-pulse" />EMA 21</span>
       </div>
 
-      <div className="mt-6 grid grid-cols-3 gap-3">
+      <div className="mt-4 grid grid-cols-3 gap-3">
         {[
-          { k: "Direção", v: "COMPRA", c: "text-neon" },
-          { k: "Confiança", v: "Alta", c: "text-mist" },
-          { k: "RSI 14", v: "58.4", c: "text-mist" }
+          { k: "Tendência", v: "Alta", c: "text-neon" },
+          { k: "RSI 14", v: "58", c: "text-mist" },
+          { k: "MACD", v: "Positivo", c: "text-mist" }
         ].map((s) => (
           <div key={s.k} className="rounded-xl border border-void-line bg-void-deep/60 p-3">
             <div className="font-mono text-[10px] uppercase tracking-wider text-mist-faint">{s.k}</div>
@@ -41,7 +79,21 @@ function SignalPreview() {
           </div>
         ))}
       </div>
-      <p className="mt-4 font-mono text-[10px] text-mist-faint">* Exemplo ilustrativo da interface.</p>
+
+      <div className="mt-4 rounded-xl border border-void-line bg-void-deep/40">
+        <div className="border-b border-void-line px-4 py-2 font-mono text-[10px] uppercase tracking-wider text-mist-faint">Histórico</div>
+        {[
+          ["EURUSD", "M1", "Acerto", true],
+          ["XAUUSD", "M5", "Acerto", true],
+          ["EURJPY", "M1", "Erro", false]
+        ].map(([a, t, r, ok], i) => (
+          <div key={i} className={`flex items-center justify-between px-4 py-2 text-xs ${i ? "border-t border-void-line" : ""}`}>
+            <span className="font-mono text-mist">{a} <span className="text-mist-faint">{t}</span></span>
+            <span className={`rounded-full px-2.5 py-0.5 font-mono text-[10px] ${ok ? "bg-neon/10 text-neon" : "bg-ember/10 text-ember-soft"}`}>{r}</span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 font-mono text-[10px] text-mist-faint">* Imagem ilustrativa da interface.</p>
     </div>
   );
 }
@@ -55,7 +107,7 @@ export default function Hero() {
       <div className="relative mx-auto grid max-w-7xl items-center gap-14 px-5 md:px-8 lg:grid-cols-[1.1fr_0.9fr]">
         <div>
           <motion.span initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="eyebrow">
-            <Sparkles size={12} /> Nova geração · TradeOn AI
+            <LineChart size={12} /> Análise técnica com IA · Forex e Ouro
           </motion.span>
 
           <motion.h1
@@ -64,8 +116,7 @@ export default function Hero() {
             transition={{ duration: 0.8, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
             className="mt-6 font-display text-[2.6rem] font-bold leading-[1.05] tracking-tight text-mist sm:text-6xl lg:text-7xl"
           >
-            Ligue o seu trade <br className="hidden sm:block" />
-            na <span className="grad-text">inteligência</span> certa.
+            Análise técnica profissional, <span className="grad-text">em segundos</span>.
           </motion.h1>
 
           <motion.p
@@ -74,8 +125,8 @@ export default function Hero() {
             transition={{ duration: 0.8, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
             className="mt-6 max-w-xl text-base leading-relaxed text-mist-dim md:text-lg"
           >
-            A TradeOn AI lê o mercado em segundos — médias, RSI, MACD e padrões de candle —
-            e entrega uma direção clara para EURUSD, EURJPY e Ouro (XAUUSD) em M1 e M5.
+            A TradeOn AI combina médias móveis, RSI, MACD e leitura de candles para analisar
+            EURUSD, EURJPY e Ouro (XAUUSD) no M1 e M5. Cada análise fica registrada no seu histórico.
           </motion.p>
 
           <motion.div
@@ -96,12 +147,8 @@ export default function Hero() {
             transition={{ duration: 0.8, delay: 0.5 }}
             className="mt-10 flex flex-wrap gap-6 text-sm text-mist-dim"
           >
-            {[
-              { i: Zap, t: "Sinal em segundos" },
-              { i: Activity, t: "5+ indicadores combinados" },
-              { i: TrendingUp, t: "EURUSD, EURJPY & Ouro" }
-            ].map(({ i: Icon, t }) => (
-              <span key={t} className="flex items-center gap-2"><Icon size={16} className="text-neon" />{t}</span>
+            {["1 análise grátis por dia", "Histórico transparente", "Sem cartão para começar"].map((t) => (
+              <span key={t} className="flex items-center gap-2"><Check size={16} className="text-neon" />{t}</span>
             ))}
           </motion.div>
         </div>
@@ -113,7 +160,7 @@ export default function Hero() {
           className="relative animate-floaty"
         >
           <div className="absolute -inset-8 rounded-[2rem] bg-gradient-to-br from-neon/20 via-volt/10 to-pulse/20 blur-3xl" />
-          <SignalPreview />
+          <ChartPreview />
         </motion.div>
       </div>
     </section>
