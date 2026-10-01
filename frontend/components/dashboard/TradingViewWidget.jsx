@@ -2,7 +2,7 @@
 import { useEffect, useRef } from "react";
 import { ASSETS } from "@/lib/assets";
 
-export default function TradingViewWidget({ pair = "EURUSD", timeframe = "M1" }) {
+export default function TradingViewWidget({ pair = "EURUSD", timeframe = "M1", onFail }) {
   const ref = useRef(null);
 
   useEffect(() => {
@@ -32,7 +32,9 @@ export default function TradingViewWidget({ pair = "EURUSD", timeframe = "M1" })
       support_host: "https://www.tradingview.com"
     });
     el.appendChild(script);
-    return () => { el.innerHTML = ""; };
+    // Se o TradingView não montar o gráfico (script bloqueado ou fora do ar), avisa para usar a reserva.
+    const check = setTimeout(() => { if (onFail && !el.querySelector("iframe")) onFail(); }, 10000);
+    return () => { clearTimeout(check); el.innerHTML = ""; };
   }, [pair, timeframe]);
 
   return <div ref={ref} className="tradingview-widget-container h-full w-full" />;
