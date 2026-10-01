@@ -6,7 +6,7 @@ import { ASSETS } from "@/lib/assets";
 export default function TradingViewWidget({ pair = "EURUSD", timeframe = "M1" }) {
   const config = {
     autosize: true,
-    symbol: ASSETS[pair]?.tv || `FX:${pair}`,
+    symbol: ASSETS[pair]?.tv || `FX_IDC:${pair}`,
     interval: timeframe === "M5" ? "5" : "1",
     timezone: "America/Sao_Paulo",
     theme: "dark",
