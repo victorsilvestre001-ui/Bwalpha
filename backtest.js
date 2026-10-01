@@ -626,8 +626,72 @@ async function runHorario() {
     console.log(`BACKTEST_HORARIO TOTAL ${JSON.stringify(fmtT)}`);
 }
 
+// Estudo do Ouro: as regras de produção (ouro.js) e variações, nos candles reais da Exnova,
+// com acerto por metade do período e por sessão. Também o resultado real dos sinais ouro_*.
+async function runOuro() {
+    const O = require('./ouro');
+    const { rows } = await pool.query("SELECT time, open, high, low, close FROM otc_candles WHERE active = 'XAUUSD' ORDER BY time");
+    const candles = rows.slice(0, -1).map((r) => ({ time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }));
+    const res = {};
+    const sess = (t) => { const h = new Date(t).getUTCHours(); return h < 7 ? 'asia' : h < 12 ? 'londres' : h < 21 ? 'ny' : 'noite'; };
+    const tests = [];
+    for (let k = WINDOW; k < candles.length - 1; k++) {
+        const cur = candles[k], next = candles[k + 1];
+        if (next.time - cur.time !== 60_000 || cur.time - candles[k - WINDOW].time !== WINDOW * 60_000 || next.close === next.open) continue;
+        tests.push(k);
+    }
+    const half = tests[Math.floor(tests.length / 2)];
+    const rej = (f, th) => { const r = (f.high - f.low) || 1e-9, dn = Math.min(f.open, f.close) - f.low, up = f.high - Math.max(f.open, f.close); return dn >= r * th ? 'COMPRA' : up >= r * th ? 'VENDA' : null; };
+    for (const k of tests) {
+        const closed = candles.slice(k - WINDOW, k), f = candles[k], up = candles[k + 1].close > candles[k + 1].open;
+        const sig = computeTechnicalSignal(closed, f);
+        const trendUp = sig.ema9 != null && sig.ema21 != null ? sig.ema9 > sig.ema21 : null;
+        const V = {};
+        for (const th of [0.5, 0.6, 0.7]) {
+            const d = rej(f, th);
+            if (d && trendUp != null) {
+                const a = (d === 'COMPRA') === trendUp;
+                V[`rej${th}_tendencia`] = a ? d : null;
+                V[`rej${th}_contra_tend_inv`] = a ? null : opp(d);
+                V[`rej${th}_contra_tend`] = a ? null : d;
+            }
+            V[`rej${th}_livre`] = d;
+        }
+        for (const L of [4, 5, 6, 8]) for (const faixa of [1.5, 2, 2.5]) for (const estica of [1.2, 1.5, 2]) {
+            V[`lat_L${L}_f${faixa}_e${estica}`] = O.lateralEsticadaContra(closed, f, L, faixa, estica);
+        }
+        for (const T of [3, 4, 5, 6]) for (const m of [1.5, 2, 2.5]) V[`corr_T${T}_m${m}`] = O.correcaoRetoma(closed, f, T, m);
+        const prod = O.sinalOuro(closed, f, sig);
+        V.producao_ouro = prod && prod.direction;
+        V.pipeline_atual_sem_ouro = computeM1Signal(closed, f, sig).direction;
+        V.pipeline_com_ouro = (prod && prod.direction) || V.pipeline_atual_sem_ouro;
+        for (const [name, d] of Object.entries(V)) {
+            if (d !== 'COMPRA' && d !== 'VENDA') continue;
+            const ok = (d === 'COMPRA') === up;
+            const b = (res[name] ||= { n: 0, w: 0, h1: [0, 0], h2: [0, 0], s: {} });
+            b.n++; if (ok) b.w++;
+            const h = k < half ? b.h1 : b.h2; h[0]++; if (ok) h[1]++;
+            const ss = (b.s[sess(f.time)] ||= [0, 0]); ss[0]++; if (ok) ss[1]++;
+        }
+    }
+    const pct = (a) => (a[0] ? +(a[1] / a[0] * 100).toFixed(1) : null);
+    const out = Object.entries(res).filter(([, b]) => b.n >= 30)
+        .map(([name, b]) => [name, b.n, +(b.w / b.n * 100).toFixed(1), pct(b.h1), pct(b.h2), Object.fromEntries(Object.entries(b.s).map(([k, v]) => [k, [v[0], pct(v)]]))])
+        .sort((a, b) => Math.min(b[3] ?? 0, b[4] ?? 0) - Math.min(a[3] ?? 0, a[4] ?? 0));
+    console.log(`BACKTEST_OURO candles=${candles.length} de=${candles[0] && new Date(candles[0].time).toISOString()} testes=${tests.length}`);
+    for (let i = 0; i < out.length; i += 20) console.log('BACKTEST_OURO_TOP ' + JSON.stringify(out.slice(i, i + 20)));
+    const live = await pool.query(`SELECT leitura, COUNT(*) FILTER (WHERE result='win')::int w, COUNT(*) FILTER (WHERE result='loss')::int l, COUNT(*) FILTER (WHERE result='draw')::int d
+        FROM analyses WHERE pair='XAUUSD' AND timeframe='M1' AND requested_at > NOW() - INTERVAL '3 days' GROUP BY 1 ORDER BY 1`);
+    console.log('BACKTEST_OURO_REAL ' + JSON.stringify(live.rows));
+}
+
 async function run() {
     console.log('BACKTEST_START');
+    if (process.env.BACKTEST_SOURCE === 'ouro') {
+        try { await runOuro(); } catch (err) { console.error('BACKTEST_ERR OURO:', err.message); }
+        console.log('BACKTEST_END');
+        return;
+    }
     if (process.env.BACKTEST_SOURCE === 'horario') {
         try { await runHorario(); } catch (err) { console.error('BACKTEST_ERR HORARIO:', err.message); }
         console.log('BACKTEST_END');
