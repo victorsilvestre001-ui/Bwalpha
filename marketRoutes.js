@@ -968,6 +968,8 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
     // Indicadores seguem calculados (inclusive o BwAlpha), mas a decisão do M1 é a leitura do candle atual.
     const technical = computeTechnicalSignal(closed, forming);
     let m1 = computeM1Signal(closed, forming, technical);
+    // Ouro: estratégias próprias (ouro.js). Quando uma aparece, ela decide o sinal no fim.
+    const ouro = pairLabel === 'XAU/USD' || pairLabel === 'XAUUSD' ? require('./ouro').sinalOuro(closed, forming, technical) : null;
     // Tamanho mínimo: o corpo do candle atual precisa ser pelo menos M1_MIN_BODY_VS_AVG × a média
     // dos corpos dos últimos 20 candles (backtest: 1,0× levou o EURUSD de ~71% para ~75%).
     const minBody = Number(process.env.M1_MIN_BODY_VS_AVG ?? 1.0);
@@ -975,14 +977,14 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
         const recent = closed.slice(-20);
         const avgBody = recent.reduce((a, c) => a + Math.abs(c.close - c.open), 0) / Math.max(recent.length, 1);
         const body = Math.abs(forming.close - forming.open);
-        if (avgBody > 0 && body < minBody * avgBody) {
+        if (avgBody > 0 && body < minBody * avgBody && !ouro) {
             const result = { pair: pairLabel, timeframe: 'M1', noEntry: true, reason: 'O candle atual está sem força (movimento pequeno). Melhor esperar o próximo.' };
             console.log(`M1 ${pairLabel} sem entrada: candle pequeno (corpo ${(body / avgBody).toFixed(2)}× a média) atual=[${forming.open}/${forming.high}/${forming.low}/${forming.close}]`);
             m1Cache[pairLabel] = { bucketStart, at: nowMs, result };
             return result;
         }
     }
-    if (m1.leitura === 'doji' && process.env.M1_DOJI_SINAL !== '1') {
+    if (m1.leitura === 'doji' && !ouro && process.env.M1_DOJI_SINAL !== '1') {
         // Candle sem corpo: não há leitura de força, seria cara ou coroa. Melhor esperar.
         const result = { pair: pairLabel, timeframe: 'M1', noEntry: true, reason: 'O candle atual está sem direção (doji). Melhor esperar o próximo.' };
         console.log(`M1 ${pairLabel} sem entrada: doji atual=[${forming.open}/${forming.high}/${forming.low}/${forming.close}]`);
@@ -993,7 +995,7 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
     // acertou 86% (31/36), já "fraco" 36% e "pinbar_invertido" 44%. Nos pares listados em
     // M1_SO_FORTE_PARES só a leitura "forte" dá entrada (vazio desliga).
     const soForte = (process.env.M1_SO_FORTE_PARES ?? 'EURUSD,EURJPY').split(',').map((x) => x.trim()).filter(Boolean);
-    if (soForte.includes(pairLabel) && m1.leitura !== 'forte') {
+    if (soForte.includes(pairLabel) && m1.leitura !== 'forte' && !ouro) {
         const result = { pair: pairLabel, timeframe: 'M1', noEntry: true, reason: 'O candle atual não tem uma direção clara de força. Melhor esperar o próximo.' };
         console.log(`M1 ${pairLabel} sem entrada: leitura ${m1.leitura} (só forte) atual=[${forming.open}/${forming.high}/${forming.low}/${forming.close}]`);
         m1Cache[pairLabel] = { bucketStart, at: nowMs, result };
@@ -1020,6 +1022,7 @@ async function getM1Signal(pairLabel, nowMs = Date.now()) {
         const contra = technical.indicadores.direcao === 'COMPRA' ? 'VENDA' : 'COMPRA';
         if (m1.direction === contra) m1 = { ...m1, leitura: 'lateral_confirma' };
     }
+    if (ouro) m1 = { ...m1, direction: ouro.direction, confidence: 'Média', leitura: ouro.leitura };
     const result = {
         ...technical,
         pair: pairLabel,
