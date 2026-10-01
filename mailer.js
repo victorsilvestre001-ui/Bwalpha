@@ -213,7 +213,7 @@ async function sendPixReminderEmail(name, email) {
                 Assim que o pagamento cair, o acesso é liberado na hora. É pagamento único, sem mensalidade.
             </p>
             ${checkout ? button(checkout, 'Finalizar pagamento') : ''}
-            ${offer ? `<p style="font-size: 13px; line-height: 1.6; color: #9AA6C3; margin-top: 20px;">O cupom <strong style="color: #00F0A8; font-family: 'Courier New', monospace;">${escapeHtml(offer.coupon)}</strong> (${escapeHtml(offer.discount)} OFF) já vai aplicado no link.</p>` : ''}
+            ${offer ? `<p style="font-size: 13px; line-height: 1.6; color: #9AA6C3; margin-top: 20px;">O cupom <strong style="color: #00F0A8; font-family: 'Courier New', monospace;">${escapeHtml(offer.coupon)}</strong> (${escapeHtml(offer.discount)} OFF) ${process.env.PAYMENT_PROVIDER === 'stripe' ? 'é só digitar no campo "código promocional" do pagamento.' : 'já vai aplicado no link.'}</p>` : ''}
             <p style="font-size: 14px; line-height: 1.6; color: #9AA6C3; margin-top: 20px;">
                 Teve alguma dificuldade? É só responder este e-mail que a gente te ajuda.
             </p>`,
