@@ -4,24 +4,22 @@ import { ASSETS } from "@/lib/assets";
 // Gráfico do TradingView embutido direto por iframe (o mesmo endereço que o script oficial
 // de embed monta). Assim não depende de carregar o script s3.tradingview.com, que deixou de montar o gráfico.
 export default function TradingViewWidget({ pair = "EURUSD", timeframe = "M1" }) {
-  // Endereço clássico do TradingView (tv.js / widgetembed): carrega os dados por outro servidor
-  // do que o widget novo, que estava ficando só girando.
-  const params = new URLSearchParams({
-    frameElementId: `tv_${pair}_${timeframe}`,
+  const config = {
+    autosize: true,
     symbol: ASSETS[pair]?.tv || `FX_IDC:${pair}`,
     interval: timeframe === "M5" ? "5" : "1",
-    hidesidetoolbar: "1",
-    symboledit: "0",
-    saveimage: "0",
-    toolbarbg: "0E1426",
+    timezone: "America/Sao_Paulo",
     theme: "dark",
     style: "1",
-    timezone: "America/Sao_Paulo",
     locale: "br",
-    withdateranges: "0",
-    hideideas: "1"
-  });
-  const src = `https://s.tradingview.com/widgetembed/?${params.toString()}`;
+    backgroundColor: "rgba(14, 20, 38, 1)",
+    gridColor: "rgba(27, 36, 64, 0.6)",
+    hide_side_toolbar: true,
+    allow_symbol_change: false,
+    save_image: false,
+    support_host: "https://www.tradingview.com"
+  };
+  const src = `https://www.tradingview-widget.com/embed-widget/advanced-chart/?locale=br#${encodeURIComponent(JSON.stringify(config))}`;
 
   return (
     <div className="tradingview-widget-container relative h-full min-h-[440px] w-full">
