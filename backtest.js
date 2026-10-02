@@ -748,7 +748,7 @@ async function runOuro() {
             V.bw_alerta_contra = opp(V.bw_alerta);
             V.bw_alerta_sem_londres = sess(f.time) !== 'londres' ? V.bw_alerta : null;
         }
-        const prod = O.sinalOuro(closed, f, sig);
+        const prod = O.sinalOuro(closed, f, sig, f.time);
         V.producao_ouro = prod && prod.direction;
         V.pipeline_atual_sem_ouro = computeM1Signal(closed, f, sig).direction;
         V.pipeline_com_ouro = (prod && prod.direction) || V.pipeline_atual_sem_ouro;

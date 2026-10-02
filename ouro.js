@@ -51,14 +51,15 @@ function correcaoRetoma(closed, f, T = 4, m = 2) {
     return trend;
 }
 
-function sinalOuro(closed, forming, technical) {
+// Ajuste de 02/10 (backtest com ~3.170 candles + resultado ao vivo): fica só a lateral L4 (faixa 1,5 /
+// esticada 1,2: 61,5%, 65,8/57,3 nas metades), desligada no horário de Londres (07–12 UTC, 4h–9h de
+// Brasília), onde ela acerta só ~42%. Rejeição e correção saem: ao vivo deram 0×2 e 2×4.
+function sinalOuro(closed, forming, technical, agora = Date.now()) {
     if (process.env.OURO_ESTRATEGIAS === '0') return null;
-    const r = rejeicaoPavioTendencia(forming, technical);
-    if (r) return { direction: r, leitura: 'ouro_rejeicao_pavio' };
-    const l = lateralEsticadaContra(closed, forming);
+    const h = new Date(agora).getUTCHours();
+    if (h >= 7 && h < 12) return null;
+    const l = lateralEsticadaContra(closed, forming, 4, 1.5, 1.2);
     if (l) return { direction: l, leitura: 'ouro_lateral_contra' };
-    const c = correcaoRetoma(closed, forming);
-    if (c) return { direction: c, leitura: 'ouro_correcao_retoma' };
     return null;
 }
 
