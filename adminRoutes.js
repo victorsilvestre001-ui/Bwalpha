@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const pool = require('./db');
 const { authMiddleware } = require('./authMiddleware');
-const { sendCouponEmail, sendTrialEmail, sendMarketOpenEmail, sendPixReminderEmail, sendResultsEmail, sendDailyFreeEmail, sendNewCheckoutEmail } = require('./mailer');
+const { sendCouponEmail, sendTrialEmail, sendMarketOpenEmail, sendPixReminderEmail, sendDailyFreeEmail, sendNewCheckoutEmail, sendCelebrationEmail } = require('./mailer');
 
 const router = express.Router();
 
@@ -168,7 +168,7 @@ function registerCampaign(route, { table, campaign, where, send, notReady, info 
                 pool.query(`SELECT COUNT(*)::int AS total ${e.sql}`, e.params),
                 countSent(),
             ]);
-            res.json({ ...info(), ready: !notReady(), eligible: elig.rows[0].total, alreadySent: sent.rows[0].total, running });
+            res.json({ ...(await info()), ready: !(await notReady()), eligible: elig.rows[0].total, alreadySent: sent.rows[0].total, running });
         } catch (err) {
             console.error(`Erro ao carregar o envio ${route}:`, err.message);
             res.status(500).json({ error: 'Erro ao carregar o envio' });
@@ -176,7 +176,7 @@ function registerCampaign(route, { table, campaign, where, send, notReady, info 
     });
 
     router.post(route, authMiddleware, requireOwnerDb, async (req, res) => {
-        const problem = notReady();
+        const problem = await notReady();
         if (problem) return res.status(400).json({ error: problem });
         if (running) return res.status(409).json({ error: 'Já existe um envio em andamento.' });
         running = true;
@@ -242,13 +242,20 @@ registerCampaign('/market-open-campaign', {
     notReady: () => (!process.env.RESEND_API_KEY ? 'Envio de e-mail não configurado (RESEND_API_KEY).' : null),
 });
 
-// Resultados (imagem do histórico M1 de 28/09: 8 WIN em 9): uma vez por conta. O nome da campanha
-// mudou, então quem recebeu o aviso anterior (4 WIN) recebe este também.
-registerCampaign('/results-campaign', {
-    campaign: () => 'resultados-m1-2809-9sinais',
+// Comemoração dos 500 cadastros: uma vez por conta (menos a do dono). Só libera com 500+ contas
+// e com o cupom configurado (CELEBRA_COUPON + CELEBRA_DISCOUNT, criado no Stripe).
+const totalUsers = async () => (await pool.query(`SELECT COUNT(*)::int AS total FROM users WHERE plan <> 'owner'`)).rows[0].total;
+registerCampaign('/celebration-campaign', {
+    campaign: () => 'comemoracao-500-cadastros',
     where: `u.plan <> 'owner'`,
-    send: sendResultsEmail,
-    notReady: () => (!process.env.RESEND_API_KEY ? 'Envio de e-mail não configurado (RESEND_API_KEY).' : null),
+    send: sendCelebrationEmail,
+    notReady: async () => {
+        if (!process.env.RESEND_API_KEY) return 'Envio de e-mail não configurado (RESEND_API_KEY).';
+        if (!process.env.CELEBRA_COUPON) return 'Cupom da comemoração não configurado (CELEBRA_COUPON).';
+        const total = await totalUsers();
+        return total < 500 ? `Ainda são ${total} cadastros; o e-mail fala em 500.` : null;
+    },
+    info: async () => ({ coupon: process.env.CELEBRA_COUPON || null, discount: process.env.CELEBRA_DISCOUNT || '50%', totalUsers: await totalUsers() }),
 });
 
 // Novidade da análise grátis diária: uma vez por conta sem VIP.

@@ -259,6 +259,34 @@ async function sendNewCheckoutEmail(name, email) {
     });
 }
 
+// Comemoração dos 500 cadastros: obrigado a todos; contas sem VIP recebem o cupom da comemoração
+// (CELEBRA_COUPON, criado no Stripe como código promocional), VIP recebe só o agradecimento.
+async function sendCelebrationEmail(name, email, account = {}) {
+    const firstName = String(name || '').trim().split(/\s+/)[0];
+    const vip = account.plan === 'vip' || account.plan === 'owner';
+    const coupon = process.env.CELEBRA_COUPON;
+    const discount = process.env.CELEBRA_DISCOUNT || '50%';
+    const offer = !vip && coupon ? { coupon, discount, url: `${FRONTEND_URL}/dashboard?upgrade=1` } : null;
+    return sendEmail({
+        to: email,
+        subject: offer ? `🎉 500 cadastros na TradeOn AI: ${discount} OFF no VIP para comemorar` : '🎉 Chegamos a 500 cadastros na TradeOn AI',
+        html: layout(`
+            <h1 style="color: #00F0A8; font-size: 22px; margin-bottom: 8px;">${firstName ? `${escapeHtml(firstName)}, chegamos` : 'Chegamos'} a 500 cadastros 🎉</h1>
+            <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">
+                A TradeOn AI passou de <strong>500 pessoas cadastradas</strong>. Obrigado por fazer parte desde o começo.
+            </p>
+            <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">
+                Nas últimas semanas a plataforma ganhou o gráfico ao vivo, o histórico com acertos e erros conferidos automaticamente e 1 análise grátis por dia para todos.
+            </p>
+            ${offer ? `${couponBlock(offer, 'Presente de comemoração')}
+            <p style="font-size: 13px; line-height: 1.6; color: #9AA6C3; margin-top: 12px;">
+                No pagamento, digite o cupom no campo <strong>código promocional</strong>. O VIP é <strong>pagamento único</strong>, sem mensalidade.
+            </p>` : `${button(`${FRONTEND_URL}/dashboard`, 'Abrir o painel')}`}`,
+            'Você recebeu este e-mail porque tem uma conta na TradeOn AI. Conteúdo educativo; operar envolve risco e resultados passados não garantem resultados futuros.'),
+        replyTo: process.env.SUPPORT_EMAIL || 'tradeonia@gmail.com',
+    });
+}
+
 // Resultados do dia: imagem do histórico (hospedada no site) + convite conforme o plano.
 async function sendResultsEmail(name, email, account = {}) {
     const firstName = String(name || '').trim().split(/\s+/)[0];
@@ -339,4 +367,4 @@ async function sendPasswordResetEmail(name, email, url) {
     return result;
 }
 
-module.exports = { sendEmail, sendDailyFreeEmail, sendNewCheckoutEmail, sendPasswordResetEmail, sendPixReminderEmail, sendResultsEmail, sendWelcomeEmail, sendCouponEmail, sendTrialEmail, sendMarketOpenEmail, escapeHtml };
+module.exports = { sendEmail, sendCelebrationEmail, sendDailyFreeEmail, sendNewCheckoutEmail, sendPasswordResetEmail, sendPixReminderEmail, sendResultsEmail, sendWelcomeEmail, sendCouponEmail, sendTrialEmail, sendMarketOpenEmail, escapeHtml };

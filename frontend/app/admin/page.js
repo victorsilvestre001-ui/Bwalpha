@@ -327,11 +327,11 @@ export default function AdminPage() {
                 sentLabel="conta(s) já receberam."
               />
               <CampaignCard
-                title="Aviso: resultados M1 (8 WIN em 9)"
-                load={api.resultsCampaign}
-                send={api.sendResultsCampaign}
-                describe={() => "E-mail com a imagem do histórico M1 de 28/09 (9 sinais: 8 WIN, 1 RED, 89%) e o convite conforme o plano. Uma vez por conta."}
-                confirmText={(i) => `Enviar o e-mail de resultados para ${i.eligible} conta(s) agora?`}
+                title="Comemoração: 500 cadastros"
+                load={api.celebrationCampaign}
+                send={api.sendCelebrationCampaign}
+                describe={(i) => `Agradece a todas as contas pelos 500 cadastros (hoje: ${i?.totalUsers ?? "…"}). Sem VIP: cupom ${i?.coupon || "(não configurado)"} com ${i?.discount || ""} OFF. VIP: só o agradecimento. Uma vez por conta.`}
+                confirmText={(i) => `Enviar o e-mail de comemoração para ${i.eligible} conta(s) agora?`}
                 sentLabel="conta(s) já receberam."
               />
               <CampaignCard
