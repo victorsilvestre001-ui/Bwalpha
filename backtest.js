@@ -712,6 +712,37 @@ async function runOuro() {
                 V[`redondo${step}_rompe`] = f.open < lvl && f.close > lvl ? 'COMPRA' : f.open > lvl && f.close < lvl ? 'VENDA' : null;
             }
         }
+        // Indicador "bwalpha" do usuário (Lua da corretora), com a configuração enviada por ele.
+        {
+            const all = [...closed, f];
+            const n = all.length - 1; // índice do candle atual (f)
+            // Padrão dos 5 candles: olha os 5 fechados ANTES do atual ([1]..[5]).
+            const five = all.slice(n - 5, n);
+            const bulls = five.filter((c) => c.close > c.open).length, bears = five.filter((c) => c.close < c.open).length;
+            const varia = five[4].close - five[0].close;
+            for (const m of [2, 3, 4, 5]) {
+                V[`bw_padrao5_min${m}`] = varia > 0 && bulls >= m ? 'COMPRA' : varia < 0 && bears >= m ? 'VENDA' : null;
+                V[`bw_padrao5_min${m}_contra`] = opp(V[`bw_padrao5_min${m}`]);
+            }
+            // Cruzamento: buffer1 = open - SMA(open,10); buffer2 = WMA(buffer1,10).
+            const sma = (arr, p, i) => { let s = 0; for (let j = i - p + 1; j <= i; j++) s += arr[j]; return s / p; };
+            const opens = all.map((c) => c.open);
+            const b1 = (i) => opens[i] - sma(opens, 10, i);
+            const wma = (i) => { let s = 0, w = 0; for (let j = 0; j < 10; j++) { s += b1(i - j) * (10 - j); w += 10 - j; } return s / w; };
+            const up = b1(n) > wma(n) && b1(n - 1) < wma(n - 1), dn = b1(n) < wma(n) && b1(n - 1) > wma(n - 1);
+            V.bw_cruzamento = up ? 'COMPRA' : dn ? 'VENDA' : null;
+            V.bw_cruzamento_contra = opp(V.bw_cruzamento);
+            // Alerta: bandas (SMA10 ± k·desvio10, k pela volatilidade) + estocástico(5) nos extremos.
+            const closes = all.map((c) => c.close), m10 = sma(closes, 10, n);
+            const sd = Math.sqrt(closes.slice(n - 9, n + 1).reduce((s, x) => s + (x - m10) ** 2, 0) / 10);
+            const rg = all.map((c) => c.high - c.low), rc = sma(rg, 5, n), rl = sma(rg, 20, n);
+            const volA = rc > rl * 1.2, volB = rc < rl * 0.8;
+            const kB = volA ? 2.0 : volB ? 1.3 : 1.6, lo = volA ? 10 : volB ? 20 : 15, hi = 100 - lo;
+            const w5 = all.slice(n - 4, n + 1), hh = Math.max(...w5.map((c) => c.high)), ll = Math.min(...w5.map((c) => c.low));
+            const sto = hh > ll ? ((f.close - ll) / (hh - ll)) * 100 : 50;
+            V.bw_alerta = f.close <= m10 - sd * kB && sto <= lo ? 'COMPRA' : f.close >= m10 + sd * kB && sto >= hi ? 'VENDA' : null;
+            V.bw_alerta_contra = opp(V.bw_alerta);
+        }
         const prod = O.sinalOuro(closed, f, sig);
         V.producao_ouro = prod && prod.direction;
         V.pipeline_atual_sem_ouro = computeM1Signal(closed, f, sig).direction;
