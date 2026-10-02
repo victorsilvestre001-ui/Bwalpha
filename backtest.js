@@ -726,12 +726,16 @@ async function runOuro() {
             }
             // Cruzamento: buffer1 = open - SMA(open,10); buffer2 = WMA(buffer1,10).
             const sma = (arr, p, i) => { let s = 0; for (let j = i - p + 1; j <= i; j++) s += arr[j]; return s / p; };
-            const opens = all.map((c) => c.open);
-            const b1 = (i) => opens[i] - sma(opens, 10, i);
-            const wma = (i) => { let s = 0, w = 0; for (let j = 0; j < 10; j++) { s += b1(i - j) * (10 - j); w += 10 - j; } return s / w; };
-            const up = b1(n) > wma(n) && b1(n - 1) < wma(n - 1), dn = b1(n) < wma(n) && b1(n - 1) > wma(n - 1);
-            V.bw_cruzamento = up ? 'COMPRA' : dn ? 'VENDA' : null;
-            V.bw_cruzamento_contra = opp(V.bw_cruzamento);
+            for (const fonte of ['open', 'close']) for (const slow of [10, 20, 34]) for (const sp of [2, 5, 10]) {
+                const src = all.map((c) => c[fonte]);
+                const b1 = (i) => src[i] - sma(src, slow, i);
+                const wma = (i) => { let s = 0, w = 0; for (let j = 0; j < sp; j++) { s += b1(i - j) * (sp - j); w += sp - j; } return s / w; };
+                const up = b1(n) > wma(n) && b1(n - 1) < wma(n - 1), dn = b1(n) < wma(n) && b1(n - 1) > wma(n - 1);
+                const d = up ? 'COMPRA' : dn ? 'VENDA' : null;
+                V[`bwx_${fonte}_${slow}_${sp}_segue`] = d;
+                V[`bwx_${fonte}_${slow}_${sp}_contra`] = opp(d);
+                if (d && trendUp != null) V[`bwx_${fonte}_${slow}_${sp}_contra_tend`] = (opp(d) === 'COMPRA') === trendUp ? opp(d) : null;
+            }
             // Alerta: bandas (SMA10 ± k·desvio10, k pela volatilidade) + estocástico(5) nos extremos.
             const closes = all.map((c) => c.close), m10 = sma(closes, 10, n);
             const sd = Math.sqrt(closes.slice(n - 9, n + 1).reduce((s, x) => s + (x - m10) ** 2, 0) / 10);
@@ -742,6 +746,7 @@ async function runOuro() {
             const sto = hh > ll ? ((f.close - ll) / (hh - ll)) * 100 : 50;
             V.bw_alerta = f.close <= m10 - sd * kB && sto <= lo ? 'COMPRA' : f.close >= m10 + sd * kB && sto >= hi ? 'VENDA' : null;
             V.bw_alerta_contra = opp(V.bw_alerta);
+            V.bw_alerta_sem_londres = sess(f.time) !== 'londres' ? V.bw_alerta : null;
         }
         const prod = O.sinalOuro(closed, f, sig);
         V.producao_ouro = prod && prod.direction;
