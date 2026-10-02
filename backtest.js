@@ -661,6 +661,57 @@ async function runOuro() {
             V[`lat_L${L}_f${faixa}_e${estica}`] = O.lateralEsticadaContra(closed, f, L, faixa, estica);
         }
         for (const T of [3, 4, 5, 6]) for (const m of [1.5, 2, 2.5]) V[`corr_T${T}_m${m}`] = O.correcaoRetoma(closed, f, T, m);
+        // Estratégias novas candidatas (estudo, nada disso vai para produção sem aprovação).
+        const cor = (c) => (c.close > c.open ? 'COMPRA' : c.close < c.open ? 'VENDA' : null);
+        const body = (c) => Math.abs(c.close - c.open);
+        const last20 = closed.slice(-20), avgBody = last20.reduce((s, c) => s + body(c), 0) / last20.length || 1e-9;
+        const rng = (f.high - f.low) || 1e-9, pos = (f.close - f.low) / rng;
+        V.base_segue_cor = cor(f);
+        V.base_contra_cor = opp(cor(f));
+        for (const km of [1.5, 2, 2.5]) {
+            const forte = body(f) >= avgBody * km;
+            const d = forte && pos >= 0.75 && cor(f) === 'COMPRA' ? 'COMPRA' : forte && pos <= 0.25 && cor(f) === 'VENDA' ? 'VENDA' : null;
+            V[`mom_k${km}_segue`] = d;
+            V[`mom_k${km}_contra`] = opp(d);
+            if (d && trendUp != null) V[`mom_k${km}_tend`] = (d === 'COMPRA') === trendUp ? d : null;
+        }
+        for (const n of [3, 4, 5]) {
+            const seq = [...closed.slice(-(n - 1)), f].map(cor);
+            const d = seq.every((c) => c && c === seq[0]) ? seq[0] : null;
+            V[`seq${n}_contra`] = opp(d);
+            V[`seq${n}_segue`] = d;
+        }
+        if (sig.rsi != null) {
+            for (const [hi, lo] of [[70, 30], [75, 25], [80, 20]]) {
+                const d = sig.rsi >= hi ? 'VENDA' : sig.rsi <= lo ? 'COMPRA' : null;
+                V[`rsi${hi}_reversao`] = d;
+                V[`rsi${hi}_segue`] = opp(d);
+            }
+        }
+        const pv = closed[closed.length - 1];
+        if (pv && cor(pv) && cor(f) && cor(pv) !== cor(f) && body(f) > body(pv)
+            && Math.max(f.open, f.close) >= Math.max(pv.open, pv.close) && Math.min(f.open, f.close) <= Math.min(pv.open, pv.close)) {
+            V.engolfo_segue = cor(f);
+            V.engolfo_contra = opp(cor(f));
+            if (trendUp != null) V.engolfo_tend = (cor(f) === 'COMPRA') === trendUp ? cor(f) : null;
+        }
+        for (const N of [10, 20]) {
+            const w = closed.slice(-N), hh = Math.max(...w.map((c) => c.high)), ll = Math.min(...w.map((c) => c.low));
+            const d = f.close > hh ? 'COMPRA' : f.close < ll ? 'VENDA' : null;
+            V[`rompe${N}_segue`] = d;
+            V[`rompe${N}_falso`] = opp(d);
+            // Pavio passou da máxima/mínima mas fechou de volta dentro: falso rompimento.
+            const fk = f.high > hh && f.close < hh ? 'VENDA' : f.low < ll && f.close > ll ? 'COMPRA' : null;
+            V[`rompe${N}_pavio_volta`] = fk;
+        }
+        for (const step of [5, 10]) {
+            const lvl = Math.round(f.close / step) * step;
+            const toca = f.low <= lvl && f.high >= lvl;
+            if (toca) {
+                V[`redondo${step}_rejeita`] = f.close > lvl && f.open > lvl ? 'COMPRA' : f.close < lvl && f.open < lvl ? 'VENDA' : null;
+                V[`redondo${step}_rompe`] = f.open < lvl && f.close > lvl ? 'COMPRA' : f.open > lvl && f.close < lvl ? 'VENDA' : null;
+            }
+        }
         const prod = O.sinalOuro(closed, f, sig);
         V.producao_ouro = prod && prod.direction;
         V.pipeline_atual_sem_ouro = computeM1Signal(closed, f, sig).direction;
