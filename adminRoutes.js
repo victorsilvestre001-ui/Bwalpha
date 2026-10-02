@@ -294,4 +294,55 @@ router.post('/pix-reminder', authMiddleware, requireOwnerDb, pixReminderLimiter,
     }
 });
 
+// CNPJs recém-abertos coletados da Casa dos Dados (cnpjCollector.js).
+// ?dias=7 (abertura nos últimos N dias), ?cnae=4781400, ?uf=SP, ?format=csv para baixar planilha.
+const CNPJ_COLUMNS = ['cnpj', 'razao_social', 'nome_fantasia', 'data_abertura', 'uf', 'municipio', 'cnae', 'cnae_descricao', 'email', 'telefone', 'mei'];
+
+function csvCell(value) {
+    if (value == null) return '';
+    const s = value instanceof Date ? value.toISOString().slice(0, 10) : String(value);
+    // Evita que o Excel interprete a célula como fórmula.
+    const safe = /^[=+\-@]/.test(s) ? `'${s}` : s;
+    return /[";\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+}
+
+router.get('/cnpjs', authMiddleware, requireOwnerDb, async (req, res) => {
+    try {
+        const cnpj = require('./cnpjCollector');
+        await cnpj.ensureTable();
+        const dias = Math.min(365, Math.max(1, Number(req.query.dias) || 7));
+        const params = [dias];
+        let where = `data_abertura >= (${TODAY_LOCAL} - $1::int)`;
+        const cnae = String(req.query.cnae || '').replace(/\D/g, '');
+        if (cnae) { params.push(cnae); where += ` AND cnae = $${params.length}`; }
+        const uf = String(req.query.uf || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2);
+        if (uf) { params.push(uf); where += ` AND uf = $${params.length}`; }
+        const { rows } = await pool.query(
+            `SELECT ${CNPJ_COLUMNS.join(', ')} FROM cnpj_novos WHERE ${where} ORDER BY data_abertura DESC, cnpj LIMIT 5000`,
+            params
+        );
+        if (req.query.format === 'csv') {
+            res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="cnpjs-novos-${dias}d.csv"`);
+            const lines = [CNPJ_COLUMNS.join(';'), ...rows.map((r) => CNPJ_COLUMNS.map((c) => csvCell(r[c])).join(';'))];
+            return res.send(`﻿${lines.join('\n')}`);
+        }
+        res.json({ status: cnpj.state, total: rows.length, empresas: rows });
+    } catch (err) {
+        console.error('Erro ao listar CNPJs:', err.message);
+        res.status(500).json({ error: 'Erro ao listar CNPJs' });
+    }
+});
+
+// Roda a coleta na hora (gasta créditos da Casa dos Dados).
+router.post('/cnpjs/sync', authMiddleware, requireOwnerDb, async (req, res) => {
+    try {
+        const saved = await require('./cnpjCollector').sync();
+        res.json({ ok: true, novos: saved });
+    } catch (err) {
+        console.error('Erro na coleta de CNPJs:', err.message);
+        res.status(400).json({ error: err.message });
+    }
+});
+
 module.exports = router;
