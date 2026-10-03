@@ -1115,13 +1115,29 @@ router.get('/candles', authMiddleware, async (req, res) => {
 
 // Gráfico da página inicial (sem login): os mesmos candles da Exnova do painel, só M5, com cache.
 const publicChartCache = {};
+async function lastStoredM5(pairLabel, n) {
+    const { rows } = await pool.query(
+        `SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 ORDER BY time DESC LIMIT $2`,
+        [pairLabel, n * 5 + 5]);
+    const out = [];
+    for (const r of rows.reverse()) {
+        const t = new Date(r.time).getTime(), b = Math.floor(t / 300_000) * 300_000, last = out[out.length - 1];
+        if (last && last.time === b) {
+            last.high = Math.max(last.high, +r.high); last.low = Math.min(last.low, +r.low); last.close = +r.close;
+        } else out.push({ time: b, open: +r.open, high: +r.high, low: +r.low, close: +r.close });
+    }
+    return out.length ? out.slice(-n) : null;
+}
+
 router.get('/public-candles', async (req, res) => {
     const pair = String(req.query.pair || 'XAUUSD').toUpperCase();
     if (!SIGNAL_PAIRS[pair]) return res.status(400).json({ error: 'Par inválido' });
     const now = Date.now(), hit = publicChartCache[pair];
     if (hit && now - hit.at < 5000) return res.json(hit.body);
     try {
-        const candles = await fetchExnovaCandles(pair, 'M5', 90);
+        let candles = await fetchExnovaCandles(pair, 'M5', 90);
+        // Mercado fechado (fim de semana): mostra os últimos candles gravados em vez de erro.
+        if (!candles || candles.length < 20) candles = (await lastStoredM5(pair, 90)) || candles;
         if (!candles || !candles.length) return res.status(503).json({ error: 'Gráfico indisponível no momento' });
         const body = { pair, tf: 'M5', candles: candles.map((c) => ({ time: Math.floor(c.time / 1000), open: c.open, high: c.high, low: c.low, close: c.close })) };
         publicChartCache[pair] = { at: now, body };
