@@ -245,7 +245,9 @@ registerCampaign('/market-open-campaign', {
 
 // Comemoração dos 500 cadastros: uma vez por conta (menos a do dono). Só libera com 500+ contas
 // e com o cupom configurado (CELEBRA_COUPON + CELEBRA_DISCOUNT, criado no Stripe).
-const totalUsers = async () => (await pool.query(`SELECT COUNT(*)::int AS total FROM users WHERE plan <> 'owner'`)).rows[0].total;
+// CELEBRA_EXTRA_CADASTROS = cadastros do outro app do dono (a comunidade toda), somados aos do site.
+const totalUsers = async () => (await pool.query(`SELECT COUNT(*)::int AS total FROM users WHERE plan <> 'owner'`)).rows[0].total
+    + (parseInt(process.env.CELEBRA_EXTRA_CADASTROS || '0', 10) || 0);
 registerCampaign('/celebration-campaign', {
     campaign: () => 'comemoracao-500-cadastros',
     where: `u.plan <> 'owner'`,

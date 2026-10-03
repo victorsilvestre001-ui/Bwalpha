@@ -269,11 +269,11 @@ async function sendCelebrationEmail(name, email, account = {}) {
     const offer = !vip && coupon ? { coupon, discount, url: `${FRONTEND_URL}/dashboard?upgrade=1` } : null;
     return sendEmail({
         to: email,
-        subject: offer ? `🎉 500 cadastros na TradeOn AI: ${discount} OFF no VIP para comemorar` : '🎉 Chegamos a 500 cadastros na TradeOn AI',
+        subject: offer ? `🎉 Nossa comunidade passou de 500 pessoas: ${discount} OFF no VIP` : '🎉 Nossa comunidade passou de 500 pessoas',
         html: layout(`
-            <h1 style="color: #00F0A8; font-size: 22px; margin-bottom: 8px;">${firstName ? `${escapeHtml(firstName)}, chegamos` : 'Chegamos'} a 500 cadastros 🎉</h1>
+            <h1 style="color: #00F0A8; font-size: 22px; margin-bottom: 8px;">${firstName ? `${escapeHtml(firstName)}, chegamos` : 'Chegamos'} a 500 pessoas 🎉</h1>
             <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">
-                A TradeOn AI passou de <strong>500 pessoas cadastradas</strong>. Obrigado por fazer parte desde o começo.
+                A nossa comunidade passou de <strong>500 pessoas cadastradas</strong>, somando a TradeOn AI e os nossos outros projetos. Obrigado por fazer parte desde o começo.
             </p>
             <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">
                 Nas últimas semanas a plataforma ganhou o gráfico ao vivo, o histórico com acertos e erros conferidos automaticamente e 1 análise grátis por dia para todos.
