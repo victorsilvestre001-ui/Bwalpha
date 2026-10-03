@@ -1,7 +1,9 @@
 "use client";
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, MessageCircle } from "lucide-react";
 import Reveal from "@/components/Reveal";
+
+const WHATS = "https://wa.me/5511957235874?text=" + encodeURIComponent("Olá! Tenho uma dúvida sobre a TradeOn AI.");
 
 const QA = [
   { q: "Vou ganhar dinheiro com isso?", a: "Ninguém sério pode te prometer isso. A TradeOn te ajuda a ler o gráfico com mais critério e a medir o seu acerto real. Operar sempre envolve risco: use gestão e opere só o que pode perder." },
@@ -9,7 +11,7 @@ const QA = [
   { q: "Quanto custa para testar?", a: "Nada. A conta grátis libera o gráfico ao vivo, 1 leitura da IA por dia e 3 perguntas por dia ao assistente. Sem cartão." },
   { q: "O VIP cobra todo mês?", a: "Não. É pagamento único: pagou uma vez, é seu. E se não curtir, em até 7 dias você pede o dinheiro de volta pelo tradeonia@gmail.com." },
   { q: "Quando dá para usar?", a: "Quando o mercado está aberto: de domingo às 19h até sexta às 19h (horário de Brasília). Fora disso o painel avisa que o mercado está fechado." },
-  { q: "Se eu tiver dúvida, falo com quem?", a: "Com gente de verdade, pelo tradeonia@gmail.com." }
+  { q: "Se eu tiver dúvida, falo com quem?", a: "Com gente de verdade, pelo WhatsApp (11) 95723-5874 ou pelo tradeonia@gmail.com." }
 ];
 
 export default function FAQ() {
@@ -39,6 +41,13 @@ export default function FAQ() {
             );
           })}
         </div>
+        <Reveal className="mt-10 text-center">
+          <p className="text-mist-dim">Ficou alguma dúvida?</p>
+          <a href={WHATS} target="_blank" rel="noopener noreferrer" className="btn-primary mt-4 !px-7 !py-3.5">
+            <MessageCircle size={18} /> Falar no WhatsApp
+          </a>
+          <p className="mt-2 font-mono text-xs text-mist-faint">(11) 95723-5874</p>
+        </Reveal>
       </div>
     </section>
   );
