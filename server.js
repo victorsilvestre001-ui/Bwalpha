@@ -309,6 +309,8 @@ runMigrations().then(() => {
         checkoutRoutes.checkStripeSetup();
         // Teste: coleta de candles do OTC da Exnova para backtest (desligado sem EXNOVA_COLLECT=1).
         require('./exnovaCollector').start();
+        // Score TradeOn em modo teste escondido: grava previsão e resultado a cada candle M5 (scoreShadow.js).
+        require('./scoreShadow').start();
         // Backtest sob demanda: RUN_BACKTEST=1 escreve nos logs a taxa de acerto de cada estratégia.
         if (process.env.RUN_BACKTEST === '1') {
             require('./backtest').run().catch((err) => console.error('BACKTEST_ERR', err.message));
