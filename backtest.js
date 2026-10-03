@@ -775,7 +775,7 @@ async function runOuro() {
 async function run() {
     console.log('BACKTEST_START');
     if (process.env.BACKTEST_SOURCE === 'score') {
-        try { await require('./scoreBacktest').runScore(pool, { computeTechnicalSignal, computeM1Signal }); } catch (err) { console.error('BACKTEST_ERR SCORE:', err.message); }
+        try { await require('./scoreBacktest').runScore(pool, { computeTechnicalSignal, computeM1Signal, fetchLongHistory, isMarketOpen }); } catch (err) { console.error('BACKTEST_ERR SCORE:', err.message); }
         console.log('BACKTEST_END');
         return;
     }

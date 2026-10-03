@@ -159,6 +159,19 @@ async function runScore(pool, deps) {
             return computeM1Signal(closed, f, computeTechnicalSignal(closed, f)).direction;
         } catch { return null; }
     };
+    // SCORE_FONTE=td: histórico longo da Twelve Data (semanas), em vez dos poucos dias do coletor.
+    if (process.env.SCORE_FONTE === 'td') {
+        for (const pair of pairs) {
+            for (const [tf, pages, ms] of [['M1', 4, 60_000], ['M5', 4, 300_000]]) {
+                try {
+                    const c = await deps.fetchLongHistory(pair, tf, pages);
+                    console.log(`SCORE_DADOS ${pair} ${tf} td candles=${c.length} de=${c[0] && new Date(c[0].time).toISOString()}`);
+                    study(`${pair} ${tf} td`, c.filter((x) => deps.isMarketOpen(new Date(x.time))), ms, tf === 'M1' ? base : null);
+                } catch (err) { console.error(`SCORE_ERR ${pair} ${tf} td:`, err.message); }
+            }
+        }
+        return;
+    }
     for (const pair of pairs) {
         const { rows } = await pool.query('SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 ORDER BY time', [pair]);
         const m1 = rows.slice(0, -1).map((r) => ({ time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }));
