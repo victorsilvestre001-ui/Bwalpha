@@ -5,10 +5,11 @@ import { Menu, X } from "lucide-react";
 import Logo from "@/components/Logo";
 
 const LINKS = [
-  { href: "#recursos", label: "Recursos" },
-  { href: "#como-funciona", label: "Como funciona" },
+  { href: "#leitura", label: "O que a IA lê" },
+  { href: "#placar", label: "Placar aberto" },
+  { href: "#combinado", label: "Combinado" },
   { href: "#planos", label: "Planos" },
-  { href: "#faq", label: "FAQ" }
+  { href: "#faq", label: "Perguntas" }
 ];
 
 export default function Nav() {
@@ -33,7 +34,7 @@ export default function Nav() {
         </div>
         <div className="hidden items-center gap-3 md:flex">
           <Link href="/auth" className="text-sm font-medium text-mist-dim transition-colors hover:text-mist">Entrar</Link>
-          <Link href="/auth?mode=register" className="btn-primary !px-5 !py-2.5">Começar grátis</Link>
+          <Link href="/auth?mode=register" className="btn-primary !px-5 !py-2.5">Testar grátis</Link>
         </div>
         <button className="rounded-lg p-2 text-mist md:hidden" onClick={() => setOpen((v) => !v)} aria-label="Menu">
           {open ? <X size={22} /> : <Menu size={22} />}
@@ -46,7 +47,7 @@ export default function Nav() {
           ))}
           <div className="mt-3 flex flex-col gap-3">
             <Link href="/auth" className="btn-ghost">Entrar</Link>
-            <Link href="/auth?mode=register" className="btn-primary">Começar grátis</Link>
+            <Link href="/auth?mode=register" className="btn-primary">Testar grátis</Link>
           </div>
         </div>
       )}

@@ -1113,6 +1113,49 @@ router.get('/candles', authMiddleware, async (req, res) => {
     res.json(body);
 });
 
+// Gráfico da página inicial (sem login): os mesmos candles da Exnova do painel, só M5, com cache.
+const publicChartCache = {};
+router.get('/public-candles', async (req, res) => {
+    const pair = String(req.query.pair || 'XAUUSD').toUpperCase();
+    if (!SIGNAL_PAIRS[pair]) return res.status(400).json({ error: 'Par inválido' });
+    const now = Date.now(), hit = publicChartCache[pair];
+    if (hit && now - hit.at < 5000) return res.json(hit.body);
+    try {
+        const candles = await fetchExnovaCandles(pair, 'M5', 90);
+        if (!candles || !candles.length) return res.status(503).json({ error: 'Gráfico indisponível no momento' });
+        const body = { pair, tf: 'M5', candles: candles.map((c) => ({ time: Math.floor(c.time / 1000), open: c.open, high: c.high, low: c.low, close: c.close })) };
+        publicChartCache[pair] = { at: now, body };
+        res.json(body);
+    } catch (err) {
+        console.error('Erro no gráfico público:', err.message);
+        res.status(503).json({ error: 'Gráfico indisponível no momento' });
+    }
+});
+
+// Números da página inicial, direto do banco (com cache de 1 min). community soma os cadastros do
+// outro app do dono (CELEBRA_EXTRA_CADASTROS), a mesma conta usada na comemoração.
+let publicStatsCache = null;
+router.get('/public-stats', async (req, res) => {
+    if (publicStatsCache && Date.now() - publicStatsCache.at < 60_000) return res.json(publicStatsCache.body);
+    try {
+        const { rows } = await pool.query(`SELECT
+            (SELECT COUNT(*)::int FROM users WHERE plan <> 'owner') AS users,
+            (SELECT COUNT(*)::int FROM analyses) AS analyses,
+            (SELECT MIN(created_at) FROM users) AS since`);
+        const r = rows[0];
+        const body = {
+            community: r.users + (parseInt(process.env.CELEBRA_EXTRA_CADASTROS || '0', 10) || 0),
+            analyses: r.analyses,
+            daysOnline: r.since ? Math.max(1, Math.ceil((Date.now() - new Date(r.since).getTime()) / 86_400_000)) : null,
+        };
+        publicStatsCache = { at: Date.now(), body };
+        res.json(body);
+    } catch (err) {
+        console.error('Erro nos números públicos:', err.message);
+        res.status(500).json({ error: 'Indisponível' });
+    }
+});
+
 router.get('/time', (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.json({ now: Date.now() });

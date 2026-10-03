@@ -11,11 +11,11 @@ export default function CTA() {
           <div className="bg-grid pointer-events-none absolute inset-0 opacity-70" />
           <div className="relative">
             <h2 className="mx-auto max-w-3xl font-display text-3xl font-bold tracking-tight text-mist md:text-5xl">
-              Pronto para operar com <span className="grad-text">a IA do seu lado?</span>
+              O mercado abre de novo amanhã. <span className="grad-text">Chegue sabendo ler.</span>
             </h2>
-            <p className="mx-auto mt-5 max-w-xl text-mist-dim">Crie sua conta gratuita e faça sua primeira análise em menos de um minuto.</p>
+            <p className="mx-auto mt-5 max-w-xl text-mist-dim">Conta grátis, sem cartão. A primeira leitura sai em menos de um minuto.</p>
             <Link href="/auth?mode=register" className="btn-primary mt-9 !px-8 !py-4">
-              Começar agora <ArrowRight size={16} />
+              Ler meu primeiro gráfico <ArrowRight size={16} />
             </Link>
           </div>
         </div>

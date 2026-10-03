@@ -8,9 +8,11 @@ export default function Footer() {
         <div className="flex flex-col items-start justify-between gap-8 md:flex-row md:items-center">
           <Logo />
           <div className="flex flex-wrap gap-6 text-sm text-mist-dim">
-            <a href="#recursos" className="hover:text-mist">Recursos</a>
+            <a href="#leitura" className="hover:text-mist">O que a IA lê</a>
+            <a href="#placar" className="hover:text-mist">Placar aberto</a>
             <a href="#planos" className="hover:text-mist">Planos</a>
-            <a href="#faq" className="hover:text-mist">FAQ</a>
+            <a href="#faq" className="hover:text-mist">Perguntas</a>
+            <a href="mailto:tradeonia@gmail.com" className="hover:text-mist">tradeonia@gmail.com</a>
             <a href="/auth" className="hover:text-mist">Entrar</a>
             <a href="/termos" className="hover:text-mist">Termos</a>
             <a href="/privacidade" className="hover:text-mist">Privacidade</a>

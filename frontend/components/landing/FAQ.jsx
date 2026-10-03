@@ -4,11 +4,12 @@ import { Plus } from "lucide-react";
 import Reveal from "@/components/Reveal";
 
 const QA = [
-  { q: "O que é a TradeOn AI?", a: "É uma plataforma de análise que combina indicadores técnicos e inteligência artificial para sugerir a direção de EURUSD, EURJPY e Ouro (XAUUSD) nos timeframes M1 e M5." },
-  { q: "Preciso pagar para usar?", a: "Criar conta é grátis e libera o painel com gráfico, 1 análise da IA por dia e 3 mensagens por dia com o assistente. Análises e assistente ilimitados são do VIP, com pagamento único." },
-  { q: "As análises garantem lucro?", a: "Não. Nenhuma ferramenta garante resultado. As análises são apoio à decisão — sempre use gestão de risco e opere apenas o que pode perder." },
-  { q: "Quando o mercado está aberto?", a: "O Forex abre domingo às 22h (UTC) e fecha sexta às 22h (UTC). Fora desse horário o painel avisa que o mercado está fechado." },
-  { q: "O VIP é mensalidade?", a: "Não. O VIP é pagamento único: você paga uma vez e tem acesso a tudo, sem cobrança todo mês. Se não gostar, pode pedir o reembolso em até 7 dias pelo tradeonia@gmail.com." }
+  { q: "Vou ganhar dinheiro com isso?", a: "Ninguém sério pode te prometer isso. A TradeOn te ajuda a ler o gráfico com mais critério e a medir o seu acerto real. Operar sempre envolve risco: use gestão e opere só o que pode perder." },
+  { q: "É corretora? Preciso depositar aqui?", a: "Não. A TradeOn não recebe depósito nem opera por você. É uma ferramenta de leitura de gráfico e estudo." },
+  { q: "Quanto custa para testar?", a: "Nada. A conta grátis libera o gráfico ao vivo, 1 leitura da IA por dia e 3 perguntas por dia ao assistente. Sem cartão." },
+  { q: "O VIP cobra todo mês?", a: "Não. É pagamento único: pagou uma vez, é seu. E se não curtir, em até 7 dias você pede o dinheiro de volta pelo tradeonia@gmail.com." },
+  { q: "Quando dá para usar?", a: "Quando o mercado está aberto: de domingo às 19h até sexta às 19h (horário de Brasília). Fora disso o painel avisa que o mercado está fechado." },
+  { q: "Se eu tiver dúvida, falo com quem?", a: "Com gente de verdade, pelo tradeonia@gmail.com." }
 ];
 
 export default function FAQ() {
@@ -17,8 +18,8 @@ export default function FAQ() {
     <section id="faq" className="relative py-24 md:py-32">
       <div className="mx-auto max-w-3xl px-5 md:px-8">
         <Reveal className="text-center">
-          <span className="eyebrow">FAQ</span>
-          <h2 className="mt-5 font-display text-3xl font-bold tracking-tight text-mist md:text-5xl">Perguntas frequentes</h2>
+          <span className="eyebrow">Sem enrolação</span>
+          <h2 className="mt-5 font-display text-3xl font-bold tracking-tight text-mist md:text-5xl">Perguntas que todo mundo faz</h2>
         </Reveal>
         <div className="mt-12 space-y-3">
           {QA.map((item, i) => {

@@ -4,24 +4,24 @@ import Reveal from "@/components/Reveal";
 
 const PLANS = [
   {
-    name: "Free",
-    tag: "Para começar",
+    name: "Grátis",
+    tag: "Pra começar",
     price: "R$ 0",
-    note: "para sempre",
-    cta: "Criar conta grátis",
+    note: "pra sempre",
+    cta: "Começar grátis",
     href: "/auth?mode=register",
     highlight: false,
-    items: ["1 análise da IA por dia", "Painel com gráfico em tempo real", "Cotações de EURUSD, EURJPY e Ouro", "3 mensagens por dia com a IA"]
+    items: ["1 leitura da IA por dia", "Gráfico ao vivo no painel", "Cotações de EURUSD, EURJPY e Ouro", "3 perguntas por dia ao assistente"]
   },
   {
     name: "VIP",
-    tag: "Mais completo",
+    tag: "Pagou uma vez, é seu",
     price: "Acesso total",
     note: "pagamento único · sem mensalidade",
     cta: "Quero ser VIP",
     href: "/auth?mode=register&plan=vip",
     highlight: true,
-    items: ["Tudo do plano Free", "Análises da IA ilimitadas (EURUSD, EURJPY e Ouro, M1 e M5)", "Leitura de pressão e volatilidade + histórico completo", "Assistente de IA ilimitado", "Pague uma vez e tenha acesso a tudo"]
+    items: ["Tudo do plano Grátis", "Leituras ilimitadas no M1 e M5 (EURUSD, EURJPY e Ouro)", "Histórico completo + simulador de banca", "Assistente de IA sem limite", "Sem mensalidade, sem pegadinha"]
   }
 ];
 
@@ -32,8 +32,9 @@ export default function Pricing() {
         <Reveal className="mx-auto max-w-2xl text-center">
           <span className="eyebrow">Planos</span>
           <h2 className="mt-5 font-display text-3xl font-bold tracking-tight text-mist md:text-5xl">
-            Comece grátis. <span className="grad-text">Evolua quando quiser.</span>
+            Comece no <span className="grad-text">zero a zero</span>
           </h2>
+          <p className="mt-5 text-mist-dim">Teste de graça todo dia. Se gostar, o VIP é seu de uma vez.</p>
         </Reveal>
 
         <div className="mt-14 grid gap-6 md:grid-cols-2">
@@ -42,7 +43,7 @@ export default function Pricing() {
               <div className={`panel relative h-full p-8 ${p.highlight ? "grad-border shadow-neon" : ""}`}>
                 {p.highlight && (
                   <span className="absolute -top-3 right-6 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-neon to-volt px-3 py-1 font-mono text-[11px] font-semibold text-void">
-                    <Crown size={12} /> RECOMENDADO
+                    <Crown size={12} /> SEM MENSALIDADE
                   </span>
                 )}
                 <div className="font-mono text-xs uppercase tracking-widest text-mist-faint">{p.tag}</div>
@@ -63,6 +64,7 @@ export default function Pricing() {
             </Reveal>
           ))}
         </div>
+        <p className="mt-8 text-center text-sm text-mist-dim">Não curtiu? Em até 7 dias você pede e a gente devolve. Simples assim.</p>
       </div>
     </section>
   );

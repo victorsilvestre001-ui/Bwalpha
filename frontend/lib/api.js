@@ -58,6 +58,8 @@ export const api = {
   updateProfile: (patch) => request("/api/auth/profile", { method: "PATCH", body: patch }),
   publicQuotes: () => request("/api/market/public-quotes", { auth: false }),
   marketStatus: () => request("/api/market/status", { auth: false }),
+  publicCandles: (pair = "XAUUSD") => request(`/api/market/public-candles?pair=${encodeURIComponent(pair)}`, { auth: false }),
+  publicStats: () => request("/api/market/public-stats", { auth: false }),
   serverTime: () => request("/api/market/time", { auth: false }),
   adminStats: () => request("/api/admin/stats"),
   couponCampaign: () => request("/api/admin/coupon-campaign"),
