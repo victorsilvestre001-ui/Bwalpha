@@ -114,7 +114,7 @@ function CampaignCard({ title, load: loadInfo, send: sendAll, describe, confirmT
       {!info ? (
         <p className="mt-3 text-sm text-mist-faint">{error || "Carregando…"}</p>
       ) : !info.ready ? (
-        <p className="mt-3 text-sm text-mist-faint">Envio não configurado no servidor.</p>
+        <p className="mt-3 text-sm text-mist-faint">{info.reason || "Envio não configurado no servidor."}</p>
       ) : (
         <>
           <p className="mt-2 text-sm text-mist-dim">{describe(info)}</p>

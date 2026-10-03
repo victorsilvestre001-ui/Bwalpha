@@ -168,7 +168,8 @@ function registerCampaign(route, { table, campaign, where, send, notReady, info 
                 pool.query(`SELECT COUNT(*)::int AS total ${e.sql}`, e.params),
                 countSent(),
             ]);
-            res.json({ ...(await info()), ready: !(await notReady()), eligible: elig.rows[0].total, alreadySent: sent.rows[0].total, running });
+            const reason = await notReady();
+            res.json({ ...(await info()), ready: !reason, reason: reason || null, eligible: elig.rows[0].total, alreadySent: sent.rows[0].total, running });
         } catch (err) {
             console.error(`Erro ao carregar o envio ${route}:`, err.message);
             res.status(500).json({ error: 'Erro ao carregar o envio' });
