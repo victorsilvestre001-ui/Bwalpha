@@ -774,6 +774,11 @@ async function runOuro() {
 
 async function run() {
     console.log('BACKTEST_START');
+    if (process.env.BACKTEST_SOURCE === 'noticia') {
+        try { await require('./newsBacktest').runNoticia(pool, { fetchLongHistory, isMarketOpen }); } catch (err) { console.error('BACKTEST_ERR NOTICIA:', err.message); }
+        console.log('BACKTEST_END');
+        return;
+    }
     if (process.env.BACKTEST_SOURCE === 'memoria') {
         try { await require('./memoriaBacktest').runMemoria({ fetchLongHistory, isMarketOpen }); } catch (err) { console.error('BACKTEST_ERR MEMORIA:', err.message); }
         console.log('BACKTEST_END');
