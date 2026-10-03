@@ -64,6 +64,49 @@ async function runNoticia(pool, deps) {
         // Cada acerto: [amostras, acerto %, margem ±%]; tamanho em múltiplos do candle médio.
         console.log(`NOTICIA_RESULT ${pair} M5 teste=${test.length} de=${new Date(rows[cut].t).toISOString()} ${JSON.stringify(rep)}`);
     }
+    if (deps.computeM1Signal) await runNoticiaM1(pool, deps, events);
 }
 
-module.exports = { runNoticia };
+// M1: (1) os sinais reais que os clientes pediram (tabela analyses), por grupo de horário;
+// (2) o sinal de produção refeito nos candles M1 reais da Exnova (otc_candles), por grupo.
+async function runNoticiaM1(pool, deps, events) {
+    const grupoDe = (pair, t) => {
+        const ev = events.filter((e) => CUR[pair]?.includes(String(e.country).toUpperCase())).map((e) => new Date(e.event_time).getTime());
+        return ev.some((et) => t >= et - 15 * 60_000 && t <= et + 30 * 60_000) ? 'noticia' : inSlot(t) ? 'horario' : 'normal';
+    };
+    try {
+        const { rows } = await pool.query(`SELECT pair, timeframe, entry_time, result FROM analyses WHERE result IN ('win', 'loss')`);
+        const rep = {};
+        for (const r of rows) {
+            const pair = String(r.pair).replace('/', '');
+            const k = `${r.timeframe} ${grupoDe(pair, new Date(r.entry_time).getTime())}`;
+            (rep[k] ||= []).push(r.result === 'win');
+        }
+        console.log(`NOTICIA_SINAIS_REAIS ${JSON.stringify(Object.fromEntries(Object.entries(rep).map(([k, l]) => [k, acc(l)])))}`);
+    } catch (err) {
+        console.error('NOTICIA_SINAIS_REAIS erro:', err.message);
+    }
+    for (const pair of ['EURUSD', 'EURJPY', 'XAUUSD']) {
+        const { rows } = await pool.query('SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 ORDER BY time', [pair]);
+        const c = rows.slice(0, -1).map((r) => ({ time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }));
+        const rep = {};
+        for (let i = 100; i < c.length - 1; i++) {
+            const nx = c[i + 1];
+            if (nx.time - c[i].time !== 60_000 || c[i].time - c[i - 99].time !== 99 * 60_000 || nx.close === nx.open) continue;
+            if (!deps.isMarketOpen(new Date(nx.time))) continue;
+            const closed = c.slice(i - 99, i);
+            let d = null;
+            try { d = deps.computeM1Signal(closed, c[i], deps.computeTechnicalSignal(closed, c[i])).direction; } catch { d = null; }
+            if (d !== 'COMPRA' && d !== 'VENDA') continue;
+            let avg = 0; for (let k = i - 19; k <= i; k++) avg += Math.abs(c[k].close - c[k].open); avg /= 20;
+            const g = grupoDe(pair, nx.time), ok = (d === 'COMPRA') === (nx.close > nx.open);
+            const b = (rep[g] ||= { l: [], tamErro: [] });
+            b.l.push(ok);
+            if (!ok) b.tamErro.push(Math.abs(nx.close - nx.open) / (avg || 1e-9));
+        }
+        const out = Object.fromEntries(Object.entries(rep).map(([g, b]) => [g, { acerto: acc(b.l), tamanho_medio_erro: b.tamErro.length ? +(b.tamErro.reduce((s, x) => s + x, 0) / b.tamErro.length).toFixed(2) : null }]));
+        console.log(`NOTICIA_M1_EXNOVA ${pair} candles=${c.length} de=${c[0] && new Date(c[0].time).toISOString()} ${JSON.stringify(out)}`);
+    }
+}
+
+module.exports = { runNoticia, runNoticiaM1 };

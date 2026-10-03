@@ -775,7 +775,7 @@ async function runOuro() {
 async function run() {
     console.log('BACKTEST_START');
     if (process.env.BACKTEST_SOURCE === 'noticia') {
-        try { await require('./newsBacktest').runNoticia(pool, { fetchLongHistory, isMarketOpen }); } catch (err) { console.error('BACKTEST_ERR NOTICIA:', err.message); }
+        try { await require('./newsBacktest').runNoticia(pool, { fetchLongHistory, isMarketOpen, computeM1Signal, computeTechnicalSignal }); } catch (err) { console.error('BACKTEST_ERR NOTICIA:', err.message); }
         console.log('BACKTEST_END');
         return;
     }
