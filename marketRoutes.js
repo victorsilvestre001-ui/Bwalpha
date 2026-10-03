@@ -1279,6 +1279,18 @@ async function requireSignalAccess(req, res, next) {
     }
 }
 
+// Filtro de notícia (M5): nos horários em que os EUA divulgam dados (8:30, 10:00 e 14:00 de Nova York,
+// ~9h30, 11h e 15h de Brasília) o M5 acertou menos e os candles ficaram maiores no backtest de 03/10.
+// Nesses minutos o M5 não dá entrada. Usa o horário de Nova York para acompanhar o horário de verão.
+// Desliga com FILTRO_NOTICIA_M5=0.
+const NY_FMT = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', weekday: 'short', hourCycle: 'h23' });
+function horarioNoticiaEUA(ms) {
+    const parts = Object.fromEntries(NY_FMT.formatToParts(new Date(ms)).map((p) => [p.type, p.value]));
+    if (parts.weekday === 'Sat' || parts.weekday === 'Sun') return false;
+    const m = parseInt(parts.hour, 10) * 60 + parseInt(parts.minute, 10);
+    return (m >= 505 && m < 540) || (m >= 595 && m < 630) || (m >= 835 && m < 870);
+}
+
 router.post('/signal', authMiddleware, requireSignalAccess, signalLimiter, async (req, res) => {
     const { pair, timeframe } = req.body;
     if (!SIGNAL_PAIRS[pair] || !SIGNAL_INTERVALS[timeframe]) {
@@ -1310,8 +1322,14 @@ router.post('/signal', authMiddleware, requireSignalAccess, signalLimiter, async
                 result = { ...result, confidence: 'Baixa' };
             }
         } else {
-            result = await getTechnicalSignal(pair, timeframe);
             ({ entry, expiry } = computeEntry(timeframe, requestedAt));
+            if (process.env.FILTRO_NOTICIA_M5 !== '0' && horarioNoticiaEUA(entry)) {
+                return res.json({
+                    pair, timeframe, noEntry: true, requestedAt, entry: null, expiry: null, analysisId: null,
+                    reason: 'Horário de notícias dos EUA: o mercado costuma ficar instável agora. No M5 a leitura volta em alguns minutos.',
+                });
+            }
+            result = await getTechnicalSignal(pair, timeframe);
         }
         if (!result) {
             return res.status(502).json({ error: 'Não foi possível calcular o sinal agora. Tente novamente.' });
@@ -1376,6 +1394,6 @@ router.get('/history', authMiddleware, async (req, res) => {
 
 module.exports = {
     router, getQuotes, getIndicators, getEconomicSnapshot, getNews, getHistory, fetchIntradayCandles, TIMEFRAME_MINUTES,
-    computeTechnicalSignal, computeCandleFollowSignal, computeM1Signal, getM1Signal, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, isMarketOpen,
+    computeTechnicalSignal, computeCandleFollowSignal, computeM1Signal, getM1Signal, horarioNoticiaEUA, fetchTwelveDataCandles, SIGNAL_PAIRS, SIGNAL_INTERVALS, isMarketOpen,
     emaSeries, rsiLast, macdHistogramLast, detectCandlePatterns, detectPinBar, getChinesaStrategySignal, getBwalphaIndicator, applyRitmo, computePressao, applyPressao, applyChinesa, computeVolatilidade, isLateral,
 };
