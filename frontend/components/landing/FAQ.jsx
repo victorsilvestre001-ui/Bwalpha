@@ -11,7 +11,7 @@ const QA = [
   { q: "Quanto custa para testar?", a: "Nada. A conta grátis libera o gráfico ao vivo, 1 leitura da IA por dia e 3 perguntas por dia ao assistente. Sem cartão." },
   { q: "O VIP cobra todo mês?", a: "Não. É pagamento único: pagou uma vez, é seu. E se não curtir, em até 7 dias você pede o dinheiro de volta pelo tradeonia@gmail.com." },
   { q: "Quando dá para usar?", a: "Quando o mercado está aberto: de domingo às 19h até sexta às 19h (horário de Brasília). Fora disso o painel avisa que o mercado está fechado." },
-  { q: "Se eu tiver dúvida, falo com quem?", a: "Com gente de verdade, pelo WhatsApp (11) 95723-5874 ou pelo tradeonia@gmail.com." }
+  { q: "Se eu tiver dúvida, falo com quem?", whats: true }
 ];
 
 export default function FAQ() {
@@ -26,6 +26,14 @@ export default function FAQ() {
         <div className="mt-12 space-y-3">
           {QA.map((item, i) => {
             const isOpen = open === i;
+            if (item.whats) return (
+              <Reveal key={item.q} delay={i * 0.04}>
+                <a href={WHATS} target="_blank" rel="noopener noreferrer" className="panel flex w-full items-center justify-between gap-4 p-5 text-left transition-colors hover:border-neon/30">
+                  <span className="font-display font-semibold text-mist">{item.q} <span className="block text-sm font-normal text-mist-dim">Toque aqui e fale direto no WhatsApp: (11) 95723-5874</span></span>
+                  <MessageCircle size={20} className="shrink-0 text-neon" />
+                </a>
+              </Reveal>
+            );
             return (
               <Reveal key={item.q} delay={i * 0.04}>
                 <button onClick={() => setOpen(isOpen ? -1 : i)} className={`panel w-full p-5 text-left transition-colors ${isOpen ? "border-neon/30" : ""}`}>
