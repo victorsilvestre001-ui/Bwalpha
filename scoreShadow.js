@@ -1,85 +1,145 @@
-// Score TradeOn em modo teste escondido: a cada candle M5 fechado (candles reais da Exnova),
-// grava a previsão do Score para o próximo candle e, quando ele fecha, o resultado. Nada aparece
-// para o cliente. O resumo (acerto geral e dos 25% mais confiantes) sai nos logs a cada hora
-// como SCORE_SHADOW_RESUMO. Desliga com SCORE_SHADOW=0.
+// Análises novas em modo teste escondido, nos candles reais da Exnova (otc_candles). A cada candle
+// fechado, cada análise grava a previsão para o próximo candle e, quando ele fecha, o resultado.
+// Nada aparece para o cliente. O resumo sai nos logs a cada hora como SCORE_SHADOW_RESUMO.
+// Desliga com SCORE_SHADOW=0.
+//   score_m5      Score TradeOn (regressão logística) em M5, pesos do estudo de 03/10.
+//   rejeicao_m5   Reversão com rejeição: preço 2 desvios fora da média + pavio devolvendo.
+//   score_m15     Score TradeOn em M15, pesos aprendidos na hora com o histórico da Twelve Data.
 const pool = require('./db');
-const { series, features, predict, toM5 } = require('./scoreBacktest');
+const { series, features, predict, samples, trainLogistic } = require('./scoreBacktest');
 
+const PAIRS = ['EURUSD', 'XAUUSD', 'EURJPY'];
 // Pesos aprendidos no estudo de 03/10 (M5, ~8 mil candles por ativo). Ordem = FEATURE_NAMES + bias.
-const W = {
+const W5 = {
     EURUSD: [-0.046, -0.031, -0.046, 0.063, -0.021, 0.088, 0.074, 0.106, -0.063, 0.006, -0.118, 0.074, 0.079, 0.026, -0.039, -0.013, 0.062],
     XAUUSD: [-0.008, -0.043, -0.005, -0.054, 0.063, 0.171, -0.003, -0.071, -0.043, -0.004, -0.189, 0.04, 0.037, -0.004, 0.08, -0.075, 0.044],
     EURJPY: [-0.037, -0.063, -0.007, -0.036, 0.002, 0.077, 0.051, 0.033, -0.022, 0.017, -0.053, 0.007, -0.002, -0.027, 0.015, 0.105, 0.105],
 };
-const TF = 300_000;
-let ready = null, lastSummary = 0;
-const done = {}; // último candle previsto por ativo
+const W15 = {}; // preenchido por trainM15()
+
+// Cada análise devolve a probabilidade de alta do próximo candle, ou null quando não entra.
+const TESTS = {
+    score_m5: { min: 5, prob: (pair, c, S, i) => predict(W5[pair], features(c, S, i)) },
+    rejeicao_m5: {
+        min: 5,
+        prob: (pair, c, S, i) => {
+            const x = features(c, S, i); // x[4] = desvios da média de 20, x[6] = rejeição
+            if (x[4] <= -2 && x[6] > 0.3) return 1;
+            if (x[4] >= 2 && x[6] < -0.3) return 0;
+            return null;
+        },
+    },
+    score_m15: { min: 15, prob: (pair, c, S, i) => (W15[pair] ? predict(W15[pair], features(c, S, i)) : null) },
+};
+
+let ready = null, lastSummary = 0, lastTrain = 0;
+const done = {}; // `${teste}:${ativo}` → último candle já processado
 
 function ensureTable() {
-    ready ||= pool.query(`CREATE TABLE IF NOT EXISTS score_shadow (
+    ready ||= pool.query(`CREATE TABLE IF NOT EXISTS shadow_tests (
+        estrategia TEXT NOT NULL,
         pair TEXT NOT NULL,
         candle_time TIMESTAMPTZ NOT NULL,
         prob REAL NOT NULL,
         direction TEXT NOT NULL,
         result TEXT,
-        PRIMARY KEY (pair, candle_time))`);
+        PRIMARY KEY (estrategia, pair, candle_time))`);
     return ready;
 }
 
-async function m5Candles(pair) {
+function aggregate(m1, min) {
+    const tf = min * 60_000, out = [];
+    for (const c of m1) {
+        const b = Math.floor(c.time / tf) * tf, last = out[out.length - 1];
+        if (last && last.time === b) { last.high = Math.max(last.high, c.high); last.low = Math.min(last.low, c.low); last.close = c.close; last.n++; }
+        else out.push({ time: b, open: c.open, high: c.high, low: c.low, close: c.close, n: 1 });
+    }
+    // Só candles completos e já fechados.
+    return out.filter((c) => c.n === min && c.time + tf <= Date.now());
+}
+
+async function m1Candles(pair, hours) {
     const { rows } = await pool.query(
-        `SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 AND time > NOW() - INTERVAL '12 hours' ORDER BY time`, [pair]);
-    const m1 = rows.map((r) => ({ time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }));
-    // Só candles M5 completos e já fechados.
-    return toM5(m1).filter((c) => c.time + TF <= Date.now());
+        `SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 AND time > NOW() - ($2::int * INTERVAL '1 hour') ORDER BY time`, [pair, hours]);
+    return rows.map((r) => ({ time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }));
+}
+
+// Pesos do M15: aprende com ~5000 candles M15 da Twelve Data (cerca de 2 meses) por ativo.
+async function trainM15() {
+    lastTrain = Date.now();
+    const { fetchTwelveDataCandles, SIGNAL_PAIRS, isMarketOpen } = require('./marketRoutes');
+    for (const pair of PAIRS) {
+        if (W15[pair]) continue;
+        try {
+            const c = await fetchTwelveDataCandles(SIGNAL_PAIRS[pair], '15min', 5000);
+            await new Promise((r) => setTimeout(r, 9000)); // plano grátis: 8 chamadas por minuto
+            if (!c || c.length < 1000) continue;
+            const rows = samples(c.filter((x) => isMarketOpen(new Date(x.time))), 900_000, null);
+            W15[pair] = trainLogistic(rows.map((r) => r.x), rows.map((r) => r.y));
+            console.log(`SCORE_SHADOW_M15_TREINO ${pair} candles=${c.length} amostras=${rows.length}`);
+        } catch (err) {
+            console.error(`SCORE_SHADOW_M15_TREINO ${pair} erro:`, err.message);
+        }
+    }
 }
 
 async function tick() {
-    const bucket = Math.floor(Date.now() / TF) * TF;
-    if (Object.keys(W).every((p) => done[p] === bucket)) return;
+    const now = Date.now();
+    if (Object.keys(W15).length < PAIRS.length && now - lastTrain > 3600_000) trainM15().catch(() => {});
+    const pending = [];
+    for (const [name, t] of Object.entries(TESTS)) {
+        const tf = t.min * 60_000, bucket = Math.floor(now / tf) * tf;
+        for (const pair of PAIRS) if (done[`${name}:${pair}`] !== bucket) pending.push([name, t, pair, tf, bucket]);
+    }
+    if (!pending.length) return;
     await ensureTable();
-    for (const pair of Object.keys(W)) {
-        if (done[pair] === bucket) continue;
-        const c = await m5Candles(pair);
+    const cache = {};
+    for (const [name, t, pair, tf, bucket] of pending) {
+        if (name === 'score_m15' && !W15[pair]) continue; // ainda sem pesos: tenta no próximo ciclo
+        const key = `${pair}:${t.min}`;
+        if (!cache[key]) cache[key] = aggregate(await m1Candles(pair, Math.ceil(t.min * 70 / 60) + 2), t.min);
+        const c = cache[key];
         if (c.length < 62) continue;
         // Resultado das previsões cujo candle alvo já fechou.
         const byTime = new Map(c.map((x) => [x.time, x]));
-        const { rows: pend } = await pool.query('SELECT candle_time FROM score_shadow WHERE pair = $1 AND result IS NULL', [pair]);
+        const { rows: pend } = await pool.query('SELECT candle_time FROM shadow_tests WHERE estrategia = $1 AND pair = $2 AND result IS NULL', [name, pair]);
         for (const r of pend) {
-            const t = new Date(r.candle_time).getTime(), alvo = byTime.get(t);
+            const tt = new Date(r.candle_time).getTime(), alvo = byTime.get(tt);
             if (alvo) {
-                const res = alvo.close === alvo.open ? 'draw' : null;
                 await pool.query(
-                    `UPDATE score_shadow SET result = COALESCE($3, CASE WHEN (direction = 'COMPRA') = $4 THEN 'win' ELSE 'loss' END)
-                     WHERE pair = $1 AND candle_time = $2`, [pair, r.candle_time, res, alvo.close > alvo.open]);
-            } else if (Date.now() - t > 3 * 3600_000) {
-                await pool.query("UPDATE score_shadow SET result = 'sem_dados' WHERE pair = $1 AND candle_time = $2", [pair, r.candle_time]);
+                    `UPDATE shadow_tests SET result = CASE WHEN $4 THEN 'draw' WHEN (direction = 'COMPRA') = $5 THEN 'win' ELSE 'loss' END
+                     WHERE estrategia = $1 AND pair = $2 AND candle_time = $3`,
+                    [name, pair, r.candle_time, alvo.close === alvo.open, alvo.close > alvo.open]);
+            } else if (now - tt > 6 * 3600_000) {
+                await pool.query("UPDATE shadow_tests SET result = 'sem_dados' WHERE estrategia = $1 AND pair = $2 AND candle_time = $3", [name, pair, r.candle_time]);
             }
         }
-        // Previsão para o próximo candle, só se o último fechado for o candle anterior a este e a série for contínua.
+        // Previsão para o candle atual, só se o último fechado for o anterior e a série for contínua.
         const i = c.length - 1, last = c[i];
-        if (last.time + TF !== bucket || last.time - c[i - 60].time !== 60 * TF) continue;
-        const p = predict(W[pair], features(c, series(c), i));
-        await pool.query(
-            `INSERT INTO score_shadow (pair, candle_time, prob, direction) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
-            [pair, new Date(bucket), p, p > 0.5 ? 'COMPRA' : 'VENDA']);
-        done[pair] = bucket;
+        if (last.time + tf !== bucket || last.time - c[i - 60].time !== 60 * tf) continue;
+        const p = t.prob(pair, c, series(c), i);
+        if (p != null) {
+            await pool.query(
+                `INSERT INTO shadow_tests (estrategia, pair, candle_time, prob, direction) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
+                [name, pair, new Date(bucket), p, p > 0.5 ? 'COMPRA' : 'VENDA']);
+        }
+        done[`${name}:${pair}`] = bucket;
     }
-    if (Date.now() - lastSummary > 3600_000) { lastSummary = Date.now(); await summary(); }
+    if (now - lastSummary > 3600_000) { lastSummary = now; await summary(); }
 }
 
+// [estratégia, ativo, amostras, acerto %, amostras top 25%, acerto top 25%]
 async function summary() {
     const { rows } = await pool.query(`
         WITH s AS (
-            SELECT pair, result, ABS(prob - 0.5) AS conf,
-                   NTILE(4) OVER (PARTITION BY pair ORDER BY ABS(prob - 0.5) DESC) AS q
-            FROM score_shadow WHERE result IN ('win', 'loss'))
-        SELECT pair,
-               COUNT(*)::int AS n, ROUND(100.0 * AVG((result = 'win')::int), 1) AS acerto,
+            SELECT estrategia, pair, result,
+                   NTILE(4) OVER (PARTITION BY estrategia, pair ORDER BY ABS(prob - 0.5) DESC) AS q
+            FROM shadow_tests WHERE result IN ('win', 'loss'))
+        SELECT estrategia, pair, COUNT(*)::int AS n, ROUND(100.0 * AVG((result = 'win')::int), 1) AS acerto,
                COUNT(*) FILTER (WHERE q = 1)::int AS n_top25,
                ROUND(100.0 * AVG((result = 'win')::int) FILTER (WHERE q = 1), 1) AS acerto_top25
-        FROM s GROUP BY pair ORDER BY pair`);
-    console.log('SCORE_SHADOW_RESUMO ' + JSON.stringify(rows));
+        FROM s GROUP BY 1, 2 ORDER BY 1, 2`);
+    console.log('SCORE_SHADOW_RESUMO ' + JSON.stringify(rows.map((r) => Object.values(r))));
 }
 
 function start() {
@@ -87,4 +147,4 @@ function start() {
     setInterval(() => tick().catch((err) => console.error('SCORE_SHADOW erro:', err.message)), 20_000);
 }
 
-module.exports = { start, summary };
+module.exports = { start, summary, TESTS };
