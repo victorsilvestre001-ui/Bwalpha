@@ -774,6 +774,11 @@ async function runOuro() {
 
 async function run() {
     console.log('BACKTEST_START');
+    if (process.env.BACKTEST_SOURCE === 'score') {
+        try { await require('./scoreBacktest').runScore(pool, { computeTechnicalSignal, computeM1Signal }); } catch (err) { console.error('BACKTEST_ERR SCORE:', err.message); }
+        console.log('BACKTEST_END');
+        return;
+    }
     if (process.env.BACKTEST_SOURCE === 'ouro') {
         try { await runOuro(); } catch (err) { console.error('BACKTEST_ERR OURO:', err.message); }
         console.log('BACKTEST_END');
