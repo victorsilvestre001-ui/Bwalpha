@@ -37,7 +37,7 @@ export default function Hero() {
           </motion.div>
 
           <motion.div {...fade(0.45)} className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-mist-dim">
-            {["1 leitura grátis todo dia", "Sem cartão", "Devolvemos em 7 dias se não curtir"].map((t) => (
+            {["1 leitura grátis todo dia"].map((t) => (
               <span key={t} className="flex items-center gap-2"><Check size={15} className="text-neon" />{t}</span>
             ))}
           </motion.div>
