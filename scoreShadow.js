@@ -4,9 +4,8 @@
 // Desliga com SCORE_SHADOW=0.
 //   score_m5      Score TradeOn (regressão logística) em M5, pesos do estudo de 03/10.
 //   rejeicao_m5   Reversão com rejeição: preço 2 desvios fora da média + pavio devolvendo.
-//   score_m15     Score TradeOn em M15, pesos aprendidos na hora com o histórico da Twelve Data.
 const pool = require('./db');
-const { series, features, predict, samples, trainLogistic } = require('./scoreBacktest');
+const { series, features, predict } = require('./scoreBacktest');
 
 const PAIRS = ['EURUSD', 'XAUUSD', 'EURJPY'];
 // Pesos aprendidos no estudo de 03/10 (M5, ~8 mil candles por ativo). Ordem = FEATURE_NAMES + bias.
@@ -15,7 +14,6 @@ const W5 = {
     XAUUSD: [-0.008, -0.043, -0.005, -0.054, 0.063, 0.171, -0.003, -0.071, -0.043, -0.004, -0.189, 0.04, 0.037, -0.004, 0.08, -0.075, 0.044],
     EURJPY: [-0.037, -0.063, -0.007, -0.036, 0.002, 0.077, 0.051, 0.033, -0.022, 0.017, -0.053, 0.007, -0.002, -0.027, 0.015, 0.105, 0.105],
 };
-const W15 = {}; // preenchido por trainM15()
 
 // Cada análise devolve a probabilidade de alta do próximo candle, ou null quando não entra.
 const TESTS = {
@@ -29,10 +27,9 @@ const TESTS = {
             return null;
         },
     },
-    score_m15: { min: 15, prob: (pair, c, S, i) => (W15[pair] ? predict(W15[pair], features(c, S, i)) : null) },
 };
 
-let ready = null, lastSummary = 0, lastTrain = 0;
+let ready = null, lastSummary = 0;
 const done = {}; // `${teste}:${ativo}` → último candle já processado
 
 function ensureTable() {
@@ -64,28 +61,8 @@ async function m1Candles(pair, hours) {
     return rows.map((r) => ({ time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }));
 }
 
-// Pesos do M15: aprende com ~5000 candles M15 da Twelve Data (cerca de 2 meses) por ativo.
-async function trainM15() {
-    lastTrain = Date.now();
-    const { fetchTwelveDataCandles, SIGNAL_PAIRS, isMarketOpen } = require('./marketRoutes');
-    for (const pair of PAIRS) {
-        if (W15[pair]) continue;
-        try {
-            const c = await fetchTwelveDataCandles(SIGNAL_PAIRS[pair], '15min', 5000);
-            await new Promise((r) => setTimeout(r, 9000)); // plano grátis: 8 chamadas por minuto
-            if (!c || c.length < 1000) continue;
-            const rows = samples(c.filter((x) => isMarketOpen(new Date(x.time))), 900_000, null);
-            W15[pair] = trainLogistic(rows.map((r) => r.x), rows.map((r) => r.y));
-            console.log(`SCORE_SHADOW_M15_TREINO ${pair} candles=${c.length} amostras=${rows.length}`);
-        } catch (err) {
-            console.error(`SCORE_SHADOW_M15_TREINO ${pair} erro:`, err.message);
-        }
-    }
-}
-
 async function tick() {
     const now = Date.now();
-    if (Object.keys(W15).length < PAIRS.length && now - lastTrain > 3600_000) trainM15().catch(() => {});
     const pending = [];
     for (const [name, t] of Object.entries(TESTS)) {
         const tf = t.min * 60_000, bucket = Math.floor(now / tf) * tf;
@@ -95,7 +72,6 @@ async function tick() {
     await ensureTable();
     const cache = {};
     for (const [name, t, pair, tf, bucket] of pending) {
-        if (name === 'score_m15' && !W15[pair]) continue; // ainda sem pesos: tenta no próximo ciclo
         const key = `${pair}:${t.min}`;
         if (!cache[key]) cache[key] = aggregate(await m1Candles(pair, Math.ceil(t.min * 70 / 60) + 2), t.min);
         const c = cache[key];
