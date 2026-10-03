@@ -6,8 +6,7 @@ import Logo from "@/components/Logo";
 
 const LINKS = [
   { href: "#leitura", label: "O que a IA lê" },
-  { href: "#placar", label: "Placar aberto" },
-  { href: "#combinado", label: "Combinado" },
+  { href: "#combinado", label: "O que faz" },
   { href: "#planos", label: "Planos" },
   { href: "#faq", label: "Perguntas" }
 ];

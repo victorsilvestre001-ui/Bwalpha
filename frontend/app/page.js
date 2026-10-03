@@ -3,7 +3,6 @@ import Hero from "@/components/landing/Hero";
 import Ticker from "@/components/landing/Ticker";
 import Features from "@/components/landing/Features";
 import HowItWorks from "@/components/landing/HowItWorks";
-import Placar from "@/components/landing/Placar";
 import Combinado from "@/components/landing/Combinado";
 import Pricing from "@/components/landing/Pricing";
 import FAQ from "@/components/landing/FAQ";
@@ -17,7 +16,6 @@ export default function HomePage() {
       <Hero />
       <Ticker />
       <Features />
-      <Placar />
       <HowItWorks />
       <Combinado />
       <Pricing />

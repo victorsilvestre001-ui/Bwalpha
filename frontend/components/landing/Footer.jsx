@@ -9,7 +9,6 @@ export default function Footer() {
           <Logo />
           <div className="flex flex-wrap gap-6 text-sm text-mist-dim">
             <a href="#leitura" className="hover:text-mist">O que a IA lê</a>
-            <a href="#placar" className="hover:text-mist">Placar aberto</a>
             <a href="#planos" className="hover:text-mist">Planos</a>
             <a href="#faq" className="hover:text-mist">Perguntas</a>
             <a href="mailto:tradeonia@gmail.com" className="hover:text-mist">tradeonia@gmail.com</a>
