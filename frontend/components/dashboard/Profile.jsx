@@ -5,6 +5,7 @@ import { api, updateSessionUser } from "@/lib/api";
 import { fileToAvatarDataUrl } from "@/lib/image";
 import { Avatar, isPaid } from "./Sidebar";
 import { formatCpf } from "@/lib/cpf";
+import { WHATSAPP_URL } from "@/lib/contact";
 
 export default function Profile({ user, onUserChange, onUpgrade, upgrading }) {
   const [cpf, setCpf] = useState(formatCpf(user?.cpf || ""));
@@ -110,9 +111,9 @@ export default function Profile({ user, onUserChange, onUpgrade, upgrading }) {
               </button>
             </>
           )}
-          <button onClick={() => window.dispatchEvent(new Event("open-support"))} className="btn-ghost mt-4 w-full">
-            <MessageCircle size={16} /> Falar com o suporte
-          </button>
+          <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="btn-ghost mt-4 w-full">
+            <MessageCircle size={16} /> Falar com o suporte no WhatsApp
+          </a>
         </div>
       </div>
     </div>

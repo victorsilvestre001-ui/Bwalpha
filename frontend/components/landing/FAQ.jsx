@@ -2,8 +2,8 @@
 import { useState } from "react";
 import { Plus, MessageCircle } from "lucide-react";
 import Reveal from "@/components/Reveal";
+import { WHATSAPP_URL as WHATS } from "@/lib/contact";
 
-const WHATS = "https://wa.me/5511957235874?text=" + encodeURIComponent("Olá! Tenho uma dúvida sobre a TradeOn AI.");
 
 const QA = [
   { q: "Vou ganhar dinheiro com isso?", a: "Ninguém sério pode te prometer isso. A TradeOn te ajuda a ler o gráfico com mais critério e a medir o seu acerto real. Operar sempre envolve risco: use gestão e opere só o que pode perder." },
