@@ -1100,13 +1100,30 @@ router.get('/public-quotes', async (req, res) => {
 // que pode estar adiantado ou atrasado em relação ao horário da corretora.
 // Candles para o gráfico do painel: os mesmos da Exnova que a IA lê (inclui o candle em formação).
 const chartCache = {};
+// Mercado fechado: últimos candles gravados, sem limite de tempo, agrupados no timeframe pedido.
+async function lastStoredCandles(pairLabel, tfMin, n) {
+    const { rows } = await pool.query(
+        `SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 ORDER BY time DESC LIMIT $2`,
+        [pairLabel, n * tfMin + tfMin]);
+    const out = [];
+    for (const r of rows.reverse()) {
+        const t = new Date(r.time).getTime(), b = Math.floor(t / (tfMin * 60_000)) * tfMin * 60_000, last = out[out.length - 1];
+        if (last && last.time === b) {
+            last.high = Math.max(last.high, +r.high); last.low = Math.min(last.low, +r.low); last.close = +r.close;
+        } else out.push({ time: b, open: +r.open, high: +r.high, low: +r.low, close: +r.close });
+    }
+    return out.length ? out.slice(-n) : null;
+}
+
 router.get('/candles', authMiddleware, async (req, res) => {
     const pair = String(req.query.pair || 'EURUSD').toUpperCase();
     const tf = req.query.tf === 'M5' ? 'M5' : 'M1';
     if (!SIGNAL_PAIRS[pair]) return res.status(400).json({ error: 'Par inválido' });
     const key = `${pair}:${tf}`, now = Date.now();
     if (chartCache[key] && now - chartCache[key].at < 1000) return res.json(chartCache[key].body);
-    const candles = await fetchExnovaCandles(pair, tf, tf === 'M5' ? 120 : 150);
+    const n = tf === 'M5' ? 120 : 150;
+    let candles = await fetchExnovaCandles(pair, tf, n);
+    if (!candles || candles.length < 20) candles = (await lastStoredCandles(pair, tf === 'M5' ? 5 : 1, n).catch(() => null)) || candles;
     if (!candles || !candles.length) return res.status(503).json({ error: 'Gráfico indisponível no momento' });
     const body = { pair, tf, source: 'exnova', candles: candles.map((c) => ({ time: Math.floor(c.time / 1000), open: c.open, high: c.high, low: c.low, close: c.close })) };
     chartCache[key] = { at: now, body };
@@ -1115,20 +1132,6 @@ router.get('/candles', authMiddleware, async (req, res) => {
 
 // Gráfico da página inicial (sem login): os mesmos candles da Exnova do painel, só M5, com cache.
 const publicChartCache = {};
-async function lastStoredM5(pairLabel, n) {
-    const { rows } = await pool.query(
-        `SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 ORDER BY time DESC LIMIT $2`,
-        [pairLabel, n * 5 + 5]);
-    const out = [];
-    for (const r of rows.reverse()) {
-        const t = new Date(r.time).getTime(), b = Math.floor(t / 300_000) * 300_000, last = out[out.length - 1];
-        if (last && last.time === b) {
-            last.high = Math.max(last.high, +r.high); last.low = Math.min(last.low, +r.low); last.close = +r.close;
-        } else out.push({ time: b, open: +r.open, high: +r.high, low: +r.low, close: +r.close });
-    }
-    return out.length ? out.slice(-n) : null;
-}
-
 router.get('/public-candles', async (req, res) => {
     const pair = String(req.query.pair || 'XAUUSD').toUpperCase();
     if (!SIGNAL_PAIRS[pair]) return res.status(400).json({ error: 'Par inválido' });
@@ -1137,7 +1140,7 @@ router.get('/public-candles', async (req, res) => {
     try {
         let candles = await fetchExnovaCandles(pair, 'M5', 90);
         // Mercado fechado (fim de semana): mostra os últimos candles gravados em vez de erro.
-        if (!candles || candles.length < 20) candles = (await lastStoredM5(pair, 90)) || candles;
+        if (!candles || candles.length < 20) candles = (await lastStoredCandles(pair, 5, 90)) || candles;
         if (!candles || !candles.length) return res.status(503).json({ error: 'Gráfico indisponível no momento' });
         const body = { pair, tf: 'M5', candles: candles.map((c) => ({ time: Math.floor(c.time / 1000), open: c.open, high: c.high, low: c.low, close: c.close })) };
         publicChartCache[pair] = { at: now, body };

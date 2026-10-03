@@ -9,7 +9,7 @@ import { ASSETS, assetDigits } from "@/lib/assets";
 // logo no início, mostra o aviso de gráfico indisponível.
 const BRT = -3 * 3600;
 
-export default function LiveChart({ pair = "EURUSD", timeframe = "M1" }) {
+export default function LiveChart({ pair = "EURUSD", timeframe = "M1", live = true }) {
   const box = useRef(null);
   const [status, setStatus] = useState("loading");
 
@@ -63,7 +63,9 @@ export default function LiveChart({ pair = "EURUSD", timeframe = "M1" }) {
       <div className="absolute left-3 top-2 z-10 flex items-center gap-2 font-mono text-xs text-mist-dim">
         <span className="font-semibold text-mist">{ASSETS[pair]?.label || pair}</span>
         <span>· {timeframe}</span>
-        <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-neon" /> ao vivo</span>
+        {live
+          ? <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-neon" /> ao vivo</span>
+          : <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-mist-faint" /> parado · últimos candles</span>}
       </div>
       {status !== "ok" && <div className="absolute inset-0 z-10 flex items-center justify-center text-sm text-mist-faint">{status === "erro" ? "Gráfico indisponível no momento." : "Carregando gráfico…"}</div>}
       <div ref={box} className="h-full w-full pt-7" />

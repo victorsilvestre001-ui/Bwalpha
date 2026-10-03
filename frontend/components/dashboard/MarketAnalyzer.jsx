@@ -83,8 +83,11 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
   const runId = useRef(0);
 
   useEffect(() => {
-    api.marketStatus().then((s) => setMarketOpen(!!s?.open)).catch(() => {});
-    return startClockSync(setOffset);
+    const check = () => api.marketStatus().then((s) => setMarketOpen(!!s?.open)).catch(() => {});
+    check();
+    const id = setInterval(check, 60_000);
+    const stop = startClockSync(setOffset);
+    return () => { clearInterval(id); if (typeof stop === "function") stop(); };
   }, []);
 
   const loadQuota = () => api.signalQuota().then((q) => setQuota(q.vip ? null : q)).catch(() => {});
@@ -180,9 +183,10 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
             <CpfGate onDone={loadQuota} />
           ) : canAnalyze ? (
             <>
-              <button onClick={analyze} disabled={loading || !!watching} className="btn-primary mt-6 w-full !py-4 text-base">
-                <Sparkles size={18} /> Analisar com IA
+              <button onClick={analyze} disabled={loading || !!watching || marketOpen === false} className="btn-primary mt-6 w-full !py-4 text-base disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none">
+                <Sparkles size={18} /> {marketOpen === false ? "Mercado fechado" : "Analisar com IA"}
               </button>
+              {marketOpen === false && <p className="mt-2 text-center text-xs text-mist-faint">As análises voltam quando o mercado abrir (domingo, 19h de Brasília).</p>}
               {!isVip && quota && (
                 <div className="mt-3 flex items-center justify-between gap-3 text-xs">
                   <span className="flex items-center gap-1.5 text-mist-dim">
@@ -223,7 +227,7 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
       </div>
 
       <div className="panel h-[460px] overflow-hidden p-1 md:h-[620px] xl:h-auto xl:min-h-[640px]">
-        <LiveChart pair={pair} timeframe={timeframe} />
+        <LiveChart pair={pair} timeframe={timeframe} live={marketOpen !== false} />
       </div>
     </div>
   );
