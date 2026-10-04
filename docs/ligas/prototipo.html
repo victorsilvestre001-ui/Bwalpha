@@ -435,6 +435,10 @@ ul.clean { margin: 6px 0 0; padding-left: 18px; } ul.clean li { margin: 3px 0; }
       <label>Distribuição<select id="c-mode"><option value="curve">Curva recomendada (1º ≈ 25%)</option><option value="brief">Briefing (1º 20%, 2º 10%)</option></select></label>
       <label class="check"><input id="c-all" type="checkbox"> 100% vai para o prêmio</label>
     </div></div>
+    <div class="card">
+      <div class="row between"><h3>Cenários até R$ 10 mil por liga</h3><span class="muted small">margem 15% · top 10% premiados · toque numa linha para abrir na calculadora</span></div>
+      <div class="scroll" style="margin-top:10px"><table><thead><tr><th>Entrada</th><th class="r">Jogadores</th><th class="r">Arrecadado</th><th class="r">Plataforma (líquido)</th><th class="r">Prêmio total</th><th class="r">Premiados</th><th class="r">1º lugar</th><th class="r">Último premiado</th></tr></thead><tbody id="c-scen"></tbody></table></div>
+    </div>
     <div class="kpis" id="c-kpis"></div>
     <div class="note" id="c-note" hidden></div>
     <div class="card"><div class="scroll"><table><thead><tr><th>Posição</th><th class="r">Prêmio</th><th class="r">% do prêmio</th><th class="r">× entrada</th><th class="r">Acumulado</th><th style="width:35%"></th></tr></thead><tbody id="c-body"></tbody></table></div></div>
@@ -945,6 +949,17 @@ ul.clean { margin: 6px 0 0; padding-left: 18px; } ul.clean li { margin: 3px 0; }
       + `<tr><td><b>Total</b></td><td class="r num"><b>${brl0(t.prizes.reduce((a, b) => a + b, 0))}</b></td><td colspan="4"></td></tr>`;
   }
   ["c-players", "c-entry", "c-margin", "c-paid", "c-pix", "c-out", "c-mode", "c-all"].forEach(id => $("#" + id).addEventListener("input", renderCalc));
+  const SCEN = [[10, 100], [10, 250], [10, 500], [10, 1000], [50, 20], [50, 50], [50, 100], [50, 200], [100, 10], [100, 25], [100, 50], [100, 100]];
+  $("#c-scen").innerHTML = SCEN.map(([e, n]) => {
+    const t = prizeTable({ players: n, entry: e, margin: 0.15, paidPct: 0.1, pixPct: 0.0099, outFee: 1, mode: "curve" });
+    return `<tr data-scen="${e},${n}" style="cursor:pointer${t.gross === 10000 ? ";font-weight:600" : ""}"><td class="num">${brl0(e)}</td><td class="r num">${n}</td><td class="r num">${brl0(t.gross)}</td><td class="r num">${brl0(t.net)}</td><td class="r num">${brl0(t.pool)}</td><td class="r num">${t.paid}</td><td class="r num">${brl0(t.prizes[0])}</td><td class="r num">${brl0(t.prizes[t.prizes.length - 1])}</td></tr>`;
+  }).join("");
+  $("#c-scen").addEventListener("click", e => {
+    const tr = e.target.closest("[data-scen]"); if (!tr) return;
+    const [en, n] = tr.dataset.scen.split(",");
+    $("#c-entry").value = en; $("#c-players").value = n; $("#c-margin").value = 15; $("#c-paid").value = 10; $("#c-all").checked = false;
+    renderCalc(); $("#c-kpis").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 
   const FLOW = [
     ["Landing", "Vê ligas abertas, prêmio de cada uma e o ranking ao vivo.", "Selo +18 e jogo responsável visíveis."],
