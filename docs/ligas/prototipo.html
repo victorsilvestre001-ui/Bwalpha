@@ -769,7 +769,7 @@ ul.clean { margin: 6px 0 0; padding-left: 18px; } ul.clean li { margin: 3px 0; }
   $("#filters").addEventListener("click", e => { const b = e.target.closest("[data-filter]"); if (b) { filter = b.dataset.filter; renderLobby(); } });
 
   function renderBoard() {
-    if (!S) {
+    if (!S || !S.last) {
       const L = LEAGUES[0];
       $("#board-name").textContent = L.title; $("#board-round").textContent = "prêmio " + brl0(L.pool);
       $("#board-rows").innerHTML = NICKS.slice(0, 6).map((n, i) => `<div class="br"><span>${i + 1}</span><span>${n}</span><span class="up">+${(38 - i * 5.3).toFixed(1).replace(".", ",")}%</span></div>`).join("");
