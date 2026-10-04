@@ -120,6 +120,8 @@ tr.paid td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .lg { display: grid; gap: 14px; }
 .lg .sport { font: 600 11.5px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .lg h3 { font-size: 25px; margin-top: 2px; }
+.tiers { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.tiers .chip { padding: 5px 11px; font-size: 13px; font-family: var(--mono); }
 .lg .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .lg .facts div { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; }
 .lg .facts small { display: block; font-size: 11.5px; color: var(--muted); }
@@ -267,7 +269,7 @@ ul.clean { margin: 6px 0 0; padding-left: 18px; } ul.clean li { margin: 3px 0; }
       <p class="lead">Você recebe R$1.000 de banca virtual, opera com odds reais de mercado e disputa o ranking com outros traders esportivos. Quem administra melhor a banca leva o prêmio.</p>
       <div class="row" style="margin-top:24px">
         <button class="btn" data-view="ligas">Ver ligas abertas</button>
-        <button class="btn ghost" data-join="cs2-free">Testar grátis</button>
+        <button class="btn ghost" data-join="cs2" data-entry="0">Testar grátis</button>
       </div>
       <p class="muted small" style="margin-top:14px">Você compete com outros jogadores, não contra a casa. Mesmas odds para todos. +18 · Jogue com responsabilidade.</p>
     </div>
@@ -307,7 +309,7 @@ ul.clean { margin: 6px 0 0; padding-left: 18px; } ul.clean li { margin: 3px 0; }
   <div id="liga-empty" class="card empty" hidden>
     <h2>Você ainda não está em nenhuma liga</h2>
     <p class="muted">Escolha uma liga no lobby. A liga grátis de CS2 é o jeito mais rápido de testar.</p>
-    <div class="row" style="justify-content:center"><button class="btn" data-view="ligas">Ver ligas</button><button class="btn ghost" data-join="cs2-free">Entrar na grátis</button></div>
+    <div class="row" style="justify-content:center"><button class="btn" data-view="ligas">Ver ligas</button><button class="btn ghost" data-join="cs2" data-entry="0">Entrar na grátis</button></div>
   </div>
   <div id="liga-on" class="stack">
     <div class="row between">
@@ -544,17 +546,23 @@ ul.clean { margin: 6px 0 0; padding-left: 18px; } ul.clean li { margin: 3px 0; }
     nba: ["Celtics", "Lakers", "Warriors", "Nuggets", "Bucks", "Heat", "Knicks", "Suns", "76ers", "Mavericks", "Thunder", "Cavaliers", "Wolves", "Pacers", "Kings", "Clippers"],
     cs2: ["FURIA", "MIBR", "Imperial", "paiN", "Vitality", "NAVI", "FaZe", "G2", "Spirit", "MOUZ", "Astralis", "Liquid", "Heroic", "Complexity", "Virtus.pro", "Falcons"]
   };
+  // Cada liga tem várias salas, uma por valor de entrada; cada sala tem 100 vagas e prêmio próprio
+  const TIERS = [5, 10, 20, 50, 100];
   const LEAGUES = [
-    { id: "br-24h", title: "Brasileirão 24h", sport: "soccer", teams: "br", entry: 10, duration: "24 horas", starts: "Hoje, 16h", filled: 87 },
-    { id: "ucl-7d", title: "Champions 7 dias", sport: "soccer", teams: "ucl", entry: 50, duration: "7 dias", starts: "Terça, 16h45", filled: 64 },
-    { id: "nba-24h", title: "NBA Noite", sport: "basketball", teams: "nba", entry: 10, duration: "24 horas", starts: "Hoje, 20h", filled: 72 },
-    { id: "cs2-free", title: "CS2 Grátis", sport: "esports", teams: "cs2", entry: 0, sponsorPool: 300, sponsor: "Patrocinada", duration: "24 horas", starts: "Agora", filled: 95 }
+    { id: "br-24h", title: "Brasileirão 24h", sport: "soccer", teams: "br", tiers: TIERS, def: 10, duration: "24 horas", starts: "Hoje, 16h", base: 92 },
+    { id: "ucl-7d", title: "Champions 7 dias", sport: "soccer", teams: "ucl", tiers: TIERS, def: 50, duration: "7 dias", starts: "Terça, 16h45", base: 78 },
+    { id: "nba-24h", title: "NBA Noite", sport: "basketball", teams: "nba", tiers: TIERS, def: 10, duration: "24 horas", starts: "Hoje, 20h", base: 84 },
+    { id: "cs2", title: "CS2 24h", sport: "esports", teams: "cs2", tiers: [0, ...TIERS], def: 0, sponsorPool: 300, duration: "24 horas", starts: "Agora", base: 97 }
   ];
-  LEAGUES.forEach(l => {
-    l.prizes = l.entry ? prizeTable({ players: 100, entry: l.entry, margin: 0.15, paidPct: 0.1, pixPct: 0.0099, outFee: 1, mode: "curve" }).prizes
+  const tierSel = Object.fromEntries(LEAGUES.map(l => [l.id, l.def]));
+  function room(l, entry) {
+    const prizes = entry ? prizeTable({ players: 100, entry, margin: 0.15, paidPct: 0.1, pixPct: 0.0099, outFee: 1, mode: "curve" }).prizes
       : splitPool(l.sponsorPool, 10, 10, "curve").prizes;
-    l.pool = l.prizes.reduce((a, b) => a + b, 0);
-  });
+    const idx = l.tiers.indexOf(entry);
+    const filled = Math.max(14, l.base - idx * 11 + (idx % 2) * 5);
+    return { ...l, entry, prizes, pool: prizes.reduce((a, b) => a + b, 0), filled };
+  }
+  const tierLabel = e => e ? brl0(e) : "Grátis";
   const FIRST_BR = [
     ["Flamengo", "Palmeiras", 2.10, 3.30, 3.60, 1.95, 1.87], ["Corinthians", "São Paulo", 2.45, 3.10, 3.05, 2.20, 1.68],
     ["Botafogo", "Fluminense", 2.00, 3.35, 3.90, 2.05, 1.78], ["Grêmio", "Internacional", 2.55, 3.05, 2.90, 2.25, 1.65],
@@ -704,9 +712,9 @@ ul.clean { margin: 6px 0 0; padding-left: 18px; } ul.clean li { margin: 3px 0; }
     if (e.target.classList.contains("overlay")) { closeModal(); return; }
     const b = e.target.closest("[data-close]");
     if (!b) return;
-    const { view: v, confirm: c, pay } = b.dataset;
+    const { view: v, confirm: c, pay, entry } = b.dataset;
     closeModal();
-    if (c) doJoin(c, pay); else if (v) go(v);
+    if (c) doJoin(c, pay, +entry); else if (v) go(v);
   });
   document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
   let tt;
@@ -723,29 +731,29 @@ ul.clean { margin: 6px 0 0; padding-left: 18px; } ul.clean li { margin: 3px 0; }
   document.addEventListener("click", e => {
     if (e.target.closest("#modal-root")) return;
     const v = e.target.closest("[data-view]"); if (v) { go(v.dataset.view); return; }
-    const j = e.target.closest("[data-join]"); if (j) askJoin(j.dataset.join);
+    const j = e.target.closest("[data-join]"); if (j) askJoin(j.dataset.join, j.dataset.entry != null ? +j.dataset.entry : tierSel[j.dataset.join]);
   });
 
   // ---------------- entrar em liga ----------------
-  function askJoin(id) {
-    const L = LEAGUES.find(x => x.id === id);
-    if (S && S.L.id === id && !S.done) { go("liga"); return; }
-    const switching = S && !S.done ? `<p class="note">Você está na ${S.L.title}. Neste protótipo só dá para jogar uma liga por vez; entrar nesta encerra a atual.</p>` : "";
+  function askJoin(id, entry) {
+    const L = room(LEAGUES.find(x => x.id === id), entry);
+    if (S && S.L.id === id && S.L.entry === entry && !S.done) { go("liga"); return; }
+    const switching = S && !S.done ? `<p class="note">Você está na ${S.L.title} (${tierLabel(S.L.entry)}). Neste protótipo só dá para jogar uma liga por vez; entrar nesta encerra a atual.</p>` : "";
     const coupon = W.coupons > 0 && L.entry > 0 && L.entry <= 10;
     const how = !L.entry ? "free" : coupon ? "coupon" : "wallet";
     const can = how !== "wallet" || W.balance >= L.entry;
     const pay = how === "free" ? `<p>Entrada <strong>grátis</strong>. O prêmio de ${brl0(L.pool)} é pago pelo patrocinador.</p>`
       : how === "coupon" ? `<p>Entrada de <strong>${brl0(L.entry)}</strong>, coberta pelo seu cupom de convite.</p>`
       : `<p>Entrada de <strong>${brl0(L.entry)}</strong>, debitada da carteira (saldo ${brl(W.balance)}).</p>`;
-    modal(`<div class="eyebrow">${SPORTS[L.sport].label} · ${L.duration}</div><h2>${L.title}</h2>${switching}${pay}
+    modal(`<div class="eyebrow">${SPORTS[L.sport].label} · ${L.duration}</div><h2>${L.title} · ${tierLabel(L.entry)}</h2>${switching}${pay}
       <ul class="clean muted small"><li>Banca virtual de R$1.000</li><li>Prêmio garantido: ${brl0(L.pool)} para o top 10 (1º leva ${brl0(L.prizes[0])})</li><li>Máx. 10% da banca por operação, odd total até 25</li></ul>
       ${can ? "" : `<p class="loss small">Saldo insuficiente. Deposite na carteira para entrar.</p>`}
-      <div class="row"><button class="btn" data-close ${can ? `data-confirm="${id}" data-pay="${how}"` : `data-view="carteira"`}>${can ? "Confirmar entrada" : "Ir para a carteira"}</button><button class="btn ghost" data-close>Cancelar</button></div>`);
+      <div class="row"><button class="btn" data-close ${can ? `data-confirm="${id}" data-pay="${how}" data-entry="${entry}"` : `data-view="carteira"`}>${can ? "Confirmar entrada" : "Ir para a carteira"}</button><button class="btn ghost" data-close>Cancelar</button></div>`);
   }
-  function doJoin(id, how) {
-    const L = LEAGUES.find(x => x.id === id);
-    if (how === "coupon") { W.coupons--; W.tx.unshift({ t: `Entrada · ${L.title} (cupom de convite)`, v: 0, when: "agora" }); }
-    else if (how === "wallet") { W.balance -= L.entry; W.tx.unshift({ t: `Entrada · ${L.title}`, v: -L.entry, when: "agora" }); }
+  function doJoin(id, how, entry) {
+    const L = room(LEAGUES.find(x => x.id === id), entry);
+    if (how === "coupon") { W.coupons--; W.tx.unshift({ t: `Entrada · ${L.title} ${tierLabel(entry)} (cupom de convite)`, v: 0, when: "agora" }); }
+    else if (how === "wallet") { W.balance -= L.entry; W.tx.unshift({ t: `Entrada · ${L.title} ${tierLabel(entry)}`, v: -L.entry, when: "agora" }); }
     startLeague(L); pane = "jogos"; stakeChip = 0.02; go("liga"); toast("Você entrou na liga. Boa operação!");
   }
 
@@ -754,29 +762,37 @@ ul.clean { margin: 6px 0 0; padding-left: 18px; } ul.clean li { margin: 3px 0; }
   function renderLobby() {
     const f = [["all", "Todas"], ["soccer", "Futebol"], ["basketball", "Basquete"], ["esports", "E-sports"], ["free", "Grátis"]];
     $("#filters").innerHTML = f.map(([k, t]) => `<button class="chip" data-filter="${k}" aria-pressed="${filter === k}">${t}</button>`).join("");
-    const list = LEAGUES.filter(l => filter === "all" || (filter === "free" ? !l.entry : l.sport === filter));
-    $("#lobby").innerHTML = list.map(l => {
-      const mine = S && S.L.id === l.id && !S.done;
+    const list = LEAGUES.filter(l => filter === "all" || (filter === "free" ? l.tiers.includes(0) : l.sport === filter));
+    $("#lobby").innerHTML = list.map(base => {
+      if (filter === "free" && tierSel[base.id] !== 0) tierSel[base.id] = 0;
+      const l = room(base, tierSel[base.id]);
+      const mine = S && S.L.id === l.id && S.L.entry === l.entry && !S.done;
+      const elsewhere = S && S.L.id === l.id && !S.done && !mine;
       return `<article class="card lg">
-        <div class="row between"><span class="sport">${SPORTS[l.sport].label} · ${l.duration}</span>${mine ? `<span class="pill gold">você está nela</span>` : l.entry ? "" : `<span class="pill acc">${l.sponsor}</span>`}</div>
+        <div class="row between"><span class="sport">${SPORTS[l.sport].label} · ${l.duration}</span>${mine ? `<span class="pill gold">você está nesta sala</span>` : elsewhere ? `<span class="pill gold">você está na sala de ${tierLabel(S.L.entry)}</span>` : l.entry ? "" : `<span class="pill acc">Patrocinada</span>`}</div>
         <h3>${l.title}</h3>
-        <div class="facts"><div><small>Entrada</small><strong>${l.entry ? brl0(l.entry) : "Grátis"}</strong></div><div><small>Prêmio</small><strong>${brl0(l.pool)}</strong></div><div><small>1º lugar</small><strong>${brl0(l.prizes[0])}</strong></div></div>
+        <div><small class="muted">Valor de entrada</small><div class="tiers" role="group" aria-label="Valor de entrada">${l.tiers.map(t => `<button class="chip" data-tier="${l.id}:${t}" aria-pressed="${t === l.entry}">${tierLabel(t)}</button>`).join("")}</div></div>
+        <div class="facts"><div><small>Entrada</small><strong>${tierLabel(l.entry)}</strong></div><div><small>Prêmio</small><strong>${brl0(l.pool)}</strong></div><div><small>1º lugar</small><strong>${brl0(l.prizes[0])}</strong></div></div>
         <div><div class="row between small muted" style="margin-bottom:4px"><span>${l.filled}/100 vagas</span><span>Começa: ${l.starts}</span></div><div class="fill"><i style="width:${l.filled}%"></i></div></div>
-        <button class="btn block${mine ? " ghost" : ""}" data-join="${l.id}">${mine ? "Continuar" : l.entry ? `Entrar por ${brl0(l.entry)}` : "Entrar grátis"}</button>
+        <button class="btn block${mine ? " ghost" : ""}" data-join="${l.id}" data-entry="${l.entry}">${mine ? "Continuar" : l.entry ? `Entrar por ${brl0(l.entry)}` : "Entrar grátis"}</button>
       </article>`;
     }).join("");
   }
+  $("#lobby").addEventListener("click", e => {
+    const t = e.target.closest("[data-tier]"); if (!t) return;
+    const [id, v] = t.dataset.tier.split(":"); tierSel[id] = +v; renderLobby();
+  });
   $("#filters").addEventListener("click", e => { const b = e.target.closest("[data-filter]"); if (b) { filter = b.dataset.filter; renderLobby(); } });
 
   function renderBoard() {
     if (!S || !S.last) {
-      const L = LEAGUES[0];
+      const L = room(LEAGUES[0], 10);
       $("#board-name").textContent = L.title; $("#board-round").textContent = "prêmio " + brl0(L.pool);
       $("#board-rows").innerHTML = NICKS.slice(0, 6).map((n, i) => `<div class="br"><span>${i + 1}</span><span>${n}</span><span class="up">+${(38 - i * 5.3).toFixed(1).replace(".", ",")}%</span></div>`).join("");
       return;
     }
     const r = ranked();
-    $("#board-name").textContent = S.L.title; $("#board-round").textContent = S.done ? "encerrada" : `rodada ${S.round}/${RULES.rounds}`;
+    $("#board-name").textContent = `${S.L.title} · ${tierLabel(S.L.entry)}`; $("#board-round").textContent = S.done ? "encerrada" : `rodada ${S.round}/${RULES.rounds}`;
     $("#board-rows").innerHTML = r.slice(0, 6).map((x, i) => { const rt = equity(x) / RULES.start - 1; return `<div class="br"><span>${i + 1}</span><span>${x.name}</span><span class="${rt >= 0 ? "up" : ""}">${rt >= 0 ? "+" : ""}${pct(rt)}</span></div>`; }).join("");
   }
 
@@ -785,7 +801,7 @@ ul.clean { margin: 6px 0 0; padding-left: 18px; } ul.clean li { margin: 3px 0; }
     if (!S) return;
     const p = me(), r = ranked(), pos = r.indexOf(p) + 1, L = S.L;
     $("#lg-meta").textContent = `${SPORTS[L.sport].label} · ${L.entry ? "entrada " + brl0(L.entry) : "grátis"} · prêmio ${brl0(L.pool)}`;
-    $("#lg-title").textContent = L.title;
+    $("#lg-title").textContent = `${L.title} · ${tierLabel(L.entry)}`;
     $("#s-eq").textContent = brl0(equity(p));
     const ret = equity(p) / RULES.start - 1;
     $("#s-ret").innerHTML = `<span class="${ret >= 0 ? "win" : "loss"}">${ret >= 0 ? "+" : ""}${pct(ret)}</span>`;
