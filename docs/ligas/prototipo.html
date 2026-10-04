@@ -1,0 +1,864 @@
+<title>Liga de Trading Esportivo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: placar esportivo + mesa de operação. Abas no topo, conteúdo em colunas que viram uma no celular. */
+:root {
+  --bg: #eef1f3;
+  --surface: #ffffff;
+  --surface-2: #f5f7f8;
+  --ink: #14212b;
+  --muted: #5a6b76;
+  --line: #d5dde2;
+  --accent: #0a6c74;
+  --accent-ink: #ffffff;
+  --gold: #b7791f;
+  --win: #1f7a45;
+  --loss: #b3372f;
+  --warn-bg: #fff4e0;
+  --warn-ink: #7a4a07;
+  --hl: #e1f1f2;
+  --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1519; --surface: #152027; --surface-2: #1a2730; --ink: #e4ecef; --muted: #93a6b0;
+    --line: #2a3a44; --accent: #3fb3bb; --accent-ink: #062226; --gold: #e3a94a; --win: #4cc27e;
+    --loss: #ef7a6f; --warn-bg: #3a2a10; --warn-ink: #f3cf8e; --hl: #173a3f; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1519; --surface: #152027; --surface-2: #1a2730; --ink: #e4ecef; --muted: #93a6b0;
+  --line: #2a3a44; --accent: #3fb3bb; --accent-ink: #062226; --gold: #e3a94a; --win: #4cc27e;
+  --loss: #ef7a6f; --warn-bg: #3a2a10; --warn-ink: #f3cf8e; --hl: #173a3f; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 16px; padding-block: 0 48px; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.05; text-wrap: balance; margin: 0; letter-spacing: .01em; }
+h2 { font-size: 30px; }
+h3 { font-size: 21px; }
+p { margin: 0; }
+.num, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.eyebrow { font-family: var(--mono); font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+.win { color: var(--win); } .loss { color: var(--loss); }
+
+/* Topo */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); }
+.top-in { max-width: 1180px; margin: 0 auto; padding-inline: 16px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding-block: 10px; }
+.brand { font-family: var(--display); font-weight: 800; font-size: 22px; letter-spacing: .02em; }
+.brand b { color: var(--accent); }
+.tabs { display: flex; gap: 4px; overflow-x: auto; flex: 1; min-width: 0; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { border: 0; background: transparent; color: var(--muted); font: 600 13.5px var(--body); padding: 8px 12px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.tab:hover { color: var(--ink); background: var(--surface-2); }
+.tab[aria-selected="true"] { color: var(--accent-ink); background: var(--accent); }
+.tag-priv { font-family: var(--mono); font-size: 11px; color: var(--muted); border: 1px dashed var(--line); padding: 3px 8px; border-radius: 4px; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.panel { display: grid; gap: 28px; padding-top: 28px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; min-width: 0; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.btn { border: 0; border-radius: 6px; font: 600 14.5px var(--body); padding: 11px 18px; cursor: pointer; background: var(--accent); color: var(--accent-ink); }
+.btn:hover { filter: brightness(1.08); }
+.btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.note { background: var(--warn-bg); color: var(--warn-ink); border-radius: 8px; padding: 12px 14px; font-size: 13.5px; }
+.scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; font: 600 11.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td.r, th.r { text-align: right; white-space: nowrap; }
+tr.me td { background: var(--hl); font-weight: 600; }
+tr.paid td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
+
+/* Landing */
+.hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 32px; align-items: center; padding-block: 24px 8px; }
+.hero h1 { font-size: clamp(44px, 7vw, 82px); font-weight: 800; text-transform: uppercase; letter-spacing: -.005em; }
+.hero h1 em { font-style: normal; color: var(--accent); }
+.hero .lead { font-size: 18px; max-width: 34em; margin-top: 16px; color: var(--muted); }
+.hero .ctas { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 24px; }
+.hero .fine { margin-top: 14px; font-size: 12.5px; color: var(--muted); }
+.board { background: var(--ink); color: var(--bg); border-radius: 12px; padding: 18px; font-family: var(--mono); font-size: 13px; }
+.board .bh { display: flex; justify-content: space-between; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; opacity: .7; margin-bottom: 10px; }
+.board .row { display: grid; grid-template-columns: 28px 1fr auto auto; gap: 10px; padding: 7px 0; border-top: 1px solid color-mix(in srgb, var(--bg) 18%, transparent); font-variant-numeric: tabular-nums; }
+.board .up { color: color-mix(in srgb, var(--win) 70%, var(--bg)); }
+.board .live { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--loss); margin-right: 6px; animation: pulse 1.4s infinite; }
+@keyframes pulse { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .board .live { animation: none; } }
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; counter-reset: s; }
+.step { border-top: 3px solid var(--accent); padding-top: 12px; }
+.step::before { counter-increment: s; content: "Passo " counter(s); font: 600 11.5px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.step h3 { margin: 6px 0 6px; }
+.benefit h3 { margin-bottom: 6px; }
+.cta-final { background: var(--accent); color: var(--accent-ink); border-radius: 12px; padding: 28px; display: flex; gap: 20px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.cta-final h2 { font-size: 34px; }
+.cta-final .btn { background: var(--accent-ink); color: var(--accent); }
+
+/* Liga */
+.league { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.kpi .l { font: 600 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.kpi .v { font: 600 22px var(--mono); font-variant-numeric: tabular-nums; margin-top: 2px; }
+.match { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 12px 0; border-top: 1px solid var(--line); }
+.match:first-of-type { border-top: 0; }
+.match .teams { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-weight: 600; }
+.match .teams .score { font-family: var(--mono); }
+.odds { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.odd { border: 1px solid var(--line); background: var(--surface-2); border-radius: 6px; padding: 6px 4px; text-align: center; cursor: pointer; color: var(--ink); font: inherit; }
+.odd small { display: block; font: 600 10.5px var(--mono); color: var(--muted); letter-spacing: .05em; }
+.odd span { font: 600 15px var(--mono); font-variant-numeric: tabular-nums; }
+.odd:hover { border-color: var(--accent); }
+.odd[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.odd[aria-pressed="true"] small { color: var(--accent-ink); }
+.odd.won { border-color: var(--win); box-shadow: inset 0 -3px 0 var(--win); }
+.odd:disabled { cursor: default; opacity: .8; }
+.slip .leg { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px dashed var(--line); font-size: 14px; }
+.slip label { font-size: 13px; color: var(--muted); display: block; margin-top: 12px; }
+.slip input { width: 100%; font: 600 18px var(--mono); padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); color: var(--ink); }
+.slip .sum { display: flex; justify-content: space-between; margin-top: 10px; font-size: 14px; }
+.err { color: var(--loss); font-size: 13px; min-height: 1.4em; margin-top: 6px; }
+.pill { display: inline-block; font: 600 11px var(--mono); padding: 2px 7px; border-radius: 99px; text-transform: uppercase; letter-spacing: .05em; }
+.pill.open { background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); }
+.pill.won { background: color-mix(in srgb, var(--win) 18%, transparent); color: var(--win); }
+.pill.lost { background: color-mix(in srgb, var(--loss) 16%, transparent); color: var(--loss); }
+.pill.void { background: var(--surface-2); color: var(--muted); }
+.formula { font-family: var(--mono); background: var(--surface-2); border-radius: 6px; padding: 10px 12px; font-size: 13px; overflow-x: auto; }
+.rowflex { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+/* Premiação */
+.form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.form label { font-size: 12.5px; color: var(--muted); display: grid; gap: 4px; }
+.form input, .form select { font: 500 15px var(--mono); padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); color: var(--ink); width: 100%; }
+.check { display: flex !important; grid-template-columns: none; align-items: center; gap: 8px !important; }
+.check input { width: auto; }
+.bar { height: 14px; background: var(--accent); border-radius: 3px; min-width: 2px; }
+.bar-cell { width: 40%; }
+
+/* Fluxo */
+.flow { display: grid; gap: 0; }
+.flow li { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 14px; padding: 14px 0; border-top: 1px solid var(--line); }
+.flow ol { list-style: none; margin: 0; padding: 0; }
+.flow .n { font: 700 26px var(--display); color: var(--accent); }
+.flow h3 { font-size: 19px; margin-bottom: 4px; }
+.flow .rule { font-size: 13.5px; color: var(--muted); margin-top: 4px; }
+pre.sql { background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 14px; font: 12.5px/1.55 var(--mono); max-height: 560px; overflow: auto; margin: 0; white-space: pre; }
+.risk { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 14px; }
+.sev { font: 600 11px var(--mono); padding: 2px 8px; border-radius: 99px; background: color-mix(in srgb, var(--loss) 16%, transparent); color: var(--loss); }
+.sev.high { background: color-mix(in srgb, var(--gold) 20%, transparent); color: var(--gold); }
+ul.clean { margin: 6px 0 0; padding-left: 18px; }
+ul.clean li { margin: 3px 0; }
+
+@media (max-width: 860px) {
+  .hero, .league { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 680px) {
+  .tabs { order: 3; flex-basis: 100%; }
+  .tag-priv { margin-left: auto; }
+}
+@media (max-width: 480px) {
+  .odds { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  h2 { font-size: 26px; }
+}
+</style>
+
+<header class="top">
+  <div class="top-in">
+    <div class="brand">LIGA<b>TRADE</b></div>
+    <nav class="tabs" role="tablist" aria-label="Seções">
+      <button class="tab" role="tab" data-tab="landing">Landing</button>
+      <button class="tab" role="tab" data-tab="liga">Liga ao vivo</button>
+      <button class="tab" role="tab" data-tab="premios">Premiação</button>
+      <button class="tab" role="tab" data-tab="fluxo">Fluxo do usuário</button>
+      <button class="tab" role="tab" data-tab="banco">Banco de dados</button>
+      <button class="tab" role="tab" data-tab="negocio">Negócio e GTM</button>
+      <button class="tab" role="tab" data-tab="riscos">Riscos</button>
+    </nav>
+    <span class="tag-priv">protótipo privado</span>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ============ LANDING ============ -->
+<section class="panel" id="p-landing" data-panel="landing">
+  <div class="hero">
+    <div>
+      <div class="eyebrow">Trading de Apostas · Brasil</div>
+      <h1>Pare de apostar.<br><em>Comece a operar.</em></h1>
+      <p class="lead">Você recebe R$1.000 de banca virtual, opera com odds reais de mercado e disputa o ranking com outros traders esportivos. Quem administra melhor a banca leva o prêmio, não quem acerta um bilhete de sorte.</p>
+      <div class="ctas">
+        <button class="btn" data-go="liga">Entrar na liga de R$10</button>
+        <button class="btn ghost" data-go="liga">Testar grátis</button>
+      </div>
+      <p class="fine">Você não aposta contra a casa: compete com outros jogadores. Mesmas odds para todos. +18 · Jogue com responsabilidade.</p>
+    </div>
+    <div class="board" aria-label="Ranking ao vivo da liga de exemplo">
+      <div class="bh"><span><i class="live"></i>Ranking ao vivo · Liga Brasileirão 24h</span><span id="board-round"></span></div>
+      <div id="board-rows"></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="eyebrow">Como funciona</div>
+    <h2 style="margin:6px 0 18px">Quatro passos, mesma regra para todo mundo</h2>
+    <div class="steps">
+      <div class="step"><h3>Escolha a liga</h3><p class="muted">Brasileirão, Champions, NBA ou e-sports. Ligas de 24h, 7 ou 30 dias, com entrada de R$10, R$50 ou R$100.</p></div>
+      <div class="step"><h3>Receba R$1.000 virtuais</h3><p class="muted">Todo mundo começa com a mesma banca. Ninguém recompra e ninguém deposita mais dentro da liga.</p></div>
+      <div class="step"><h3>Monte sua carteira</h3><p class="muted">Simples ou múltiplas com odds reais de mercado. Cada operação usa no máximo 10% da banca atual.</p></div>
+      <div class="step"><h3>Suba no ranking e saque</h3><p class="muted">O Skill Score mede retorno e consistência. Os 10% melhores dividem o prêmio, que sai por Pix.</p></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="eyebrow">Por que é diferente</div>
+    <h2 style="margin:6px 0 18px">Feito para quem trata aposta como estratégia</h2>
+    <div class="grid3">
+      <div class="card benefit"><h3>Sem a casa do outro lado</h3><p class="muted">A plataforma não ganha quando você perde. Você disputa contra outros traders, com as mesmas odds.</p></div>
+      <div class="card benefit"><h3>Risco limitado</h3><p class="muted">Você paga só a entrada. A banca de R$1.000 é virtual, então não existe prejuízo além do valor da liga.</p></div>
+      <div class="card benefit"><h3>Ranking que mede habilidade</h3><p class="muted">O Skill Score pune quedas bruscas e exige um mínimo de operações. Um bilhete de odd 20 não ganha a liga sozinho.</p></div>
+      <div class="card benefit"><h3>Odds de mercado</h3><p class="muted">Média das principais casas, com margem fixa de 2%. A mesma tabela para todos os participantes.</p></div>
+      <div class="card benefit"><h3>Saldo ao vivo</h3><p class="muted">Sua banca e sua posição se atualizam no segundo em que o jogo termina.</p></div>
+      <div class="card benefit"><h3>Guildas no Discord e no Telegram</h3><p class="muted">Entre num grupo, troque análises e dispute ligas entre guildas. Leia os Playbooks de gestão de banca.</p></div>
+    </div>
+  </div>
+
+  <div class="cta-final">
+    <div>
+      <h2>Convide um amigo, ganhe uma entrada de R$10.</h2>
+      <p style="margin-top:6px">A próxima liga do Brasileirão começa sábado às 16h. Prêmio garantido divulgado antes do início.</p>
+    </div>
+    <button class="btn" data-go="liga">Criar conta grátis</button>
+  </div>
+</section>
+
+<!-- ============ LIGA ============ -->
+<section class="panel" id="p-liga" data-panel="liga" hidden>
+  <div class="rowflex" style="justify-content:space-between">
+    <div>
+      <div class="eyebrow">Liga de exemplo · 100 jogadores · entrada R$10 · 5 rodadas</div>
+      <h2 style="margin-top:6px">Liga Brasileirão 24h</h2>
+      <p class="muted" style="margin-top:4px">Você contra 99 jogadores simulados. Faça operações, encerre a rodada e veja os resultados e o ranking mudarem.</p>
+    </div>
+    <div class="rowflex">
+      <button class="btn" id="btn-round">Encerrar rodada 1</button>
+      <button class="btn ghost" id="btn-reset">Reiniciar liga</button>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="l">Banca livre</div><div class="v" id="k-bank"></div></div>
+    <div class="kpi"><div class="l">Em jogo</div><div class="v" id="k-exp"></div></div>
+    <div class="kpi"><div class="l">Retorno</div><div class="v" id="k-ret"></div></div>
+    <div class="kpi"><div class="l">Maior queda</div><div class="v" id="k-mdd"></div></div>
+    <div class="kpi"><div class="l">Skill Score</div><div class="v" id="k-score"></div></div>
+    <div class="kpi"><div class="l">Posição</div><div class="v" id="k-rank"></div></div>
+  </div>
+
+  <div class="league">
+    <div class="card">
+      <div class="rowflex" style="justify-content:space-between">
+        <h3 id="round-title">Jogos da rodada</h3>
+        <span class="muted mono" style="font-size:12px">odds de exemplo · margem 2%</span>
+      </div>
+      <div id="matches" style="margin-top:6px"></div>
+    </div>
+
+    <div style="display:grid;gap:20px">
+      <div class="card slip" aria-live="polite">
+        <h3>Boletim</h3>
+        <div id="slip-legs" style="margin-top:8px"></div>
+        <label for="stake">Valor da operação (máx. 10% da banca: <span id="max-stake" class="num"></span>)</label>
+        <input id="stake" type="number" min="1" step="1" value="50" inputmode="decimal">
+        <div class="sum"><span class="muted">Odd total</span><span class="num" id="slip-odds">—</span></div>
+        <div class="sum"><span class="muted">Retorno possível</span><span class="num" id="slip-ret">—</span></div>
+        <div class="err" id="slip-err"></div>
+        <button class="btn" id="btn-place" style="width:100%;margin-top:6px">Confirmar operação</button>
+      </div>
+
+      <div class="card">
+        <h3>Minhas operações</h3>
+        <div id="my-bets" style="margin-top:8px"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="rowflex" style="justify-content:space-between">
+      <h3>Ranking</h3>
+      <span class="muted" style="font-size:13px">Faixa dourada = posições premiadas (top 10%)</span>
+    </div>
+    <div class="scroll" style="margin-top:10px">
+      <table>
+        <thead><tr><th>#</th><th>Jogador</th><th class="r">Banca total</th><th class="r">Operações</th><th class="r">Maior queda</th><th class="r">Skill Score</th><th class="r">Prêmio</th></tr></thead>
+        <tbody id="rank-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Como o Skill Score é calculado</h3>
+      <div class="formula" style="margin-top:10px">Skill Score = 1000 × R × A × D<br>R = banca total / banca inicial<br>A = min(1, operações liquidadas / 10)<br>D = 1 − 0,5 × maior queda</div>
+      <p class="muted" style="margin-top:10px;font-size:14px">É a fórmula do briefing (saldo final ÷ inicial × consistência), com a consistência dividida em atividade (A) e controle de queda (D). Desempate: CLV médio, depois quem chegou primeiro.</p>
+    </div>
+    <div class="card">
+      <h3>Regras aplicadas nesta demo</h3>
+      <ul class="clean muted" style="font-size:14px">
+        <li>Cada operação usa no máximo 10% da banca livre atual.</li>
+        <li>Odd total de até 25,00. Múltiplas com até 5 jogos diferentes.</li>
+        <li>Um mesmo jogo não entra duas vezes na mesma múltipla.</li>
+        <li>Banca total abaixo de R$1 elimina o jogador (knockout).</li>
+        <li>Resultados sorteados com as probabilidades justas (odds sem margem).</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PREMIAÇÃO ============ -->
+<section class="panel" id="p-premios" data-panel="premios" hidden>
+  <div>
+    <div class="eyebrow">Modelo matemático</div>
+    <h2 style="margin-top:6px">Distribuição de prêmios</h2>
+    <p class="muted" style="margin-top:6px;max-width:62ch">Altere os números e a tabela se recalcula. O padrão é o caso pedido: 100 jogadores, entrada de R$10 e 15% de rentabilidade para a plataforma.</p>
+  </div>
+
+  <div class="card">
+    <div class="form">
+      <label>Jogadores<input id="c-players" type="number" min="2" value="100"></label>
+      <label>Entrada (R$)<input id="c-entry" type="number" min="1" value="10"></label>
+      <label>Margem líquida alvo (%)<input id="c-margin" type="number" min="0" max="60" step="0.5" value="15"></label>
+      <label>Premiados (% do total)<input id="c-paid" type="number" min="1" max="50" value="10"></label>
+      <label>Custo Pix entrada (%)<input id="c-pix" type="number" min="0" step="0.01" value="0.99"></label>
+      <label>Custo por saque (R$)<input id="c-out" type="number" min="0" step="0.1" value="1"></label>
+      <label>Distribuição
+        <select id="c-mode">
+          <option value="curve">Curva recomendada (1º ≈ 25%)</option>
+          <option value="brief">Briefing (1º 20%, 2º 10%, resto em curva)</option>
+        </select>
+      </label>
+      <label class="check"><input id="c-all" type="checkbox"> 100% vai para o prêmio (texto original)</label>
+    </div>
+  </div>
+
+  <div class="kpis" id="c-kpis"></div>
+  <div class="note" id="c-note" hidden></div>
+
+  <div class="card">
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Posição</th><th class="r">Prêmio</th><th class="r">% do prêmio</th><th class="r">× entrada</th><th class="r">Acumulado</th><th class="bar-cell"></th></tr></thead>
+        <tbody id="c-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Como a taxa é calculada</h3>
+      <div class="formula" style="margin-top:10px">custos = arrecadado × Pix% + premiados × saque<br>taxa = ⌈(margem × arrecadado + custos) / arrecadado⌉ (em %)<br>prêmio = arrecadado × (1 − taxa)</div>
+      <p class="muted" style="margin-top:10px;font-size:14px">Os 15% são margem de contribuição por liga. Não incluem PIS, Cofins, ISS, custos fixos, aquisição de clientes nem a API de odds.</p>
+    </div>
+    <div class="card">
+      <h3>Como os prêmios são divididos</h3>
+      <div class="formula" style="margin-top:10px">prêmioᵢ = piso + (prêmio − piso × N) × (1/iᵅ) / Σ(1/kᵅ)<br>piso = 1,5 × entrada · α ajustado para o alvo do 1º</div>
+      <p class="muted" style="margin-top:10px;font-size:14px">O piso garante que o último premiado receba pelo menos 1,5× a entrada. Valores arredondados para R$5, com a diferença acertada no 1º lugar.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FLUXO ============ -->
+<section class="panel" id="p-fluxo" data-panel="fluxo" hidden>
+  <div>
+    <div class="eyebrow">User flow</div>
+    <h2 style="margin-top:6px">Do cadastro ao saque do prêmio</h2>
+  </div>
+  <div class="card flow"><ol id="flow-list"></ol></div>
+</section>
+
+<!-- ============ BANCO ============ -->
+<section class="panel" id="p-banco" data-panel="banco" hidden>
+  <div class="rowflex" style="justify-content:space-between">
+    <div>
+      <div class="eyebrow">PostgreSQL 16 · schema <span class="mono">ligas</span></div>
+      <h2 style="margin-top:6px">Banco de dados</h2>
+      <p class="muted" style="margin-top:4px">19 tabelas. Valores em centavos (BIGINT). O SQL completo está abaixo e também em <span class="mono">docs/ligas/schema_ligas.sql</span>.</p>
+    </div>
+    <button class="btn ghost" id="btn-copy">Copiar SQL</button>
+  </div>
+  <div class="grid3" id="table-groups"></div>
+  <div class="card">
+    <pre class="sql" id="sql">Carregando o schema…</pre>
+  </div>
+</section>
+
+<!-- ============ NEGÓCIO ============ -->
+<section class="panel" id="p-negocio" data-panel="negocio" hidden>
+  <div>
+    <div class="eyebrow">Modelo de negócio</div>
+    <h2 style="margin-top:6px">Fontes de receita</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><h3>Taxa de serviço e processamento</h3><p class="muted" style="margin-top:6px">Retida sobre cada entrada paga. Com 100 jogadores × R$10 e 15% de margem alvo, a taxa fica em 17% (R$170) e o prêmio em R$830. Use a aba Premiação para testar outros cenários.</p></div>
+    <div class="card"><h3>Ligas patrocinadas</h3><p class="muted" style="margin-top:6px">A marca paga para dar nome à liga (ex: "Liga Red Bull de E-sports"), ganha banner e oferece brindes aos vencedores. Também pode cobrir a diferença quando a liga não enche.</p></div>
+    <div class="card"><h3>Plano Pro</h3><p class="muted" style="margin-top:6px">Assinatura mensal com analytics avançadas, histórico de oponentes, CLV por mercado e ferramentas de gestão de banca.</p></div>
+    <div class="card"><h3>House edge em ligas Free (opcional)</h3><p class="muted" style="margin-top:6px">Margem de 5% nas odds simuladas das ligas grátis. Atenção: sem entrada paga, essa margem não vira receita. Ela só deixa a liga mais difícil.</p></div>
+  </div>
+
+  <div>
+    <div class="eyebrow">Go-to-market Brasil</div>
+    <h2 style="margin-top:6px">Aquisição</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><h3>Posicionamento</h3><p class="muted" style="margin-top:6px">"Trading de Apostas": o usuário é um trader esportivo que gere banca, não um apostador que conta com a sorte.</p></div>
+    <div class="card"><h3>Comunidade</h3><p class="muted" style="margin-top:6px">Discord e Telegram como canal principal. Guildas com ranking próprio e ligas guilda contra guilda.</p></div>
+    <div class="card"><h3>Conteúdo</h3><p class="muted" style="margin-top:6px">Playbooks semanais de gestão de banca, leitura de odds e análise das ligas encerradas (quem venceu e como).</p></div>
+    <div class="card"><h3>Loop viral</h3><p class="muted" style="margin-top:6px">Convide um amigo e ganhe um cupom de entrada grátis numa liga de R$10, liberado quando o amigo termina a primeira liga.</p></div>
+  </div>
+
+  <div class="card">
+    <h3>Arquitetura técnica</h3>
+    <div class="scroll" style="margin-top:10px">
+      <table>
+        <thead><tr><th>Camada</th><th>Tecnologia</th><th>Função</th></tr></thead>
+        <tbody>
+          <tr><td>Frontend</td><td class="mono">Next.js</td><td>Landing, lobby de ligas, boletim, ranking</td></tr>
+          <tr><td>API</td><td class="mono">Node.js (Express)</td><td>Cadastro, entradas, operações em transação com trava da banca</td></tr>
+          <tr><td>Odds</td><td class="mono">Worker + Redis</td><td>Coleta odds do agregador, tira a margem, aplica 2% e guarda em cache com validade de 60–120 s</td></tr>
+          <tr><td>Liquidação</td><td class="mono">Worker</td><td>Confirma o placar em 2 fontes, liquida as operações e recalcula o Skill Score</td></tr>
+          <tr><td>Ranking</td><td class="mono">Redis ZSET</td><td><span class="mono">ZADD rank:{liga}</span>, posição em O(log n)</td></tr>
+          <tr><td>Tempo real</td><td class="mono">WebSockets (ws)</td><td>Envia saldo e posição por liga inscrita</td></tr>
+          <tr><td>Dados</td><td class="mono">PostgreSQL</td><td>Usuários, carteira, ligas, operações, antifraude</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ RISCOS ============ -->
+<section class="panel" id="p-riscos" data-panel="riscos" hidden>
+  <div>
+    <div class="eyebrow">Risk analysis</div>
+    <h2 style="margin-top:6px">Os 5 maiores riscos regulatórios e técnicos</h2>
+  </div>
+  <div class="grid2" id="risk-list"></div>
+</section>
+
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- utilidades ----------
+  const $ = (s, r) => (r || document).querySelector(s);
+  const brl = v => "R$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const brl0 = v => "R$ " + v.toLocaleString("pt-BR", { maximumFractionDigits: 0 });
+  const pct = (v, d = 1) => (v * 100).toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d }) + "%";
+  const odd = v => v.toFixed(2).replace(".", ",");
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* sem storage */ } }
+  };
+
+  // ---------- abas ----------
+  const tabs = [...document.querySelectorAll(".tab")];
+  function show(name) {
+    tabs.forEach(t => t.setAttribute("aria-selected", String(t.dataset.tab === name)));
+    document.querySelectorAll("[data-panel]").forEach(p => { p.hidden = p.dataset.panel !== name; });
+    store.set("liga-tab", name);
+    if (name === "banco") loadSql();
+  }
+  tabs.forEach(t => t.addEventListener("click", () => show(t.dataset.tab)));
+  document.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => { show(b.dataset.go); window.scrollTo(0, 0); }));
+
+  // ---------- modelo de premiação ----------
+  function prizeTable(o) {
+    const gross = o.players * o.entry;
+    const paid = Math.max(1, Math.floor(o.players * o.paidPct));
+    const costs = gross * o.pixPct + paid * o.outFee;
+    const take = o.allToPool ? 0 : Math.ceil(((o.margin * gross + costs) / gross) * 100) / 100;
+    const pool = Math.round(gross * (1 - take));
+    const step = o.entry >= 10 ? 5 : 1;
+    let floor = o.entry * 1.5;
+    if (floor * paid > pool * 0.6) floor = (pool * 0.6) / paid;
+
+    function curve(n, total, alpha, fl) {
+      const w = Array.from({ length: n }, (_, i) => 1 / Math.pow(i + 1, alpha));
+      const sw = w.reduce((a, b) => a + b, 0);
+      const rest = Math.max(0, total - fl * n);
+      return w.map(x => fl + rest * (x / sw));
+    }
+    let raw;
+    if (paid === 1) raw = [pool];
+    else if (o.mode === "brief" && paid >= 9) {
+      // 1º 20% e 2º 10% fixos; o 3º em diante decresce a partir de ~9,5% sem passar o 2º
+      const fl = Math.min(floor, (pool * 0.7) / (paid - 2));
+      let best = null;
+      for (let a = 0; a <= 3; a += 0.01) {
+        const c = curve(paid - 2, pool * 0.7, a, fl);
+        if (c[0] > pool * 0.1) continue;
+        const d = Math.abs(c[0] / pool - 0.095);
+        if (!best || d < best.d) best = { c, d };
+      }
+      raw = [pool * 0.2, pool * 0.1, ...(best ? best.c : curve(paid - 2, pool * 0.7, 0, fl))];
+    } else {
+      let best = null;
+      for (let a = 0.3; a <= 3; a += 0.01) {
+        const c = curve(paid, pool, a, floor);
+        const d = Math.abs(c[0] / pool - 0.25);
+        if (!best || d < best.d) best = { c, d };
+      }
+      raw = best.c;
+    }
+    const prizes = raw.map(v => Math.max(step, Math.round(v / step) * step));
+    prizes[0] += pool - prizes.reduce((a, b) => a + b, 0);
+    return { gross, paid, costs, take, pool, prizes, net: gross * take - costs, briefFallback: o.mode === "brief" && paid < 9 };
+  }
+
+  // ---------- calculadora ----------
+  const cIds = ["c-players", "c-entry", "c-margin", "c-paid", "c-pix", "c-out", "c-mode", "c-all"];
+  function renderCalc() {
+    const o = {
+      players: Math.max(2, +$("#c-players").value || 2),
+      entry: Math.max(1, +$("#c-entry").value || 1),
+      margin: (+$("#c-margin").value || 0) / 100,
+      paidPct: (+$("#c-paid").value || 10) / 100,
+      pixPct: (+$("#c-pix").value || 0) / 100,
+      outFee: +$("#c-out").value || 0,
+      mode: $("#c-mode").value,
+      allToPool: $("#c-all").checked
+    };
+    const t = prizeTable(o);
+    const k = [
+      ["Arrecadado", brl(t.gross)],
+      ["Taxa retida", pct(t.take, 0) + " · " + brl0(t.gross * t.take)],
+      ["Custos diretos", brl(t.costs)],
+      ["Margem líquida", brl(t.net) + " · " + pct(t.net / t.gross)],
+      ["Prêmio garantido", brl0(t.pool)],
+      ["Retorno ao jogador", pct(t.pool / t.gross)]
+    ];
+    $("#c-kpis").innerHTML = k.map(([l, v]) => `<div class="kpi"><div class="l">${l}</div><div class="v" style="font-size:18px">${v}</div></div>`).join("");
+    const note = $("#c-note");
+    if (o.allToPool) {
+      note.hidden = false;
+      note.textContent = `Com 100% para o prêmio a plataforma fica com ${brl(t.net)} por liga: ela paga as tarifas de Pix e não tem receita sobre a entrada. Para chegar a ${pct(o.margin, 0)} de margem, desmarque esta opção.`;
+    } else if (t.briefFallback) {
+      note.hidden = false;
+      note.textContent = `Com só ${t.paid} premiados não dá para manter 1º 20% e 2º 10% com o restante decrescente (sobram 70% para poucas posições). A tabela abaixo usa a curva recomendada.`;
+    } else note.hidden = true;
+    const max = Math.max(...t.prizes);
+    let acc = 0;
+    const rows = t.prizes.length > 60 ? t.prizes.slice(0, 50) : t.prizes;
+    $("#c-body").innerHTML = rows.map((p, i) => {
+      acc += p;
+      return `<tr><td class="mono">${i + 1}º</td><td class="r num">${brl0(p)}</td><td class="r num">${pct(p / t.pool)}</td><td class="r num">${(p / o.entry).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}×</td><td class="r num">${pct(acc / t.pool)}</td><td class="bar-cell"><div class="bar" style="width:${(p / max) * 100}%"></div></td></tr>`;
+    }).join("") + (t.prizes.length > rows.length ? `<tr><td colspan="6" class="muted">+ ${t.prizes.length - rows.length} posições premiadas (até ${t.paid}º)</td></tr>` : "") +
+      `<tr><td><b>Total</b></td><td class="r num"><b>${brl0(t.prizes.reduce((a, b) => a + b, 0))}</b></td><td colspan="4"></td></tr>`;
+  }
+  cIds.forEach(id => $("#" + id).addEventListener("input", renderCalc));
+
+  // ---------- liga simulada ----------
+  const LEAGUE = { players: 100, entry: 10, rounds: 5, start: 1000, maxStake: 0.10, maxOdds: 25, margin: 0.02, nMin: 10 };
+  const PRIZES = prizeTable({ players: 100, entry: 10, margin: 0.15, paidPct: 0.10, pixPct: 0.0099, outFee: 1, mode: "curve", allToPool: false }).prizes;
+  const TEAMS = ["Flamengo", "Palmeiras", "Corinthians", "São Paulo", "Botafogo", "Fluminense", "Grêmio", "Internacional", "Atlético-MG", "Cruzeiro", "Bahia", "Fortaleza", "Vasco", "Bragantino", "Santos", "Vitória"];
+  const FIRST = [
+    ["Flamengo", "Palmeiras", 2.10, 3.30, 3.60, 1.95, 1.87],
+    ["Corinthians", "São Paulo", 2.45, 3.10, 3.05, 2.20, 1.68],
+    ["Botafogo", "Fluminense", 2.00, 3.35, 3.90, 2.05, 1.78],
+    ["Grêmio", "Internacional", 2.55, 3.05, 2.90, 2.25, 1.65],
+    ["Atlético-MG", "Cruzeiro", 2.30, 3.20, 3.20, 2.10, 1.74],
+    ["Bahia", "Fortaleza", 1.85, 3.50, 4.40, 2.00, 1.82],
+    ["Vasco", "Bragantino", 2.40, 3.25, 2.95, 1.98, 1.84],
+    ["Santos", "Vitória", 1.70, 3.80, 5.00, 1.90, 1.92]
+  ];
+  const SEL = ["1", "X", "2", "+2,5", "−2,5"];
+  const SEL_NAME = ["Casa", "Empate", "Fora", "Mais de 2,5 gols", "Menos de 2,5 gols"];
+  const NICKS = ["TraderTricolor", "BancaFirme", "OddCerta", "ValueHunter", "Zagueiro_Quant", "MengãoTrader", "LinhaDeFundo", "Verdão_Ops", "KellyBR", "GreenDiário", "ContraAZebra", "AnalistaSP", "OverUnder", "Fechamento", "Mandante", "Visitante", "GestãoTotal", "PlaybookPro", "Escanteio", "Trivela"];
+
+  function devig(odds) {
+    const q = odds.map(o => 1 / o), s = q.reduce((a, b) => a + b, 0);
+    return q.map(x => x / s);
+  }
+  function makeMatch(h, a, raw) {
+    const p1 = devig(raw.slice(0, 3)), p2 = devig(raw.slice(3, 5));
+    const fair = [...p1, ...p2];
+    const offered = fair.map(p => Math.round((1 / (p * (1 + LEAGUE.margin))) * 100) / 100);
+    return { home: h, away: a, fair, offered, result: null };
+  }
+  function randomRound(rng) {
+    const t = [...TEAMS].sort(() => rng() - 0.5);
+    const out = [];
+    for (let i = 0; i < 16; i += 2) {
+      const ph = 0.28 + rng() * 0.32, pd = 0.24 + rng() * 0.06, pa = Math.max(0.1, 1 - ph - pd);
+      const s = ph + pd + pa, ov = 1.05;
+      const po = 0.42 + rng() * 0.16;
+      const r2 = x => Math.round(x * 100) / 100;
+      out.push(makeMatch(t[i], t[i + 1], [r2(1 / (ph / s * ov)), r2(1 / (pd / s * ov)), r2(1 / (pa / s * ov)), r2(1 / (po * ov)), r2(1 / ((1 - po) * ov))]));
+    }
+    return out;
+  }
+  const SCORES = { "0o": ["2-1", "3-1", "3-0", "4-2"], "0u": ["1-0", "2-0"], "1o": ["2-2", "3-3"], "1u": ["0-0", "1-1"], "2o": ["1-2", "1-3", "0-3"], "2u": ["0-1", "0-2"] };
+
+  let S; // estado da liga
+  function newPlayer(name, me) {
+    return { name, me: !!me, bank: LEAGUE.start, exposure: 0, peak: LEAGUE.start, mdd: 0, n: 0, bets: [], out: false, firstAt: 0,
+      style: { sf: 0.02 + Math.random() * 0.08, k: 1 + Math.floor(Math.random() * 4), parlay: Math.random() * 0.6, pick: ["fav", "dog", "any"][Math.floor(Math.random() * 3)] } };
+  }
+  function reset() {
+    const players = [newPlayer("Você", true)];
+    for (let i = 1; i < LEAGUE.players; i++) players.push(newPlayer(NICKS[i % NICKS.length] + (i >= NICKS.length ? Math.floor(i / NICKS.length) + 1 : ""), false));
+    S = { round: 1, done: false, matches: FIRST.map(r => makeMatch(r[0], r[1], r.slice(2))), players, slip: [], tick: 0 };
+    renderLeague();
+  }
+  const me = () => S.players[0];
+  const equity = p => p.bank + p.exposure;
+  function score(p) {
+    if (p.out) return 0;
+    const R = equity(p) / LEAGUE.start, A = Math.min(1, p.n / LEAGUE.nMin), D = 1 - 0.5 * p.mdd;
+    return 1000 * R * A * D;
+  }
+  function ranked() {
+    return [...S.players].sort((a, b) => (score(b) - score(a)) || (equity(b) - equity(a)) || (a.firstAt - b.firstAt));
+  }
+
+  function placeBet(p, legs, stake) {
+    const total = legs.reduce((a, l) => a * l.odds, 1);
+    p.bank -= stake; p.exposure += stake;
+    p.bets.push({ legs, stake, odds: total, status: "open", ret: 0, round: S.round });
+  }
+
+  function botBets(p) {
+    if (p.out) return;
+    const ms = S.matches;
+    for (let b = 0; b < p.style.k; b++) {
+      const nLegs = Math.random() < p.style.parlay ? 2 + Math.floor(Math.random() * 2) : 1;
+      const idx = [...ms.keys()].sort(() => Math.random() - 0.5).slice(0, nLegs);
+      const legs = idx.map(mi => {
+        const m = ms[mi];
+        let s;
+        if (p.style.pick === "fav") s = [0, 1, 2].reduce((a, c) => m.offered[c] < m.offered[a] ? c : a, 0);
+        else if (p.style.pick === "dog") s = [0, 2].reduce((a, c) => m.offered[c] > m.offered[a] ? c : a, 0);
+        else s = Math.floor(Math.random() * 5);
+        return { m: mi, s, odds: m.offered[s] };
+      });
+      const total = legs.reduce((a, l) => a * l.odds, 1);
+      const stake = Math.floor(p.bank * p.style.sf);
+      if (total <= LEAGUE.maxOdds && stake >= 1) placeBet(p, legs, stake);
+    }
+  }
+
+  function legWins(m, s) {
+    const [r, ou] = m.result;
+    return s < 3 ? s === r : (s === 3 ? ou === "o" : ou === "u");
+  }
+
+  function closeRound() {
+    if (S.done) return;
+    S.players.slice(1).forEach(botBets);
+    // sorteio com as probabilidades justas
+    S.matches.forEach(m => {
+      let u = Math.random(), r = 0;
+      while (r < 2 && u > m.fair[r]) { u -= m.fair[r]; r++; }
+      const ou = Math.random() < m.fair[3] ? "o" : "u";
+      const opts = SCORES[r + ou];
+      m.result = [r, ou, opts[Math.floor(Math.random() * opts.length)]];
+    });
+    S.tick++;
+    S.players.forEach(p => {
+      p.bets.filter(b => b.status === "open").forEach(b => {
+        const won = b.legs.every(l => legWins(S.matches[l.m], l.s));
+        b.status = won ? "won" : "lost";
+        b.ret = won ? Math.round(b.stake * b.odds * 100) / 100 : 0;
+        p.exposure -= b.stake; p.bank += b.ret; p.n++;
+        const eq = equity(p);
+        if (eq > p.peak) p.peak = eq;
+        p.mdd = Math.max(p.mdd, (p.peak - eq) / p.peak);
+      });
+      p.firstAt = S.tick;
+      if (equity(p) < 1 && !p.out) p.out = true;
+    });
+    S.lastMatches = S.matches;
+    if (S.round >= LEAGUE.rounds) { S.done = true; }
+    else { S.round++; S.matches = randomRound(Math.random); }
+    S.slip = [];
+    renderLeague();
+  }
+
+  function renderLeague() {
+    const p = me(), r = ranked(), pos = r.indexOf(p) + 1;
+    $("#k-bank").textContent = brl(p.bank);
+    $("#k-exp").textContent = brl(p.exposure);
+    const ret = equity(p) / LEAGUE.start - 1;
+    $("#k-ret").innerHTML = `<span class="${ret >= 0 ? "win" : "loss"}">${ret >= 0 ? "+" : ""}${pct(ret)}</span>`;
+    $("#k-mdd").textContent = pct(p.mdd);
+    $("#k-score").textContent = p.n ? Math.round(score(p)).toLocaleString("pt-BR") : "—";
+    $("#k-rank").textContent = S.tick ? `${pos}º / ${LEAGUE.players}` : "—";
+
+    const btn = $("#btn-round");
+    btn.textContent = S.done ? "Liga encerrada" : `Encerrar rodada ${S.round} de ${LEAGUE.rounds}`;
+    btn.disabled = S.done;
+
+    // jogos
+    const shown = S.done ? S.lastMatches : S.matches;
+    $("#round-title").textContent = S.done ? "Resultados da última rodada" : `Jogos da rodada ${S.round}`;
+    $("#matches").innerHTML = (S.round > 1 && !S.done && S.lastMatches ? `<p class="muted" style="font-size:13px;margin-bottom:6px">Rodada anterior: ${S.lastMatches.map(m => `${m.home} ${m.result[2]} ${m.away}`).join(" · ")}</p>` : "") +
+      shown.map((m, mi) => `
+      <div class="match">
+        <div class="teams"><span>${m.home} × ${m.away}</span>${m.result && S.done ? `<span class="score">${m.result[2]}</span>` : ""}</div>
+        <div class="odds">${m.offered.map((o, s) => {
+          const on = S.slip.some(l => l.m === mi && l.s === s);
+          const won = S.done && m.result && legWins(m, s);
+          return `<button class="odd${won ? " won" : ""}" data-m="${mi}" data-s="${s}" aria-pressed="${on}" ${S.done ? "disabled" : ""} title="${SEL_NAME[s]} · prob. justa ${pct(m.fair[s])}"><small>${SEL[s]}</small><span>${odd(o)}</span></button>`;
+        }).join("")}</div>
+      </div>`).join("");
+
+    renderSlip();
+
+    // minhas operações
+    const mine = [...p.bets].reverse();
+    $("#my-bets").innerHTML = mine.length ? `<div class="scroll"><table><thead><tr><th>Rod.</th><th>Seleções</th><th class="r">Valor</th><th class="r">Odd</th><th class="r">Retorno</th></tr></thead><tbody>${mine.map(b => {
+      const ms = b.round === S.round && !S.done ? S.matches : null;
+      const desc = b.legs.map(l => l.label || SEL_NAME[l.s]).join(" + ");
+      return `<tr><td class="mono">${b.round}</td><td style="font-size:13px">${desc}<br><span class="pill ${b.status}">${{ open: "aberta", won: "ganhou", lost: "perdeu" }[b.status]}</span></td><td class="r num">${brl0(b.stake)}</td><td class="r num">${odd(b.odds)}</td><td class="r num ${b.status === "won" ? "win" : b.status === "lost" ? "loss" : ""}">${b.status === "open" ? brl0(b.stake * b.odds) : brl0(b.ret)}</td></tr>`;
+    }).join("")}</tbody></table></div>` : `<p class="muted" style="font-size:14px">Nenhuma operação ainda. Clique numa odd para adicionar ao boletim.</p>`;
+
+    // ranking
+    const top = r.slice(0, 12);
+    if (!top.includes(p)) top.push(p);
+    $("#rank-body").innerHTML = top.map(x => {
+      const i = r.indexOf(x);
+      const prize = S.tick && i < PRIZES.length ? brl0(PRIZES[i]) : "";
+      const sep = x === p && i >= 12 ? `<tr><td colspan="7" class="muted" style="text-align:center">⋯</td></tr>` : "";
+      return `${sep}<tr class="${x.me ? "me" : ""} ${i < PRIZES.length ? "paid" : ""}"><td class="mono">${i + 1}</td><td>${x.name}${x.out ? ' <span class="pill lost">eliminado</span>' : ""}</td><td class="r num">${brl0(equity(x))}</td><td class="r num">${x.n}</td><td class="r num">${pct(x.mdd, 0)}</td><td class="r num">${x.n ? Math.round(score(x)).toLocaleString("pt-BR") : "—"}</td><td class="r num">${prize}</td></tr>`;
+    }).join("");
+
+    // placar da landing
+    $("#board-round").textContent = S.done ? "encerrada" : `rodada ${S.round}/${LEAGUE.rounds}`;
+    $("#board-rows").innerHTML = r.slice(0, 6).map((x, i) => {
+      const rt = equity(x) / LEAGUE.start - 1;
+      return `<div class="row"><span>${i + 1}</span><span>${x.name}</span><span class="${rt >= 0 ? "up" : ""}">${rt >= 0 ? "+" : ""}${pct(rt)}</span><span>${x.n ? Math.round(score(x)) : "—"}</span></div>`;
+    }).join("") + `<div class="row"><span></span><span>Prêmio garantido</span><span></span><span>${brl0(PRIZES.reduce((a, b) => a + b, 0))}</span></div>`;
+
+    if (S.done) {
+      const prize = pos <= PRIZES.length ? PRIZES[pos - 1] : 0;
+      $("#slip-legs").innerHTML = `<p style="font-size:15px"><b>Liga encerrada.</b> Você terminou em ${pos}º de ${LEAGUE.players}. ${prize ? `Prêmio: <b class="win">${brl0(prize)}</b> (fica retido para revisão antifraude e depois vai para a carteira).` : "Fora da faixa premiada (top 10)."}</p>`;
+    }
+  }
+
+  function slipCalc() {
+    const total = S.slip.reduce((a, l) => a * l.odds, 1);
+    return { total };
+  }
+  function renderSlip() {
+    if (S.done) { $("#btn-place").disabled = true; $("#stake").disabled = true; $("#slip-odds").textContent = "—"; $("#slip-ret").textContent = "—"; $("#slip-err").textContent = ""; $("#max-stake").textContent = brl(0); return; }
+    $("#stake").disabled = false;
+    const p = me(), maxS = Math.floor(p.bank * LEAGUE.maxStake * 100) / 100;
+    $("#max-stake").textContent = brl(maxS);
+    const legs = $("#slip-legs");
+    legs.innerHTML = S.slip.length ? S.slip.map(l => `<div class="leg"><span>${l.label}</span><span class="num">${odd(l.odds)}</span></div>`).join("") + `<p class="muted" style="font-size:12.5px;margin-top:6px">${S.slip.length > 1 ? `Múltipla de ${S.slip.length} jogos` : "Simples"}</p>` : `<p class="muted" style="font-size:14px">Escolha uma odd. Odds de jogos diferentes viram múltipla.</p>`;
+    const { total } = slipCalc();
+    const stake = +$("#stake").value || 0;
+    $("#slip-odds").textContent = S.slip.length ? odd(total) : "—";
+    $("#slip-ret").textContent = S.slip.length ? brl(stake * total) : "—";
+    let err = "";
+    if (S.slip.length && total > LEAGUE.maxOdds) err = `Odd total ${odd(total)} passa do limite de 25,00.`;
+    else if (stake > maxS) err = `Valor acima de 10% da banca livre (${brl(maxS)}).`;
+    else if (stake < 1 && S.slip.length) err = "Valor mínimo: R$ 1,00.";
+    $("#slip-err").textContent = err;
+    $("#btn-place").disabled = !S.slip.length || !!err;
+  }
+
+  $("#matches").addEventListener("click", e => {
+    const b = e.target.closest(".odd");
+    if (!b || S.done) return;
+    const mi = +b.dataset.m, s = +b.dataset.s, m = S.matches[mi];
+    const i = S.slip.findIndex(l => l.m === mi);
+    if (i >= 0 && S.slip[i].s === s) S.slip.splice(i, 1);
+    else {
+      const leg = { m: mi, s, odds: m.offered[s], label: `${m.home} × ${m.away}: ${SEL_NAME[s]}` };
+      if (i >= 0) S.slip[i] = leg; else if (S.slip.length < 5) S.slip.push(leg);
+    }
+    renderLeague();
+  });
+  $("#stake").addEventListener("input", renderSlip);
+  $("#btn-place").addEventListener("click", () => {
+    const stake = Math.floor((+$("#stake").value || 0) * 100) / 100;
+    placeBet(me(), S.slip.map(l => ({ ...l })), stake);
+    S.slip = [];
+    renderLeague();
+  });
+  $("#btn-round").addEventListener("click", closeRound);
+  $("#btn-reset").addEventListener("click", reset);
+
+  // ---------- fluxo ----------
+  const FLOW = [
+    ["Landing", "Vê ligas abertas, prêmio garantido de cada uma e o ranking ao vivo de uma liga em andamento.", "Selo +18 e link de jogo responsável visíveis."],
+    ["Cadastro", "E-mail, senha, apelido público, CPF e data de nascimento. Código de convite opcional.", "CPF validado e maioridade conferida. Uma conta por CPF. Fingerprint do dispositivo gravado."],
+    ["Primeira liga grátis", "Entra numa liga grátis de 24h com tutorial de 3 passos: escolher jogo, definir valor, ver o ranking.", "Mesmas regras das ligas pagas. O Skill Score aparece sendo calculado."],
+    ["KYC completo", "Selfie com prova de vida e checagem de PEP e sanções, pedida antes do primeiro depósito.", "Aprovação automática em ~1 min. Casos duvidosos vão para revisão manual."],
+    ["Depósito via Pix", "Adiciona saldo na carteira (pacotes de R$20, R$50, R$100).", "Pix tem de sair de conta do mesmo CPF. Limites diários e mensais escolhidos pelo usuário."],
+    ["Escolha da liga", "Filtra por esporte, duração (24h, 7d, 30d), entrada (R$10, R$50, R$100) e formato (padrão ou knockout).", "Mostra prêmio, tabela de premiação, mínimo e máximo de participantes e regras."],
+    ["Entrada", "Confirma a entrada com saldo da carteira ou cupom de convite e recebe R$1.000 virtuais.", "Uma entrada por CPF por liga. Reembolso integral se desistir antes do início."],
+    ["Operações", "Monta simples ou múltiplas nos jogos elegíveis.", "Máx. 10% da banca atual por operação. Odd total até 25. Fecha 1 min antes do início do jogo."],
+    ["Acompanhamento ao vivo", "Saldo, operações abertas, posição e Skill Score atualizados por WebSocket.", "Push quando uma operação liquida ou quando entra na faixa premiada."],
+    ["Fim da liga", "Último jogo liquidado, ranking congelado e resultado publicado.", "Só entram jogos que terminam antes do fim da liga."],
+    ["Revisão antifraude", "Prêmios ficam retidos por até 48h.", "Sinais graves suspendem apenas aquele prêmio. Os demais são liberados."],
+    ["Resgate", "Prêmio cai na carteira e o saque sai por Pix para chave do mesmo CPF.", "Imposto retido quando aplicável. Comprovante no histórico."]
+  ];
+  $("#flow-list").innerHTML = FLOW.map((f, i) => `<li><span class="n">${String(i + 1).padStart(2, "0")}</span><div><h3>${f[0]}</h3><p>${f[1]}</p><p class="rule">${f[2]}</p></div></li>`).join("");
+
+  // ---------- banco ----------
+  const GROUPS = [
+    ["Usuários", ["users", "kyc_checks", "user_limits", "entry_coupons", "device_sessions"]],
+    ["Carteira", ["wallets", "wallet_transactions", "payouts"]],
+    ["Esportes e odds", ["sports_events", "markets", "selections", "odds_snapshots"]],
+    ["Ligas", ["leagues", "league_prize_tiers", "league_entries", "sponsors"]],
+    ["Operações", ["bets", "bet_legs"]],
+    ["Antifraude", ["fraud_signals"]]
+  ];
+  $("#table-groups").innerHTML = GROUPS.map(g => `<div class="card"><h3>${g[0]}</h3><p class="mono muted" style="font-size:13px;margin-top:6px">${g[1].join("<br>")}</p></div>`).join("");
+  let sqlLoaded = false;
+  function loadSql() {
+    if (sqlLoaded) return;
+    sqlLoaded = true;
+    fetch("schema_ligas.sql").then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
+      .then(t => { $("#sql").textContent = t; })
+      .catch(() => { $("#sql").textContent = "Não consegui carregar o arquivo do schema. Ele está no repositório em docs/ligas/schema_ligas.sql."; sqlLoaded = false; });
+  }
+  $("#btn-copy").addEventListener("click", () => {
+    const txt = $("#sql").textContent, b = $("#btn-copy");
+    const done = () => { b.textContent = "Copiado"; setTimeout(() => { b.textContent = "Copiar SQL"; }, 1600); };
+    if (navigator.clipboard) navigator.clipboard.writeText(txt).then(done).catch(() => selectSql());
+    else selectSql();
+  });
+  function selectSql() { const r = document.createRange(); r.selectNodeContents($("#sql")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+
+  // ---------- riscos ----------
+  const RISKS = [
+    ["Enquadramento como aposta sem licença", "Regulatório", "crit", "As operações usam odds de mercado sobre jogos isolados. A SPA/MF pode tratar o produto como aposta de quota fixa, que exige outorga federal (Lei 14.790/2023). Sem ela: bloqueio do site e do meio de pagamento, multa e responsabilização dos sócios.",
+      ["Parecer jurídico antes de cobrar a primeira entrada.", "Começar com ligas grátis e patrocinadas.", "Para ligas pagas: parceria com operador licenciado, ou adequação às regras de fantasy (prêmio fixo anunciado antes, resultado que não dependa de um único jogo)."]],
+    ["Publicidade e jogo responsável", "Regulatório", "high", "As regras da SPA/MF e do CONAR proíbem apresentar aposta como investimento ou fonte de renda. O posicionamento \"Trading de Apostas\" e os bônus de convite entram nesse ponto.",
+      ["Revisão jurídica da copy e dos criativos antes de veicular.", "Selo +18, autoexclusão e limites de depósito desde o MVP.", "Ter uma versão alternativa da copy pronta, centrada em competição e estratégia."]],
+    ["Pagamentos, PLD e LGPD", "Regulatório", "high", "Meios de pagamento podem recusar o segmento. Há obrigação de prevenção à lavagem de dinheiro (COAF). Selfie e biometria são dados sensíveis pela LGPD. Stripe e PayPal têm pouca aderência no Brasil.",
+      ["Pix via PSP que aceite o segmento (o repositório já tem Asaas), com um segundo PSP de reserva.", "Pix só de conta do mesmo CPF do titular.", "Consentimento específico para biometria, retenção mínima e DPO nomeado."]],
+    ["Odds e resultados", "Técnico", "high", "Licença de uso comercial da API de odds, odd desatualizada explorada por jogadores rápidos, placar errado liquidando operações e custo de créditos da API crescendo com o número de ligas.",
+      ["Confirmar nos termos da API o direito de exibição comercial.", "Odd válida por 60 s e mercado suspenso em movimento brusco.", "Placar confirmado por 2 fontes, com rotina de reliquidação."]],
+    ["Fraude e integridade", "Técnico", "high", "Multicontas, operações em lados opostos entre contas ligadas (uma sempre termina no topo), bots e conluio de guildas. Copiar a mesma estratégia, sozinho, não dá vantagem.",
+      ["1 entrada por CPF por liga, KYC e fingerprint de dispositivo.", "Detecção de operações opostas e de cópia em segundos, sempre combinada com vínculo entre contas.", "Prêmio retido 48h para revisão. Regras de desclassificação públicas."]]
+  ];
+  $("#risk-list").innerHTML = RISKS.map((r, i) => `<div class="card risk"><span class="flow"><span class="n">${i + 1}</span></span><div><div class="rowflex"><h3>${r[0]}</h3><span class="sev ${r[2] === "high" ? "high" : ""}">${r[2] === "crit" ? "crítico" : "alto"}</span><span class="pill open">${r[1]}</span></div><p style="margin-top:8px">${r[3]}</p><p class="eyebrow" style="margin-top:12px">Mitigação</p><ul class="clean">${r[4].map(x => `<li>${x}</li>`).join("")}</ul></div></div>`).join("");
+
+  // ---------- início ----------
+  reset();
+  renderCalc();
+  const saved = store.get("liga-tab");
+  show(tabs.some(t => t.dataset.tab === saved) ? saved : "landing");
+})();
+</script>
