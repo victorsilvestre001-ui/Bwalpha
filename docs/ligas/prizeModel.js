@@ -13,14 +13,14 @@ const PAID_SHARE = 0.10;     // top 10% premiados
 const MIN_PRIZE_MULT = 1.5;  // último premiado recebe >= 1,5x a entrada
 
 const gross = players * entry;
-const paid = Math.max(1, Math.floor(players * PAID_SHARE));
+const paid = Math.min(players, Math.max(3, Math.floor(players * PAID_SHARE))); // sempre pelo menos 3 premiados
 const costs = gross * PIX_IN_PCT + paid * PIX_OUT_FIXED;
 // Taxa retida arredondada para cima em pontos inteiros de %
 const takeRate = Math.ceil(((targetMargin * gross + costs) / gross) * 100) / 100;
 const pool = Math.round(gross * (1 - takeRate));
 
 // Curva de potência: p_i ∝ 1 / i^alpha, com piso no último premiado.
-// Busca o alpha que deixa o 1º com ~25% do prêmio sem furar o piso.
+// Busca o alpha que deixa o 1º com a fatia alvo sem furar o piso.
 function curve(alpha) {
   const floor = entry * MIN_PRIZE_MULT;
   const w = Array.from({ length: paid }, (_, i) => 1 / Math.pow(i + 1, alpha));
@@ -36,10 +36,12 @@ function roundTo(values, step) {
   return r;
 }
 
+// Com poucos premiados o 1º precisa de fatia maior para não ficar tudo igual
+const target = paid <= 3 ? 0.5 : paid <= 5 ? 0.4 : paid <= 9 ? 0.3 : 0.25;
 let best = null;
-for (let a = 0.5; a <= 2.5; a += 0.01) {
+for (let a = 0.3; a <= 4; a += 0.01) {
   const c = curve(a);
-  const diff = Math.abs(c[0] / pool - 0.25);
+  const diff = Math.abs(c[0] / pool - target);
   if (!best || diff < best.diff) best = { a, c, diff };
 }
 const prizes = roundTo(best.c, 5);

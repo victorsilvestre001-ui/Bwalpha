@@ -432,11 +432,11 @@ ul.clean { margin: 6px 0 0; padding-left: 18px; } ul.clean li { margin: 3px 0; }
       <label>Premiados (% do total)<input id="c-paid" type="number" min="1" max="50" value="10"></label>
       <label>Custo Pix entrada (%)<input id="c-pix" type="number" min="0" step="0.01" value="0.99"></label>
       <label>Custo por saque (R$)<input id="c-out" type="number" min="0" step="0.1" value="1"></label>
-      <label>Distribuição<select id="c-mode"><option value="curve">Curva recomendada (1º ≈ 25%)</option><option value="brief">Briefing (1º 20%, 2º 10%)</option></select></label>
+      <label>Distribuição<select id="c-mode"><option value="curve">Curva recomendada (1º ≈ 25%, mais com poucos premiados)</option><option value="brief">Briefing (1º 20%, 2º 10%)</option></select></label>
       <label class="check"><input id="c-all" type="checkbox"> 100% vai para o prêmio</label>
     </div></div>
     <div class="card">
-      <div class="row between"><h3>Cenários até R$ 10 mil por liga</h3><span class="muted small">margem 15% · top 10% premiados · toque numa linha para abrir na calculadora</span></div>
+      <div class="row between"><h3>Cenários até R$ 10 mil por liga</h3><span class="muted small">margem 15% · top 10% premiados (mínimo 3) · toque numa linha para abrir na calculadora</span></div>
       <div class="scroll" style="margin-top:10px"><table><thead><tr><th>Entrada</th><th class="r">Jogadores</th><th class="r">Arrecadado</th><th class="r">Plataforma (líquido)</th><th class="r">Prêmio total</th><th class="r">Premiados</th><th class="r">1º lugar</th><th class="r">Último premiado</th></tr></thead><tbody id="c-scen"></tbody></table></div>
     </div>
     <div class="kpis" id="c-kpis"></div>
@@ -510,9 +510,11 @@ ul.clean { margin: 6px 0 0; padding-left: 18px; } ul.clean li { margin: 3px 0; }
       raw = [pool * 0.2, pool * 0.1, ...(best ? best.c : curve(paid - 2, pool * 0.7, 0, fl))];
     } else {
       fallback = mode === "brief";
+      // com poucos premiados o 1º precisa de fatia maior para não ficar tudo igual
+      const target = paid <= 3 ? 0.5 : paid <= 5 ? 0.4 : paid <= 9 ? 0.3 : 0.25;
       let best = null;
-      for (let a = 0.3; a <= 3; a += 0.01) {
-        const c = curve(paid, pool, a, floor), d = Math.abs(c[0] / pool - 0.25);
+      for (let a = 0.3; a <= 4; a += 0.01) {
+        const c = curve(paid, pool, a, floor), d = Math.abs(c[0] / pool - target);
         if (!best || d < best.d) best = { c, d };
       }
       raw = best.c;
@@ -522,7 +524,7 @@ ul.clean { margin: 6px 0 0; padding-left: 18px; } ul.clean li { margin: 3px 0; }
     return { prizes, fallback };
   }
   function prizeTable(o) {
-    const gross = o.players * o.entry, paid = Math.max(1, Math.floor(o.players * o.paidPct));
+    const gross = o.players * o.entry, paid = Math.min(o.players, Math.max(3, Math.floor(o.players * o.paidPct))); // sempre pelo menos 3 premiados
     const costs = gross * o.pixPct + paid * o.outFee;
     const take = o.allToPool ? 0 : Math.ceil(((o.margin * gross + costs) / gross) * 100) / 100;
     const pool = Math.round(gross * (1 - take));

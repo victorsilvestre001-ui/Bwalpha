@@ -204,7 +204,7 @@ Por que esta curva e não "1º leva 20%, 2º 10%…":
 |---|---|---|---|
 | Base, como fantasy | 17% | R$830 | Tabela acima |
 | Como aposta licenciada (12% de imposto sobre GGR) | 20% | R$800 | `T × 1000 − 19,90 − 0,12 × T × 1000 = 150` → T = 19,3%, arredondado para 20% |
-| 30 jogadores (mínimo da liga) | 17% | R$249 | Top 3: R$104 / R$80 / R$65 |
+| 30 jogadores (mínimo da liga) | 17% | R$249 | Top 3: R$124 / R$70 / R$55 (mínimo de 3 premiados; com poucos premiados o 1º leva ~50%) |
 | 1.000 jogadores | 17% | R$8.300 | Top 100. O 1º leva R$2.085 (208×) e o 100º leva R$20 |
 
 O que não entra nos 15%: impostos sobre a receita (PIS, Cofins, ISS), custos fixos, CAC e
