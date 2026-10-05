@@ -7,8 +7,26 @@ function escapeHtml(value) {
     return String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-async function sendEmail({ to, subject, html, replyTo }) {
+// Versão em texto puro do e-mail (Gmail e Outlook desconfiam de e-mail só com HTML).
+function htmlToText(html) {
+    return String(html)
+        .replace(/<a [^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, (m, href, txt) => `${txt.replace(/<[^>]+>/g, '').trim()}: ${href}`)
+        .replace(/<(br|\/p|\/h\d|\/div|\/li)[^>]*>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+        .replace(/[ \t]+/g, ' ').replace(/\n\s*\n\s*/g, '\n\n').trim();
+}
+
+const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'tradeonia@gmail.com';
+const firstNameOf = (name) => { const f = String(name || '').trim().split(/\s+/)[0]; return f ? `${f}, ` : ''; };
+
+// marketing: e-mails de campanha (cupom, comemoração, novidades) levam o cabeçalho de descadastro,
+// que o Gmail exige de quem manda e-mail em massa; sem ele a mensagem tende a cair no spam.
+async function sendEmail({ to, subject, html, replyTo, marketing = false }) {
     if (!process.env.RESEND_API_KEY) return { ok: false, error: 'RESEND_API_KEY não configurada' };
+    const headers = marketing
+        ? { 'List-Unsubscribe': `<mailto:${SUPPORT_EMAIL}?subject=Descadastrar%20${encodeURIComponent(to)}>` }
+        : undefined;
     try {
         const res = await fetch('https://api.resend.com/emails', {
             method: 'POST',
@@ -16,7 +34,11 @@ async function sendEmail({ to, subject, html, replyTo }) {
                 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ from: EMAIL_FROM, to: [to], subject, html, ...(replyTo ? { reply_to: replyTo } : {}) }),
+            body: JSON.stringify({
+                from: EMAIL_FROM, to: [to], subject, html, text: htmlToText(html),
+                reply_to: replyTo || SUPPORT_EMAIL,
+                ...(headers ? { headers } : {}),
+            }),
         });
         if (!res.ok) return { ok: false, error: `${res.status} ${await res.text()}` };
         return { ok: true };
@@ -85,8 +107,8 @@ async function sendWelcomeEmail(name, email) {
     const result = await sendEmail({
         to: email,
         subject: offer
-            ? `Sua conta na TradeOn AI foi criada 🎉 + ${offer.discount} OFF no VIP`
-            : 'Sua conta na TradeOn AI foi criada 🎉',
+            ? 'Sua conta na TradeOn AI foi criada'
+            : 'Sua conta na TradeOn AI foi criada',
         html: layout(`
             <h1 style="color: #00F0A8; font-size: 22px; margin-bottom: 8px;">Bem-vindo(a), ${escapeHtml(name)}!</h1>
             <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">
@@ -109,8 +131,9 @@ async function sendCouponEmail(name, email) {
     if (!offer) return { ok: false, error: 'Cupom não configurado (SIGNUP_COUPON / KIWIFY_CHECKOUT_URL)' };
     const firstName = String(name || '').trim().split(/\s+/)[0];
     return sendEmail({
+        marketing: true,
         to: email,
-        subject: `🎁 ${offer.discount} OFF no VIP da TradeOn AI, só para você`,
+        subject: firstNameOf(name) ? `${firstNameOf(name)}um desconto no VIP da TradeOn AI` : 'Um desconto no VIP da TradeOn AI',
         html: layout(`
             <h1 style="color: #00F0A8; font-size: 22px; margin-bottom: 8px;">${firstName ? `${escapeHtml(firstName)}, um` : 'Um'} presente para você 🎁</h1>
             <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">
@@ -133,8 +156,9 @@ async function sendTrialEmail(name, email) {
     const firstName = String(name || '').trim().split(/\s+/)[0];
     const offer = couponOffer(name, email);
     return sendEmail({
+        marketing: true,
         to: email,
-        subject: '🎁 Liberamos 3 sinais grátis da IA para você testar',
+        subject: 'Suas 3 leituras de teste na TradeOn AI estão liberadas',
         html: layout(`
             <h1 style="color: #00F0A8; font-size: 22px; margin-bottom: 8px;">${firstName ? `${escapeHtml(firstName)}, seu` : 'Seu'} teste grátis está liberado 🎁</h1>
             <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">
@@ -173,8 +197,9 @@ async function sendMarketOpenEmail(name, email, account = {}) {
                ${offer ? couponBlock(offer, 'Condição especial') : button(`${FRONTEND_URL}/dashboard`, 'Conhecer o VIP')}`;
 
     return sendEmail({
+        marketing: true,
         to: email,
-        subject: '📈 Mercado aberto: a IA da TradeOn já está analisando',
+        subject: 'O mercado abriu: a TradeOn AI já está lendo os gráficos',
         html: layout(`
             <h1 style="color: #00F0A8; font-size: 22px; margin-bottom: 8px;">${hi} mercado está aberto! 📈</h1>
             ${body}
@@ -230,7 +255,7 @@ async function sendNewCheckoutEmail(name, email) {
     const discount = process.env.SIGNUP_COUPON_DISCOUNT || '20%';
     return sendEmail({
         to: email,
-        subject: coupon ? `🔗 Novo link do VIP TradeOn AI + ${discount} OFF para você` : '🔗 Novo link de pagamento do VIP TradeOn AI',
+        subject: 'Novo link de pagamento do VIP TradeOn AI',
         html: layout(`
             <h1 style="color: #00F0A8; font-size: 22px; margin-bottom: 8px;">${firstName ? `${escapeHtml(firstName)}, mudamos` : 'Mudamos'} o link de pagamento do VIP 🔗</h1>
             <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">
@@ -268,8 +293,9 @@ async function sendCelebrationEmail(name, email, account = {}) {
     const discount = process.env.CELEBRA_DISCOUNT || '50%';
     const offer = !vip && coupon ? { coupon, discount, url: `${FRONTEND_URL}/dashboard?upgrade=1` } : null;
     return sendEmail({
+        marketing: true,
         to: email,
-        subject: offer ? `🎉 Nossa comunidade passou de 500 pessoas: ${discount} OFF no VIP` : '🎉 Nossa comunidade passou de 500 pessoas',
+        subject: 'Nossa comunidade passou de 500 pessoas',
         html: layout(`
             <h1 style="color: #00F0A8; font-size: 22px; margin-bottom: 8px;">${firstName ? `${escapeHtml(firstName)}, chegamos` : 'Chegamos'} a 500 pessoas 🎉</h1>
             <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">
@@ -299,8 +325,9 @@ async function sendResultsEmail(name, email, account = {}) {
             ? button(`${FRONTEND_URL}/dashboard`, 'Testar meus 3 sinais grátis')
             : (offer ? couponBlock(offer, 'Condição especial') : button(`${FRONTEND_URL}/dashboard`, 'Conhecer o VIP'));
     return sendEmail({
+        marketing: true,
         to: email,
-        subject: '📊 Sinais M1 de 28/09: 8 WIN em 9 análises',
+        subject: 'Como foram as leituras M1 de 28/09',
         html: layout(`
             <h1 style="color: #00F0A8; font-size: 22px; margin-bottom: 8px;">${firstName ? `${escapeHtml(firstName)}, olha` : 'Olha'} o resultado dos sinais M1 📊</h1>
             <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">
@@ -328,8 +355,9 @@ async function sendDailyFreeEmail(name, email) {
     const n = Math.max(1, parseInt(process.env.FREE_DAILY_SIGNALS ?? '1', 10) || 1);
     const qtd = n === 1 ? '1 análise da IA por dia' : `${n} análises da IA por dia`;
     return sendEmail({
+        marketing: true,
         to: email,
-        subject: `🎁 Novidade: ${qtd} grátis na TradeOn AI`,
+        subject: `Novidade na TradeOn AI: ${qtd} sem pagar`,
         html: layout(`
             <h1 style="color: #00F0A8; font-size: 22px; margin-bottom: 8px;">${firstName ? `${escapeHtml(firstName)}, sua` : 'Sua'} conta ganhou ${qtd} 🎁</h1>
             <p style="font-size: 15px; line-height: 1.6; color: #E7ECF7;">
