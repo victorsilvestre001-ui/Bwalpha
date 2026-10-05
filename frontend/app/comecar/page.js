@@ -18,7 +18,7 @@ const FEATURES = [
   { icon: Brain, title: "Leitura técnica com IA", text: "Médias móveis, RSI, MACD e padrões de candle combinados em uma leitura objetiva, com nível de confiança." },
   { icon: LineChart, title: "Gráfico em tempo real", text: "EURUSD, EURJPY e Ouro (XAUUSD) em 1 e 5 minutos, direto no painel." },
   { icon: History, title: "Pressão e volatilidade", text: "Veja quem está no controle do candle e se o mercado está lento, normal ou volátil." },
-  { icon: Calculator, title: "Simulador de banca", text: "Teste capital, valor por operação, meta e limite de perda numa banca fictícia, sem dinheiro real." },
+  { icon: Calculator, title: "Simulador de gestão de risco", text: "Teste capital, valor por operação, meta e limite de perda numa conta fictícia, sem dinheiro real." },
   { icon: Bot, title: "Assistente de IA", text: "Tire dúvidas sobre indicadores e gestão de risco e envie prints do gráfico para análise." },
   { icon: ShieldCheck, title: "Gestão de risco em primeiro lugar", text: "Ferramentas para você acompanhar sua taxa de acerto real antes de arriscar." }
 ];

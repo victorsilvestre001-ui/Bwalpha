@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { createChart, CandlestickSeries, LineSeries, ColorType } from "lightweight-charts";
 import { api } from "@/lib/api";
 
-// Gráfico da página inicial: Ouro M5 com os mesmos candles da Exnova do painel, atualizado a cada 5 s.
+// Gráfico da página inicial: Ouro M5 com os mesmos candles do painel, atualizado a cada 5 s.
 // Os cards (tendência, RSI, MACD) são calculados desses mesmos candles.
 const BRT = -3 * 3600;
 
