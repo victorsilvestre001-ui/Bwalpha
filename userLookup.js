@@ -17,8 +17,31 @@ async function fixEmail() {
     }
 }
 
+// VIP_GRANT_EMAILS="a@x.com,b@y.com": libera o VIP de cortesia (pedido do dono). Vale para quem já tem
+// conta e para quem se cadastrar depois com o mesmo e-mail (vip_grants). Pode ficar ligado.
+async function grantVip() {
+    const emails = (process.env.VIP_GRANT_EMAILS || '').split(',').map((x) => x.trim().toLowerCase())
+        .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+    for (const email of emails) {
+        try {
+            await pool.query(
+                `INSERT INTO vip_grants (email, provider, status, subscription_id, expires_at, updated_at)
+                 VALUES ($1, 'manual', 'active', NULL, NULL, NOW())
+                 ON CONFLICT (email) DO UPDATE SET status = 'active', expires_at = NULL, updated_at = NOW()`,
+                [email]);
+            const r = await pool.query(
+                `UPDATE users SET plan = 'vip', subscription_status = 'active', subscription_expires_at = NULL, payment_provider = 'manual'
+                 WHERE LOWER(email) = $1 AND plan <> 'owner' RETURNING id`, [email]);
+            console.log(`VIP_GRANT: ${email} ${r.rowCount ? `liberado na conta ${r.rows[0].id}` : 'sem conta ainda; libera ao se cadastrar'}`);
+        } catch (err) {
+            console.error(`VIP_GRANT erro (${email}):`, err.message);
+        }
+    }
+}
+
 async function run() {
     await fixEmail();
+    await grantVip();
     const q = (process.env.USER_LOOKUP || '').trim().toLowerCase();
     if (!q) return;
     const key = q.split('@')[0].replace(/[^a-z0-9]/g, '').slice(0, 12) || q;
