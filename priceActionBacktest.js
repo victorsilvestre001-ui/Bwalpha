@@ -184,6 +184,32 @@ const PADROES = {
         }
         return null;
     },
+    // Padrão do dono (06/10): candle que fecha na ponta, sem pavio no fechamento, e só tem pavio na
+    // abertura (alta: fecha na máxima com pavio embaixo; baixa: fecha na mínima com pavio em cima).
+    // Direção testada = continuação; acerto abaixo de 50% quer dizer que o contrário funciona.
+    fecha_sem_pavio: (c, i, P) => {
+        const x = c[i], b = body(x);
+        if (Math.abs(b) < 0.3 * P.atr[i]) return null;
+        if (b > 0 && x.close === x.high && loW(x) > 0) return 1;
+        if (b < 0 && x.close === x.low && upW(x) > 0) return 0;
+        return null;
+    },
+    fecha_sem_pavio_forte: (c, i, P) => {
+        // Mesmo padrão com corpo grande (≥ 1 ATR) e pavio de abertura de pelo menos 15% do candle.
+        const x = c[i], b = body(x), r = range(x);
+        if (Math.abs(b) < P.atr[i]) return null;
+        if (b > 0 && x.close === x.high && loW(x) >= 0.15 * r) return 1;
+        if (b < 0 && x.close === x.low && upW(x) >= 0.15 * r) return 0;
+        return null;
+    },
+    fecha_quase_sem_pavio: (c, i, P) => {
+        // Versão com tolerância: pavio do fechamento até 5% do candle.
+        const x = c[i], b = body(x), r = range(x);
+        if (Math.abs(b) < 0.3 * P.atr[i]) return null;
+        if (b > 0 && upW(x) <= 0.05 * r && loW(x) >= 0.1 * r) return 1;
+        if (b < 0 && loW(x) <= 0.05 * r && upW(x) >= 0.1 * r) return 0;
+        return null;
+    },
     tendencia_maior_pullback: (c, i, P) => {
         // Tendência do tempo maior (média de 200, ~M15/H1) + recuo até a média de 20 + candle de retomada.
         const x = c[i], a = c[i - 1];
