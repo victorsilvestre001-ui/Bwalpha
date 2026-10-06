@@ -195,10 +195,10 @@ async function tick() {
     st.lastBucket = bucket;
     if (!st.ready || !isMarketOpen(new Date(bucket)) || !isMarketOpen(new Date(bucket + TF))) return;
     if (horarioNoticiaEUA(bucket)) return;
-    // Conta só as entradas aceitas; ordens recusadas pela corretora não gastam a vez, mas no máximo 6 tentativas por dia.
+    // Conta só as entradas aceitas; ordens recusadas pela corretora não gastam a vez, mas no máximo (limite + 4) tentativas por dia.
     const { rows } = await pool.query(`SELECT COUNT(*) FILTER (WHERE status NOT LIKE 'recusada%')::int AS ok, COUNT(*)::int AS total
         FROM auto_trades WHERE dia = $1`, [brDay(now)]);
-    if (rows[0].ok >= MAX_POR_DIA || rows[0].total >= 6) return;
+    if (rows[0].ok >= MAX_POR_DIA || rows[0].total >= MAX_POR_DIA + 4) return;
     if (now - st.thrAt > 6 * 3600_000) await updateThresholds();
     const cands = [];
     for (const pair of PAIRS) {
