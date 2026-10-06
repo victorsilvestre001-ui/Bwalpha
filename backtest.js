@@ -779,6 +779,11 @@ async function run() {
         console.log('BACKTEST_END');
         return;
     }
+    if (process.env.BACKTEST_SOURCE === 'minerador') {
+        try { await require('./mineradorBacktest').runMinerador(pool, { fetchLongHistory, isMarketOpen }); } catch (err) { console.error('BACKTEST_ERR MINERADOR:', err.message); }
+        console.log('BACKTEST_END');
+        return;
+    }
     if (process.env.BACKTEST_SOURCE === 'priceaction') {
         try { await require('./priceActionBacktest').runPriceAction(pool, { fetchLongHistory, isMarketOpen }); } catch (err) { console.error('BACKTEST_ERR PRICE_ACTION:', err.message); }
         console.log('BACKTEST_END');
