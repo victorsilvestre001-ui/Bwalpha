@@ -4,8 +4,15 @@
 // Desliga com SCORE_SHADOW=0.
 //   score_m5      Score TradeOn (regressão logística) em M5, pesos do estudo de 03/10.
 //   rejeicao_m5   Reversão com rejeição: preço 2 desvios fora da média + pavio devolvendo.
+// Testes de 06/10 (pedido do dono: medir e ir melhorando a análise sem mexer no robô):
+//   robo_m5       a regra exata do robô demo (Score top 5% + técnico Alta + rejeição + fora de notícia),
+//                 em todos os candles, para ter amostra grande em vez de 2 entradas por dia.
+//   rigida_m5     robo_m5 + só Londres/NY (7h–17h UTC) + último candle fechado a favor da entrada.
+//   exnova_m5     Score com pesos retreinados só nos candles reais da Exnova (nunca vê o futuro).
+//   tecnico_m5    sinal técnico do painel com confiança Alta, sozinho (o que o cliente recebe).
+// Esses quatro também são refeitos uma vez no histórico guardado (origem = 'historico').
 const pool = require('./db');
-const { series, features, predict } = require('./scoreBacktest');
+const { series, features, predict, samples, trainLogistic } = require('./scoreBacktest');
 
 const PAIRS = ['EURUSD', 'XAUUSD', 'EURJPY'];
 // Pesos aprendidos no estudo de 03/10 (M5, ~8 mil candles por ativo). Ordem = FEATURE_NAMES + bias.
@@ -40,8 +47,118 @@ function ensureTable() {
         prob REAL NOT NULL,
         direction TEXT NOT NULL,
         result TEXT,
-        PRIMARY KEY (estrategia, pair, candle_time))`);
+        PRIMARY KEY (estrategia, pair, candle_time))`)
+        .then(() => pool.query(`ALTER TABLE shadow_tests ADD COLUMN IF NOT EXISTS origem TEXT DEFAULT 'ao_vivo'`));
     return ready;
+}
+
+// ---- Testes de 06/10 ----
+const TF = 300_000;
+const NOVOS = ['robo_m5', 'rigida_m5', 'exnova_m5', 'tecnico_m5'];
+const JANELA_CORTE = 1152; // 96 h de candles M5, igual ao robô
+const novo = { done: {}, wEx: {}, wExAt: 0 };
+
+async function m5Historico(pair, dias) {
+    return aggregate(await m1Candles(pair, dias * 24), 5);
+}
+
+// Confiança do Score (pesos do estudo) em cada candle, para o corte dos 5% mais fortes.
+function confSerie(pair, c, S) {
+    return c.map((x, i) => (i >= 60 && x.time - c[i - 60].time === 60 * TF ? Math.abs(predict(W5[pair], features(c, S, i)) - 0.5) : null));
+}
+
+function corteTopo(confs, i) {
+    const prev = confs.slice(Math.max(0, i - JANELA_CORTE), i).filter((v) => v != null);
+    if (prev.length < 500) return null;
+    prev.sort((a, b) => b - a);
+    return prev[Math.floor(prev.length * 0.05)];
+}
+
+// Pesos treinados só com candles cujo alvo fechou antes de `ate` (sem ver o futuro).
+function pesosExnova(c, ate) {
+    const rows = samples(c, TF, null).filter((r) => r.t + 2 * TF <= ate);
+    return rows.length >= 800 ? trainLogistic(rows.map((r) => r.x), rows.map((r) => r.y)) : null;
+}
+
+// Leituras dos testes novos no candle i fechado, para o candle seguinte. Valor = probabilidade de alta.
+function leituras(pair, c, S, confs, i, wEx) {
+    const { isMarketOpen, horarioNoticiaEUA, computeTechnicalSignal } = require('./marketRoutes');
+    const b = c[i].time + TF, out = {};
+    if (i < 98 || c[i].time - c[i - 60].time !== 60 * TF) return out;
+    if (!isMarketOpen(new Date(b)) || !isMarketOpen(new Date(b + TF))) return out;
+    const x = features(c, S, i);
+    if (wEx) out.exnova_m5 = predict(wEx, x);
+    if (horarioNoticiaEUA(b)) return out;
+    const last = c[i];
+    const tec = computeTechnicalSignal(c.slice(i - 98, i + 1), { time: b, open: last.close, high: last.close, low: last.close, close: last.close });
+    if (tec?.confidence === 'Alta' && (tec.direction === 'COMPRA' || tec.direction === 'VENDA')) out.tecnico_m5 = tec.direction === 'COMPRA' ? 1 : 0;
+    const p = predict(W5[pair], x), lado = p > 0.5 ? 'COMPRA' : 'VENDA', thr = corteTopo(confs, i);
+    if (thr == null || Math.abs(p - 0.5) < thr || tec?.direction !== lado || tec?.confidence !== 'Alta') return out;
+    const rej = x[4] <= -2 && x[6] > 0.3 ? 'COMPRA' : x[4] >= 2 && x[6] < -0.3 ? 'VENDA' : null;
+    if (rej && rej !== lado) return out;
+    out.robo_m5 = p;
+    const h = new Date(b).getUTCHours();
+    const velaAFavor = lado === 'COMPRA' ? last.close > last.open : last.close < last.open;
+    if (h >= 7 && h < 17 && velaAFavor) out.rigida_m5 = p;
+    return out;
+}
+
+const resultado = (dir, alvo) => (alvo.close === alvo.open ? 'draw' : (dir === 'COMPRA') === (alvo.close > alvo.open) ? 'win' : 'loss');
+
+// Refaz os testes novos em todo o histórico guardado, uma vez (se ainda não houver linhas 'historico').
+async function backfill() {
+    const { rows } = await pool.query(`SELECT 1 FROM shadow_tests WHERE origem = 'historico' AND estrategia = ANY($1) LIMIT 1`, [NOVOS]);
+    if (rows.length) return;
+    for (const pair of PAIRS) {
+        const c = await m5Historico(pair, 30), S = series(c), confs = confSerie(pair, c, S);
+        const pesosDia = {};
+        const cont = {};
+        for (let i = 98; i < c.length - 1; i++) {
+            const alvo = c[i + 1];
+            if (alvo.time !== c[i].time + TF) continue;
+            const dia = Math.floor(alvo.time / 86_400_000) * 86_400_000;
+            if (!(dia in pesosDia)) pesosDia[dia] = pesosExnova(c, dia);
+            for (const [name, p] of Object.entries(leituras(pair, c, S, confs, i, pesosDia[dia]))) {
+                const dir = p > 0.5 ? 'COMPRA' : 'VENDA';
+                await pool.query(
+                    `INSERT INTO shadow_tests (estrategia, pair, candle_time, prob, direction, result, origem) VALUES ($1, $2, $3, $4, $5, $6, 'historico') ON CONFLICT DO NOTHING`,
+                    [name, pair, new Date(alvo.time), p, dir, resultado(dir, alvo)]);
+                cont[name] = (cont[name] || 0) + 1;
+            }
+        }
+        console.log(`SCORE_SHADOW_HISTORICO ${pair} candles=${c.length} de=${c[0] && new Date(c[0].time).toISOString()} ${JSON.stringify(cont)}`);
+    }
+}
+
+async function tickNovos(now) {
+    const bucket = Math.floor(now / TF) * TF;
+    if (now - novo.wExAt > 6 * 3600_000) { novo.wExAt = now; novo.recarregar = true; }
+    for (const pair of PAIRS) {
+        if (novo.done[pair] === bucket) continue;
+        const c = await m5Historico(pair, 30);
+        if (c.length < 200) continue;
+        if (novo.recarregar || !(pair in novo.wEx)) novo.wEx[pair] = pesosExnova(c, now);
+        const byTime = new Map(c.map((x) => [x.time, x]));
+        const { rows: pend } = await pool.query('SELECT estrategia, candle_time, direction FROM shadow_tests WHERE estrategia = ANY($1) AND pair = $2 AND result IS NULL', [NOVOS, pair]);
+        for (const r of pend) {
+            const tt = new Date(r.candle_time).getTime(), alvo = byTime.get(tt);
+            if (alvo) await pool.query('UPDATE shadow_tests SET result = $4 WHERE estrategia = $1 AND pair = $2 AND candle_time = $3', [r.estrategia, pair, r.candle_time, resultado(r.direction, alvo)]);
+            else if (now - tt > 6 * 3600_000) await pool.query("UPDATE shadow_tests SET result = 'sem_dados' WHERE estrategia = $1 AND pair = $2 AND candle_time = $3", [r.estrategia, pair, r.candle_time]);
+        }
+        const i = c.length - 1;
+        // O coletor pode atrasar uns segundos: tenta de novo no próximo tick até 1 min depois da abertura.
+        if (c[i].time + TF !== bucket && now - bucket < 60_000) continue;
+        if (c[i].time + TF === bucket) {
+            const S = series(c);
+            for (const [name, p] of Object.entries(leituras(pair, c, S, confSerie(pair, c, S), i, novo.wEx[pair]))) {
+                await pool.query(
+                    `INSERT INTO shadow_tests (estrategia, pair, candle_time, prob, direction, origem) VALUES ($1, $2, $3, $4, $5, 'ao_vivo') ON CONFLICT DO NOTHING`,
+                    [name, pair, new Date(bucket), p, p > 0.5 ? 'COMPRA' : 'VENDA']);
+            }
+        }
+        novo.done[pair] = bucket;
+    }
+    novo.recarregar = false;
 }
 
 function aggregate(m1, min) {
@@ -68,8 +185,9 @@ async function tick() {
         const tf = t.min * 60_000, bucket = Math.floor(now / tf) * tf;
         for (const pair of PAIRS) if (done[`${name}:${pair}`] !== bucket) pending.push([name, t, pair, tf, bucket]);
     }
-    if (!pending.length) return;
     await ensureTable();
+    await tickNovos(now);
+    if (!pending.length) return;
     const cache = {};
     for (const [name, t, pair, tf, bucket] of pending) {
         const key = `${pair}:${t.min}`;
@@ -104,23 +222,25 @@ async function tick() {
     if (now - lastSummary > 3600_000) { lastSummary = now; await summary(); }
 }
 
-// [estratégia, ativo, amostras, acerto %, amostras top 25%, acerto top 25%]
+// [estratégia, origem, ativo, amostras, acerto %, amostras top 25%, acerto top 25%]; ativo 'TODOS' = soma.
 async function summary() {
     const { rows } = await pool.query(`
         WITH s AS (
-            SELECT estrategia, pair, result,
-                   NTILE(4) OVER (PARTITION BY estrategia, pair ORDER BY ABS(prob - 0.5) DESC) AS q
+            SELECT estrategia, COALESCE(origem, 'ao_vivo') AS origem, pair, result,
+                   NTILE(4) OVER (PARTITION BY estrategia, COALESCE(origem, 'ao_vivo'), pair ORDER BY ABS(prob - 0.5) DESC) AS q
             FROM shadow_tests WHERE result IN ('win', 'loss'))
-        SELECT estrategia, pair, COUNT(*)::int AS n, ROUND(100.0 * AVG((result = 'win')::int), 1) AS acerto,
+        SELECT estrategia, origem, COALESCE(pair, 'TODOS') AS pair, COUNT(*)::int AS n, ROUND(100.0 * AVG((result = 'win')::int), 1) AS acerto,
                COUNT(*) FILTER (WHERE q = 1)::int AS n_top25,
                ROUND(100.0 * AVG((result = 'win')::int) FILTER (WHERE q = 1), 1) AS acerto_top25
-        FROM s GROUP BY 1, 2 ORDER BY 1, 2`);
+        FROM s GROUP BY GROUPING SETS ((estrategia, origem, pair), (estrategia, origem)) ORDER BY 1, 2, 3`);
     console.log('SCORE_SHADOW_RESUMO ' + JSON.stringify(rows.map((r) => Object.values(r))));
 }
 
 function start() {
     if (process.env.SCORE_SHADOW === '0') return;
+    setTimeout(() => ensureTable().then(backfill).then(summary)
+        .catch((err) => console.error('SCORE_SHADOW_HISTORICO erro:', err.message)), 60_000);
     setInterval(() => tick().catch((err) => console.error('SCORE_SHADOW erro:', err.message)), 20_000);
 }
 
-module.exports = { start, summary, TESTS, W5 };
+module.exports = { start, summary, TESTS, W5, leituras, confSerie, pesosExnova };
