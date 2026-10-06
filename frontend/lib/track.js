@@ -4,7 +4,7 @@
 // Podem ser trocados pela variável de ambiente (separados por vírgula). O fbq("track") manda para todos.
 const META_PIXEL_IDS = (process.env.NEXT_PUBLIC_META_PIXEL_ID || "1856706728826047,2784557928605608")
   .split(",").map((id) => id.trim()).filter(Boolean);
-const GOOGLE_ADS_ID = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID || ""; // formato AW-XXXXXXXXX
+const GOOGLE_ADS_ID = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID || "AW-18498114373"; // tag do Google Ads da TradeOn
 const GADS_LABELS = {
   CompleteRegistration: process.env.NEXT_PUBLIC_GADS_SIGNUP_LABEL || "",
   InitiateCheckout: process.env.NEXT_PUBLIC_GADS_CHECKOUT_LABEL || "",
@@ -44,6 +44,21 @@ function addScript(src) {
   document.head.appendChild(s);
 }
 
+// Tag do Google em modo de consentimento: carrega em toda página (o Google precisa detectá-la),
+// mas com cookies e anúncios negados até a pessoa aceitar no aviso de cookies (LGPD).
+let googleBase = false;
+export function initGoogleTag() {
+  if (googleBase || typeof window === "undefined" || !GOOGLE_ADS_ID) return;
+  googleBase = true;
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = window.gtag || function () { window.dataLayer.push(arguments); };
+  const granted = getConsent() === "all" ? "granted" : "denied";
+  window.gtag("consent", "default", { ad_storage: granted, ad_user_data: granted, ad_personalization: granted, analytics_storage: granted });
+  addScript(`https://www.googletagmanager.com/gtag/js?id=${GOOGLE_ADS_ID}`);
+  window.gtag("js", new Date());
+  window.gtag("config", GOOGLE_ADS_ID);
+}
+
 export function loadTrackers() {
   if (loaded || typeof window === "undefined" || getConsent() !== "all") return;
   loaded = true;
@@ -57,12 +72,9 @@ export function loadTrackers() {
     window.fbq("track", "PageView");
   }
 
-  if (GOOGLE_ADS_ID && !window.gtag) {
-    window.dataLayer = window.dataLayer || [];
-    window.gtag = function () { window.dataLayer.push(arguments); };
-    addScript(`https://www.googletagmanager.com/gtag/js?id=${GOOGLE_ADS_ID}`);
-    window.gtag("js", new Date());
-    window.gtag("config", GOOGLE_ADS_ID);
+  if (GOOGLE_ADS_ID) {
+    initGoogleTag();
+    window.gtag("consent", "update", { ad_storage: "granted", ad_user_data: "granted", ad_personalization: "granted", analytics_storage: "granted" });
   }
 }
 

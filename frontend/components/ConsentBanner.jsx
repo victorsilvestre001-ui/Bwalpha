@@ -1,13 +1,14 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getConsent, setConsent, loadTrackers } from "@/lib/track";
+import { getConsent, setConsent, loadTrackers, initGoogleTag } from "@/lib/track";
 
 export default function ConsentBanner() {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
     const c = getConsent();
+    initGoogleTag();
     if (c === "all") loadTrackers();
     else if (!c) setShow(true);
   }, []);
