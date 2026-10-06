@@ -311,6 +311,8 @@ runMigrations().then(() => {
         require('./exnovaCollector').start();
         // Score TradeOn em modo teste escondido: grava previsão e resultado a cada candle M5 (scoreShadow.js).
         require('./scoreShadow').start();
+        // Robô de teste na conta DEMO da Exnova: máx. 2 entradas por dia (autoTrader.js). Liga com AUTO_TRADE=1.
+        require('./autoTrader').start();
         // Backtest sob demanda: RUN_BACKTEST=1 escreve nos logs a taxa de acerto de cada estratégia.
         if (process.env.RUN_BACKTEST === '1') {
             require('./backtest').run().catch((err) => console.error('BACKTEST_ERR', err.message));

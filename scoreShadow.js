@@ -123,4 +123,4 @@ function start() {
     setInterval(() => tick().catch((err) => console.error('SCORE_SHADOW erro:', err.message)), 20_000);
 }
 
-module.exports = { start, summary, TESTS };
+module.exports = { start, summary, TESTS, W5 };
