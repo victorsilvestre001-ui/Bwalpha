@@ -10,6 +10,8 @@
 //   rigida_m5     robo_m5 + só Londres/NY (7h–17h UTC) + último candle fechado a favor da entrada.
 //   exnova_m5     Score com pesos retreinados só nos candles reais da Exnova (nunca vê o futuro).
 //   tecnico_m5    sinal técnico do painel com confiança Alta, sozinho (o que o cliente recebe).
+//   min_*         regras achadas pelo minerador (mineradorBacktest.js) no mercado real M5, que passaram
+//                 em estudo, confirmação e prova lá; aqui são conferidas no preço da Exnova.
 // Esses quatro também são refeitos uma vez no histórico guardado (origem = 'historico').
 const pool = require('./db');
 const { series, features, predict, samples, trainLogistic } = require('./scoreBacktest');
@@ -54,7 +56,18 @@ function ensureTable() {
 
 // ---- Testes de 06/10 ----
 const TF = 300_000;
-const NOVOS = ['robo_m5', 'rigida_m5', 'exnova_m5', 'tecnico_m5'];
+// Regras do minerador (06/10). Horários em UTC (21h UTC = 18h de Brasília; 15h UTC = 12h).
+const REGRAS_MIN = [
+    { id: 'min_h21_mini', se: { corpo: 'mini', hora: '21', minuto: '5' }, dir: 1 },
+    { id: 'min_h21_baixa', se: { tendencia: 'baixa', hora: '21', minuto: '5' }, dir: 1 },
+    { id: 'min_h21_pavio', se: { pavio_cima: 'longo', z_media: '0', hora: '21' }, dir: 1 },
+    { id: 'min_h15_rompe', se: { sequencia: '2', hora: '15', vs_anterior: 'abaixo_min' }, dir: 0 },
+    { id: 'min_h14_rompe', se: { sequencia: '1', hora: '14', vs_anterior: 'acima_max' }, dir: 1 },
+    { id: 'min_h11_rompe', se: { cores3: 'RVV', hora: '11', vs_anterior: 'acima_max' }, dir: 1 },
+    { id: 'min_vrr_forte', se: { cores3: 'VRR', corpo: 'grande', pavio_cima: 'zero' }, dir: 0 },
+];
+const NOVOS = ['robo_m5', 'rigida_m5', 'exnova_m5', 'tecnico_m5', ...REGRAS_MIN.map((r) => r.id)];
+const minerador = require('./mineradorBacktest');
 const JANELA_CORTE = 1152; // 96 h de candles M5, igual ao robô
 const novo = { done: {}, wEx: {}, wExAt: 0 };
 
@@ -81,11 +94,15 @@ function pesosExnova(c, ate) {
 }
 
 // Leituras dos testes novos no candle i fechado, para o candle seguinte. Valor = probabilidade de alta.
-function leituras(pair, c, S, confs, i, wEx) {
+function leituras(pair, c, S, confs, i, wEx, Pm) {
     const { isMarketOpen, horarioNoticiaEUA, computeTechnicalSignal } = require('./marketRoutes');
     const b = c[i].time + TF, out = {};
     if (i < 98 || c[i].time - c[i - 60].time !== 60 * TF) return out;
     if (!isMarketOpen(new Date(b)) || !isMarketOpen(new Date(b + TF))) return out;
+    if (Pm) {
+        const f = minerador.descreve(c, i, Pm, pair, TF);
+        for (const r of REGRAS_MIN) if (Object.entries(r.se).every(([k, v]) => f[k] === v)) out[r.id] = r.dir;
+    }
     const x = features(c, S, i);
     if (wEx) out.exnova_m5 = predict(wEx, x);
     if (horarioNoticiaEUA(b)) return out;
@@ -107,10 +124,12 @@ const resultado = (dir, alvo) => (alvo.close === alvo.open ? 'draw' : (dir === '
 
 // Refaz os testes novos em todo o histórico guardado, uma vez (se ainda não houver linhas 'historico').
 async function backfill() {
-    const { rows } = await pool.query(`SELECT 1 FROM shadow_tests WHERE origem = 'historico' AND estrategia = ANY($1) LIMIT 1`, [NOVOS]);
-    if (rows.length) return;
+    const { rows } = await pool.query(`SELECT DISTINCT estrategia FROM shadow_tests WHERE origem = 'historico'`);
+    const feitos = new Set(rows.map((r) => r.estrategia));
+    // Só refaz o histórico se alguma regra nova ainda não tem (ON CONFLICT mantém as que já existem).
+    if (!REGRAS_MIN.some((r) => !feitos.has(r.id)) && feitos.has('robo_m5')) return;
     for (const pair of PAIRS) {
-        const c = await m5Historico(pair, 30), S = series(c), confs = confSerie(pair, c, S);
+        const c = await m5Historico(pair, 30), S = series(c), confs = confSerie(pair, c, S), Pm = minerador.prep(c);
         const pesosDia = {};
         const cont = {};
         for (let i = 98; i < c.length - 1; i++) {
@@ -118,7 +137,7 @@ async function backfill() {
             if (alvo.time !== c[i].time + TF) continue;
             const dia = Math.floor(alvo.time / 86_400_000) * 86_400_000;
             if (!(dia in pesosDia)) pesosDia[dia] = pesosExnova(c, dia);
-            for (const [name, p] of Object.entries(leituras(pair, c, S, confs, i, pesosDia[dia]))) {
+            for (const [name, p] of Object.entries(leituras(pair, c, S, confs, i, pesosDia[dia], Pm))) {
                 const dir = p > 0.5 ? 'COMPRA' : 'VENDA';
                 await pool.query(
                     `INSERT INTO shadow_tests (estrategia, pair, candle_time, prob, direction, result, origem) VALUES ($1, $2, $3, $4, $5, $6, 'historico') ON CONFLICT DO NOTHING`,
@@ -150,7 +169,7 @@ async function tickNovos(now) {
         if (c[i].time + TF !== bucket && now - bucket < 60_000) continue;
         if (c[i].time + TF === bucket) {
             const S = series(c);
-            for (const [name, p] of Object.entries(leituras(pair, c, S, confSerie(pair, c, S), i, novo.wEx[pair]))) {
+            for (const [name, p] of Object.entries(leituras(pair, c, S, confSerie(pair, c, S), i, novo.wEx[pair], minerador.prep(c)))) {
                 await pool.query(
                     `INSERT INTO shadow_tests (estrategia, pair, candle_time, prob, direction, origem) VALUES ($1, $2, $3, $4, $5, 'ao_vivo') ON CONFLICT DO NOTHING`,
                     [name, pair, new Date(bucket), p, p > 0.5 ? 'COMPRA' : 'VENDA']);

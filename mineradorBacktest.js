@@ -35,7 +35,7 @@ function descreve(c, i, P, pair, tfMs) {
     let s = 0, q = 0; for (let k = i - 19; k <= i; k++) { s += c[k].close; q += c[k].close * c[k].close; }
     const m = s / 20, sd = Math.sqrt(Math.max(q / 20 - m * m, 1e-18)) || 1e-9, z = (x.close - m) / sd;
     let seq = 1; for (let k = i - 1; k > i - 8 && cor(c[k]) === cor(x) && cor(x) !== 'D'; k--) seq++;
-    const d = new Date(c[i + 1].time);
+    const d = new Date(c[i].time + tfMs); // horário do candle da entrada
     return {
         ativo: pair,
         cor: cor(x),
@@ -156,4 +156,4 @@ async function runMinerador(pool, deps) {
     await relatorio('mercado_real_M5', tdM5);
 }
 
-module.exports = { runMinerador, amostras, busca, descreve };
+module.exports = { runMinerador, amostras, busca, descreve, prep };
