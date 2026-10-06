@@ -55,12 +55,16 @@ function descreve(c, i, P, pair, tfMs) {
     };
 }
 
+// MIN_SEM_HORAS="20,21,22": tira esses horários UTC da busca (ex.: a virada do dia do câmbio).
+const SEM_HORAS = new Set((process.env.MIN_SEM_HORAS || '').split(',').map((x) => x.trim()).filter(Boolean));
+
 function amostras(c, pair, tfMs, isOpen) {
     const P = prep(c), out = [];
     for (let i = 60; i < c.length - 1; i++) {
         if (c[i + 1].time - c[i].time !== tfMs || c[i].time - c[i - 20].time !== 20 * tfMs) continue;
         if (isOpen && !isOpen(new Date(c[i + 1].time))) continue;
         if (c[i + 1].close === c[i + 1].open) continue;
+        if (SEM_HORAS.size && SEM_HORAS.has(String(new Date(c[i + 1].time).getUTCHours()))) continue;
         out.push({ t: c[i].time, f: descreve(c, i, P, pair, tfMs), y: c[i + 1].close > c[i + 1].open ? 1 : 0 });
     }
     return out;
