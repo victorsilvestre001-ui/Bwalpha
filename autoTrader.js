@@ -21,7 +21,7 @@ const PAIRS = ['EURUSD', 'EURJPY', 'XAUUSD'];
 const TRADE_IDS = Object.fromEntries((process.env.AUTO_ACTIVE_IDS || 'EURUSD:1861,EURJPY:1864,XAUUSD:1912')
     .split(',').map((x) => x.trim().split(':')).filter(([n, id]) => n && id).map(([n, id]) => [n.toUpperCase(), Number(id)]));
 const TF = 300_000;
-const MAX_POR_DIA = Math.min(2, parseInt(process.env.AUTO_MAX_DIA, 10) || 2);
+const MAX_POR_DIA = Math.min(4, parseInt(process.env.AUTO_MAX_DIA, 10) || 2); // padrão 2; até 4 se o dono pedir
 const VALOR = Number(process.env.AUTO_VALOR) || 5;
 const PCT_TOPO = 0.05; // 5% leituras mais confiantes
 
