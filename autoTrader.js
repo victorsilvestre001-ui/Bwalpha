@@ -181,7 +181,8 @@ async function evaluate(pair, bucket, noticia) {
             }
         }
     }
-    if (noticia) return null;
+    // Score antigo: desligado desde 06/10 (o dono quer só as regras). Religa com AUTO_SCORE=1.
+    if (noticia || process.env.AUTO_SCORE !== '1') return null;
     const x = features(c, series(c), i);
     const p = predict(W5[pair], x), conf = Math.abs(p - 0.5);
     const lado = p > 0.5 ? 'COMPRA' : 'VENDA';
@@ -220,7 +221,7 @@ async function tick() {
     const { rows } = await pool.query(`SELECT COUNT(*) FILTER (WHERE status NOT LIKE 'recusada%')::int AS ok, COUNT(*)::int AS total
         FROM auto_trades WHERE dia = $1`, [brDay(now)]);
     if (rows[0].ok >= MAX_POR_DIA || rows[0].total >= MAX_POR_DIA + 4) return;
-    if (now - st.thrAt > 6 * 3600_000) await updateThresholds();
+    if (process.env.AUTO_SCORE === '1' && now - st.thrAt > 6 * 3600_000) await updateThresholds();
     const cands = [];
     for (const pair of PAIRS) {
         try { const e = await evaluate(pair, bucket, noticia); if (e) cands.push(e); } catch (err) { console.error(`ROBO_DEMO: erro avaliando ${pair}:`, err.message); }

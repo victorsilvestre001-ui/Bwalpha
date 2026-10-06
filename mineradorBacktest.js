@@ -156,4 +156,40 @@ async function runMinerador(pool, deps) {
     await relatorio('mercado_real_M5', tdM5);
 }
 
-module.exports = { runMinerador, amostras, busca, descreve, prep };
+// Confirmação das regras do robô (06/10): para cada regra, o acerto separado por cada característica
+// extra (tendência, RSI, corpo, pavios...), no mercado real M5 e na Exnova M5. Mostra qual filtro
+// confirma a regra (sobe o acerto sem matar a amostra). BACKTEST_SOURCE=confirma; logs CONF_*.
+const REGRAS_ROBO = {
+    min_h11_rompe: { se: { cores3: 'RVV', hora: '11', vs_anterior: 'acima_max' }, y: 1 },
+    min_h14_rompe: { se: { sequencia: '1', hora: '14', vs_anterior: 'acima_max' }, y: 1 },
+};
+
+async function runConfirma(pool, deps) {
+    const PAIRS = ['EURUSD', 'EURJPY', 'XAUUSD'];
+    const bases = { mercado_real_M5: [], exnova_M5: [] };
+    for (const pair of PAIRS) {
+        const { rows } = await pool.query('SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 ORDER BY time', [pair]);
+        const m1 = rows.slice(0, -1).map((r) => ({ time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }));
+        bases.exnova_M5.push(...amostras(agrega(m1, 5), pair, 300_000, deps.isMarketOpen));
+        try {
+            const td = (await deps.fetchLongHistory(pair, 'M5', parseInt(process.env.PA_TD_PAGES, 10) || 4)).filter((x) => deps.isMarketOpen(new Date(x.time)));
+            bases.mercado_real_M5.push(...amostras(td, pair, 300_000, null));
+        } catch (err) { console.error(`CONF_ERR TD ${pair}:`, err.message); }
+    }
+    for (const [base, S] of Object.entries(bases)) {
+        for (const [nome, r] of Object.entries(REGRAS_ROBO)) {
+            const hits = S.filter((s) => Object.entries(r.se).every(([k, v]) => s.f[k] === v));
+            const ok = (l) => [l.length, l.length ? +(100 * l.filter((s) => s.y === r.y).length / l.length).toFixed(1) : null];
+            const por = {};
+            for (const k of Object.keys(S[0]?.f || {})) {
+                if (k in r.se || k === 'hora') continue;
+                const g = {};
+                for (const s of hits) (g[s.f[k]] ||= []).push(s);
+                por[k] = Object.fromEntries(Object.entries(g).map(([v, l]) => [v, ok(l)]));
+            }
+            console.log(`CONF_RESULT ${base} ${nome} total=${JSON.stringify(ok(hits))} ${JSON.stringify(por)}`);
+        }
+    }
+}
+
+module.exports = { runConfirma, runMinerador, amostras, busca, descreve, prep };
