@@ -84,6 +84,21 @@ async function connect() {
             console.log(demo
                 ? `ROBO_DEMO: conectado ao saldo de TREINO (saldo ${demo.amount} ${demo.currency || ''})`
                 : 'ROBO_DEMO: saldo de treino não encontrado; o robô NÃO vai operar');
+            // Ordem de teste (pedido do dono em 06/10), só para ver se a corretora aceita o código do
+            // ativo: AUTO_TESTE_AGORA=XAUUSD (ou outro par). Valor mínimo, 1 vez por processo, no treino.
+            const testPair = (process.env.AUTO_TESTE_AGORA || '').toUpperCase();
+            if (demo && TRADE_IDS[testPair] && !st.testDone) {
+                st.testDone = true;
+                const req = send('sendMessage', {
+                    name: 'binary-options.open-option', version: '1.0',
+                    body: {
+                        user_balance_id: st.practiceId, active_id: TRADE_IDS[testPair], option_type_id: 3, direction: 'call',
+                        expired: Math.floor(Date.now() / 60_000) * 60 + 120, price: 1,
+                    },
+                });
+                st.pending.set(req, 0);
+                console.log(`ROBO_DEMO: ordem de TESTE enviada ${testPair} (id ${TRADE_IDS[testPair]}, treino, valor 1)`);
+            }
         } else if (m.name === 'heartbeat') {
             send('heartbeat', { userTime: Date.now(), heartbeatTime: m.msg });
         } else if (/option/i.test(m.name || '') && !st.pending.has(m.request_id)) {
