@@ -109,6 +109,37 @@ async function busca(S, ys) {
     return { regras: tab.size, passam, corte: [c1, c2] };
 }
 
+// Refino (meta 80%): pega as regras que passaram (≥60%) e tenta uma condição a mais. Para passar:
+// estudo ≥ 78% (n ≥ 30) e confirmação ≥ 75% (n ≥ 15), na mesma direção; a prova é o juiz final.
+async function refina(S, ys, base, corte) {
+    const [c1, c2] = corte, keys = Object.keys(S[0].f), out = [], vistos = new Set();
+    for (const b of base) {
+        await new Promise((r) => setImmediate(r));
+        const conds = b.regra.split(' & ').map((x) => x.split('='));
+        const dir = b.entrada === 'COMPRA' ? 1 : 0;
+        const idx = [];
+        S.forEach((s, j) => { if (conds.every(([k, v]) => s.f[k] === v)) idx.push(j); });
+        for (const k of keys) {
+            if (conds.some(([ck]) => ck === k)) continue;
+            const g = {};
+            for (const j of idx) {
+                const v = S[j].f[k], parte = S[j].t < c1 ? 0 : S[j].t < c2 ? 1 : 2;
+                const a = (g[v] ||= [0, 0, 0, 0, 0, 0]);
+                a[parte * 2]++; a[parte * 2 + 1] += ys[j] === dir ? 1 : 0;
+            }
+            for (const [v, a] of Object.entries(g)) {
+                const [n0, w0, n1, w1, n2, w2] = a;
+                if (n0 < 30 || n1 < 15 || w0 / n0 < 0.78 || w1 / n1 < 0.75) continue;
+                const regra = [...conds.map(([ck, cv]) => `${ck}=${cv}`), `${k}=${v}`].sort().join(' & ');
+                if (vistos.has(regra)) continue;
+                vistos.add(regra);
+                out.push({ regra, entrada: b.entrada, estudo: [n0, +(100 * w0 / n0).toFixed(1)], confirmacao: [n1, +(100 * w1 / n1).toFixed(1)], prova: [n2, n2 ? +(100 * w2 / n2).toFixed(1) : null] });
+            }
+        }
+    }
+    return out;
+}
+
 function embaralha(ys) {
     const a = ys.slice();
     for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
@@ -122,8 +153,17 @@ async function relatorio(nome, S) {
     const provaOk = real.passam.filter((r) => r.prova[0] >= 20 && r.prova[1] >= 58);
     const provaOkCtrl = ctrl.passam.filter((r) => r.prova[0] >= 20 && r.prova[1] >= 58);
     console.log(`MIN_RESUMO ${nome} amostras=${S.length} regras_testadas=${real.regras} passam_estudo_e_confirmacao=${real.passam.length} (controle embaralhado: ${ctrl.passam.length}) passam_tambem_na_prova=${provaOk.length} (controle: ${provaOkCtrl.length}) cortes=${real.corte.map((t) => new Date(t).toISOString().slice(0, 16)).join(',')}`);
-    const top = real.passam.sort((a, b) => (b.prova[1] ?? 0) - (a.prova[1] ?? 0)).slice(0, 25);
+    const top = real.passam.slice().sort((a, b) => (b.prova[1] ?? 0) - (a.prova[1] ?? 0)).slice(0, 25);
     for (const r of top) console.log(`MIN_REGRA ${nome} ${JSON.stringify(r)}`);
+    if (process.env.MIN_REFINA === '1') {
+        const ysCtrl = embaralha(S.map((s) => s.y));
+        const ctrlBase = (await busca(S, ysCtrl)).passam;
+        const r80 = await refina(S, S.map((s) => s.y), real.passam, real.corte);
+        const c80 = await refina(S, ysCtrl, ctrlBase, real.corte);
+        const ok = (l) => l.filter((r) => r.prova[0] >= 15 && r.prova[1] >= 75);
+        console.log(`MIN_80_RESUMO ${nome} passam_estudo_e_confirmacao=${r80.length} (controle: ${c80.length}) passam_tambem_na_prova_75=${ok(r80).length} (controle: ${ok(c80).length})`);
+        for (const r of r80.sort((a, b) => (b.prova[1] ?? 0) - (a.prova[1] ?? 0)).slice(0, 30)) console.log(`MIN_80 ${nome} ${JSON.stringify(r)}`);
+    }
 }
 
 function agrega(m1, min) {
@@ -192,4 +232,4 @@ async function runConfirma(pool, deps) {
     }
 }
 
-module.exports = { runConfirma, runMinerador, amostras, busca, descreve, prep };
+module.exports = { runConfirma, runMinerador, amostras, busca, refina, descreve, prep };
