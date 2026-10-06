@@ -8,17 +8,18 @@
 // Roda com RUN_BACKTEST=1 e BACKTEST_SOURCE=priceaction; o resultado vai para os logs (PA_*).
 
 function prep(c) {
-    const n = c.length, tr = new Array(n), atr = new Array(n), e20 = new Array(n), e50 = new Array(n);
-    let a = 0, x20 = c[0].close, x50 = c[0].close;
+    const n = c.length, tr = new Array(n), atr = new Array(n), e20 = new Array(n), e50 = new Array(n), e200 = new Array(n);
+    let a = 0, x20 = c[0].close, x50 = c[0].close, x200 = c[0].close;
     for (let i = 0; i < n; i++) {
         tr[i] = i ? Math.max(c[i].high - c[i].low, Math.abs(c[i].high - c[i - 1].close), Math.abs(c[i].low - c[i - 1].close)) : c[i].high - c[i].low;
         a = i ? (a * 13 + tr[i]) / 14 : tr[i];
         atr[i] = a || 1e-9;
         x20 = i ? c[i].close * (2 / 21) + x20 * (19 / 21) : x20;
         x50 = i ? c[i].close * (2 / 51) + x50 * (49 / 51) : x50;
-        e20[i] = x20; e50[i] = x50;
+        x200 = i ? c[i].close * (2 / 201) + x200 * (199 / 201) : x200;
+        e20[i] = x20; e50[i] = x50; e200[i] = x200;
     }
-    return { atr, e20, e50 };
+    return { atr, e20, e50, e200 };
 }
 
 const body = (x) => x.close - x.open;
@@ -115,6 +116,79 @@ const PADROES = {
         const x = c[i], { sup, res, tol } = niveis(c, i, P.atr[i]);
         if (sup.some((v) => x.low <= v + tol && x.low >= v - 2 * tol && x.close > v) && loW(x) > upW(x) && body(x) >= 0) return 1;
         if (res.some((v) => x.high >= v - tol && x.high <= v + 2 * tol && x.close < v) && upW(x) > loW(x) && body(x) <= 0) return 0;
+        return null;
+    },
+    // ---- Segunda rodada (06/10) ----
+    sequencia5_inverte: (c, i) => {
+        const col = (k) => Math.sign(body(c[k]));
+        const s = col(i);
+        if (!s) return null;
+        for (let k = i - 4; k < i; k++) if (col(k) !== s) return null;
+        return s > 0 ? 0 : 1;
+    },
+    numero_redondo: (c, i, P) => {
+        // Rejeição num número redondo (00/50 pips; ouro: dólar cheio).
+        const x = c[i], passo = x.close > 500 ? 1 : x.close > 50 ? 0.5 : 0.005;
+        const nivel = Math.round(x.close / passo) * passo, tol = 0.3 * P.atr[i];
+        if (x.low <= nivel + tol && x.close > nivel && loW(x) > 1.5 * Math.abs(body(x))) return 1;
+        if (x.high >= nivel - tol && x.close < nivel && upW(x) > 1.5 * Math.abs(body(x))) return 0;
+        return null;
+    },
+    compressao_rompe: (c, i, P) => {
+        // 10 candles espremidos (faixa total < 2 ATR de 50 candles atrás) e o candle atual rompe a faixa.
+        const hi = maxHigh(c, i - 10, i - 1), lo = minLow(c, i - 10, i - 1);
+        if (hi - lo > 2 * P.atr[i - 40]) return null;
+        if (c[i].close > hi) return 1;
+        if (c[i].close < lo) return 0;
+        return null;
+    },
+    fundo_topo_duplo: (c, i, P) => {
+        const x = c[i], tol = 0.2 * P.atr[i];
+        const lo = minLow(c, i - 30, i - 5), hi = maxHigh(c, i - 30, i - 5);
+        if (Math.abs(x.low - lo) <= tol && body(x) > 0 && x.close > lo + 0.5 * P.atr[i]) return 1;
+        if (Math.abs(x.high - hi) <= tol && body(x) < 0 && x.close < hi - 0.5 * P.atr[i]) return 0;
+        return null;
+    },
+    fibo_618_tendencia: (c, i, P) => {
+        // Na tendência (média 20 acima da 50), o preço volta 50–61,8% da última perna e fecha a favor.
+        const hi = maxHigh(c, i - 20, i), lo = minLow(c, i - 20, i), x = c[i], perna = hi - lo;
+        if (perna < 3 * P.atr[i]) return null;
+        if (P.e20[i] > P.e50[i] && x.low <= hi - 0.5 * perna && x.low >= hi - 0.618 * perna && body(x) > 0) return 1;
+        if (P.e20[i] < P.e50[i] && x.high >= lo + 0.5 * perna && x.high <= lo + 0.618 * perna && body(x) < 0) return 0;
+        return null;
+    },
+    pavio_grande_preenche: (c, i, P) => {
+        // Pavio maior que 1,5 ATR: o preço tende a voltar para dentro dele?
+        const x = c[i];
+        if (upW(x) >= 1.5 * P.atr[i] && upW(x) > 2 * loW(x)) return 1;
+        if (loW(x) >= 1.5 * P.atr[i] && loW(x) > 2 * upW(x)) return 0;
+        return null;
+    },
+    exaustao_3_fortes: (c, i, P) => {
+        const s = [c[i - 2], c[i - 1], c[i]];
+        if (s.every((x) => body(x) > 0.8 * P.atr[i])) return 0;
+        if (s.every((x) => body(x) < -0.8 * P.atr[i])) return 1;
+        return null;
+    },
+    abertura_sessao: (c, i) => {
+        // Rompimento da faixa dos primeiros 15 min de Londres (7h UTC) e de NY (13h30 UTC), na 1ª hora.
+        const d = new Date(c[i].time), m = d.getUTCHours() * 60 + d.getUTCMinutes();
+        for (const ini of [420, 810]) {
+            if (m < ini + 15 || m >= ini + 60) continue;
+            const t0 = c[i].time - (m - ini) * 60_000, t1 = t0 + 15 * 60_000;
+            let hi = -Infinity, lo = Infinity, k = i - 1;
+            while (k >= 0 && c[k].time >= t0) { if (c[k].time < t1) { hi = Math.max(hi, c[k].high); lo = Math.min(lo, c[k].low); } k--; }
+            if (!isFinite(hi)) return null;
+            if (c[i].close > hi && c[i - 1].close <= hi) return 1;
+            if (c[i].close < lo && c[i - 1].close >= lo) return 0;
+        }
+        return null;
+    },
+    tendencia_maior_pullback: (c, i, P) => {
+        // Tendência do tempo maior (média de 200, ~M15/H1) + recuo até a média de 20 + candle de retomada.
+        const x = c[i], a = c[i - 1];
+        if (x.close > P.e200[i] && P.e200[i] > P.e200[i - 20] && a.low <= P.e20[i - 1] && body(x) > 0 && x.close > a.high) return 1;
+        if (x.close < P.e200[i] && P.e200[i] < P.e200[i - 20] && a.high >= P.e20[i - 1] && body(x) < 0 && x.close < a.low) return 0;
         return null;
     },
     rompe_suporte_resistencia: (c, i, P) => {
