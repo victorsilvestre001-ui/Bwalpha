@@ -56,6 +56,12 @@ function descreve(c, i, P, pair, tfMs) {
 }
 
 // MIN_SEM_HORAS="20,21,22": tira esses horários UTC da busca (ex.: a virada do dia do câmbio).
+// Cortes da busca (padrão: estudo ≥ 60% com n ≥ 60, confirmação ≥ 58% com n ≥ 30, prova ≥ 58% com n ≥ 20).
+// A busca semanal na Exnova (padrões de ~1 vez por dia com 70%) usa MIN_ALVO=0.7 MIN_CONF=0.65 MIN_N0=30 MIN_N1=15 MIN_N2=10.
+const CORTE = {
+    alvo: Number(process.env.MIN_ALVO) || 0.6, conf: Number(process.env.MIN_CONF) || 0.58,
+    n0: Number(process.env.MIN_N0) || 60, n1: Number(process.env.MIN_N1) || 30, n2: Number(process.env.MIN_N2) || 20,
+};
 const SEM_HORAS = new Set((process.env.MIN_SEM_HORAS || '').split(',').map((x) => x.trim()).filter(Boolean));
 
 function amostras(c, pair, tfMs, isOpen) {
@@ -97,12 +103,12 @@ async function busca(S, ys) {
     const passam = [];
     for (const [regra, v] of tab) {
         const [n0, u0, n1, u1, n2, u2] = v;
-        if (n0 < 60 || n1 < 30) continue;
+        if (n0 < CORTE.n0 || n1 < CORTE.n1) continue;
         const p0 = u0 / n0, p1 = u1 / n1;
-        const dir = p0 >= 0.6 ? 1 : p0 <= 0.4 ? 0 : null;
+        const dir = p0 >= CORTE.alvo ? 1 : p0 <= 1 - CORTE.alvo ? 0 : null;
         if (dir == null) continue;
         const a1 = dir ? p1 : 1 - p1;
-        if (a1 < 0.58) continue;
+        if (a1 < CORTE.conf) continue;
         passam.push({
             regra, entrada: dir ? 'COMPRA' : 'VENDA',
             estudo: [n0, +((dir ? p0 : 1 - p0) * 100).toFixed(1)],
@@ -154,8 +160,8 @@ async function relatorio(nome, S) {
     if (S.length < 2000) return console.log(`MIN_RESULT ${nome} poucos dados (${S.length})`);
     const real = await busca(S, S.map((s) => s.y));
     const ctrl = await busca(S, embaralha(S.map((s) => s.y)));
-    const provaOk = real.passam.filter((r) => r.prova[0] >= 20 && r.prova[1] >= 58);
-    const provaOkCtrl = ctrl.passam.filter((r) => r.prova[0] >= 20 && r.prova[1] >= 58);
+    const provaOk = real.passam.filter((r) => r.prova[0] >= CORTE.n2 && r.prova[1] >= CORTE.conf * 100);
+    const provaOkCtrl = ctrl.passam.filter((r) => r.prova[0] >= CORTE.n2 && r.prova[1] >= CORTE.conf * 100);
     console.log(`MIN_RESUMO ${nome} amostras=${S.length} regras_testadas=${real.regras} passam_estudo_e_confirmacao=${real.passam.length} (controle embaralhado: ${ctrl.passam.length}) passam_tambem_na_prova=${provaOk.length} (controle: ${provaOkCtrl.length}) cortes=${real.corte.map((t) => new Date(t).toISOString().slice(0, 16)).join(',')}`);
     const top = real.passam.slice().sort((a, b) => (b.prova[1] ?? 0) - (a.prova[1] ?? 0)).slice(0, 25);
     for (const r of top) console.log(`MIN_REGRA ${nome} ${JSON.stringify(r)}`);
