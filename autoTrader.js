@@ -12,6 +12,7 @@
 // (foram validadas assim no mercado real M5). Horários em UTC; troca com AUTO_REGRAS (vazio desliga):
 //   min_h11_rompe  11h UTC (08h Brasília): cores vermelho-verde-verde e o último fechou acima da máxima do anterior → COMPRA
 //   min_h14_rompe  14h UTC (11h Brasília): 1º candle verde depois de vermelho fechando acima da máxima do anterior → COMPRA
+// Cada uma só entra com a sua confirmação (ver REGRAS). O Score antigo fica desligado (AUTO_SCORE=1 religa).
 // Expiração: fim do candle M5 (5 min). Tudo fica gravado na tabela auto_trades.
 const WebSocket = require('ws');
 const pool = require('./db');
@@ -29,8 +30,10 @@ const MAX_POR_DIA = Math.min(4, parseInt(process.env.AUTO_MAX_DIA, 10) || 2); //
 const VALOR = Number(process.env.AUTO_VALOR) || 5;
 const PCT_TOPO = 0.05; // 5% leituras mais confiantes
 const REGRAS = {
-    min_h11_rompe: { se: { cores3: 'RVV', hora: '11', vs_anterior: 'acima_max' }, lado: 'COMPRA' },
-    min_h14_rompe: { se: { sequencia: '1', hora: '14', vs_anterior: 'acima_max' }, lado: 'COMPRA' },
+    // Confirmações (estudo de 06/10 no mercado real M5): regra 1 sobe de 67% para 72,5% com tendência de
+    // alta (média 20 acima da 50); regra 2 sobe de 66% para 70% com o preço não esticado acima da média.
+    min_h11_rompe: { se: { cores3: 'RVV', hora: '11', vs_anterior: 'acima_max' }, lado: 'COMPRA', confirma: (f) => f.tendencia === 'alta' },
+    min_h14_rompe: { se: { sequencia: '1', hora: '14', vs_anterior: 'acima_max' }, lado: 'COMPRA', confirma: (f) => ['0', '-1', '-2'].includes(f.z_media) },
 };
 const REGRAS_ATIVAS = (process.env.AUTO_REGRAS ?? 'min_h11_rompe,min_h14_rompe').split(',').map((x) => x.trim()).filter((x) => REGRAS[x]);
 
@@ -176,7 +179,7 @@ async function evaluate(pair, bucket, noticia) {
         const f = minerador.descreve(c, i, minerador.prep(c), pair, TF);
         for (const nome of REGRAS_ATIVAS) {
             const r = REGRAS[nome];
-            if (Object.entries(r.se).every(([k, v]) => f[k] === v)) {
+            if (Object.entries(r.se).every(([k, v]) => f[k] === v) && (!r.confirma || r.confirma(f))) {
                 return { pair, lado: r.lado, p: r.lado === 'COMPRA' ? 1 : 0, conf: 1, detalhes: { regra: nome } };
             }
         }
