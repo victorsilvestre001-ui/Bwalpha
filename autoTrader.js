@@ -16,7 +16,10 @@ const { series, features, predict } = require('./scoreBacktest');
 const AUTH_URL = process.env.EXNOVA_AUTH_URL || 'https://auth.trade.exnova.com/api/v2/login';
 const WS_URL = process.env.EXNOVA_WS_URL || 'wss://ws.trade.exnova.com/echo/websocket';
 const PAIRS = ['EURUSD', 'EURJPY', 'XAUUSD'];
-const DEFAULT_IDS = { EURUSD: 1, EURJPY: 4, XAUUSD: 74 };
+// Ids para OPERAR (instrumentos "-op" da lista da Exnova). Os ids 1/4/74 servem só para os candles:
+// com eles a corretora respondeu "asset is not available" (06/10). Troca com AUTO_ACTIVE_IDS="EURUSD:1861,...".
+const TRADE_IDS = Object.fromEntries((process.env.AUTO_ACTIVE_IDS || 'EURUSD:1861,EURJPY:1864,XAUUSD:1912')
+    .split(',').map((x) => x.trim().split(':')).filter(([n, id]) => n && id).map(([n, id]) => [n.toUpperCase(), Number(id)]));
 const TF = 300_000;
 const MAX_POR_DIA = Math.min(2, parseInt(process.env.AUTO_MAX_DIA, 10) || 2);
 const VALOR = Number(process.env.AUTO_VALOR) || 5;
@@ -177,10 +180,10 @@ async function tick() {
     st.lastBucket = bucket;
     if (!st.ready || !isMarketOpen(new Date(bucket)) || !isMarketOpen(new Date(bucket + TF))) return;
     if (horarioNoticiaEUA(bucket)) return;
-    // Conta só as entradas aceitas; ordens recusadas pela corretora não gastam a vez, mas no máximo 4 tentativas por dia.
+    // Conta só as entradas aceitas; ordens recusadas pela corretora não gastam a vez, mas no máximo 6 tentativas por dia.
     const { rows } = await pool.query(`SELECT COUNT(*) FILTER (WHERE status NOT LIKE 'recusada%')::int AS ok, COUNT(*)::int AS total
         FROM auto_trades WHERE dia = $1`, [brDay(now)]);
-    if (rows[0].ok >= MAX_POR_DIA || rows[0].total >= 4) return;
+    if (rows[0].ok >= MAX_POR_DIA || rows[0].total >= 6) return;
     if (now - st.thrAt > 6 * 3600_000) await updateThresholds();
     const cands = [];
     for (const pair of PAIRS) {
@@ -188,7 +191,6 @@ async function tick() {
     }
     if (!cands.length) return;
     const best = cands.sort((a, b) => b.conf - a.conf)[0];
-    const ids = { ...DEFAULT_IDS, ...(require('./exnovaCollector').state.actives || {}) };
     const { rows: ins } = await pool.query(
         `INSERT INTO auto_trades (dia, pair, candle_time, direction, prob, detalhes, valor, status) VALUES ($1, $2, $3, $4, $5, $6, $7, 'enviando') RETURNING id`,
         [brDay(now), best.pair, new Date(bucket), best.lado, best.p, best.detalhes, VALOR]);
@@ -197,7 +199,7 @@ async function tick() {
     const req = send('sendMessage', {
         name: 'binary-options.open-option', version: '1.0',
         body: {
-            user_balance_id: st.practiceId, active_id: ids[best.pair], option_type_id: 3,
+            user_balance_id: st.practiceId, active_id: TRADE_IDS[best.pair], option_type_id: 3,
             direction: best.lado === 'COMPRA' ? 'call' : 'put', expired: Math.floor((bucket + TF) / 1000), price: VALOR,
         },
     });
