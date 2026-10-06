@@ -779,6 +779,11 @@ async function run() {
         console.log('BACKTEST_END');
         return;
     }
+    if (process.env.BACKTEST_SOURCE === 'priceaction') {
+        try { await require('./priceActionBacktest').runPriceAction(pool, { fetchLongHistory, isMarketOpen }); } catch (err) { console.error('BACKTEST_ERR PRICE_ACTION:', err.message); }
+        console.log('BACKTEST_END');
+        return;
+    }
     if (process.env.BACKTEST_SOURCE === 'memoria') {
         try { await require('./memoriaBacktest').runMemoria({ fetchLongHistory, isMarketOpen }); } catch (err) { console.error('BACKTEST_ERR MEMORIA:', err.message); }
         console.log('BACKTEST_END');
