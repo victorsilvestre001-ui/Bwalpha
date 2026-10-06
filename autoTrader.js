@@ -8,6 +8,10 @@
 //   2. sinal técnico M5 do painel para o mesmo lado, com confiança Alta;
 //   3. Reversão com rejeição sem apontar para o lado contrário;
 //   4. fora do horário de notícia dos EUA.
+// Regras do minerador (pedido do dono em 06/10, "regra 1 e regra 2"), entram também, sem filtro de notícia
+// (foram validadas assim no mercado real M5). Horários em UTC; troca com AUTO_REGRAS (vazio desliga):
+//   min_h11_rompe  11h UTC (08h Brasília): cores vermelho-verde-verde e o último fechou acima da máxima do anterior → COMPRA
+//   min_h14_rompe  14h UTC (11h Brasília): 1º candle verde depois de vermelho fechando acima da máxima do anterior → COMPRA
 // Expiração: fim do candle M5 (5 min). Tudo fica gravado na tabela auto_trades.
 const WebSocket = require('ws');
 const pool = require('./db');
@@ -24,6 +28,11 @@ const TF = 300_000;
 const MAX_POR_DIA = Math.min(4, parseInt(process.env.AUTO_MAX_DIA, 10) || 2); // padrão 2; até 4 se o dono pedir
 const VALOR = Number(process.env.AUTO_VALOR) || 5;
 const PCT_TOPO = 0.05; // 5% leituras mais confiantes
+const REGRAS = {
+    min_h11_rompe: { se: { cores3: 'RVV', hora: '11', vs_anterior: 'acima_max' }, lado: 'COMPRA' },
+    min_h14_rompe: { se: { sequencia: '1', hora: '14', vs_anterior: 'acima_max' }, lado: 'COMPRA' },
+};
+const REGRAS_ATIVAS = (process.env.AUTO_REGRAS ?? 'min_h11_rompe,min_h14_rompe').split(',').map((x) => x.trim()).filter((x) => REGRAS[x]);
 
 const st = { ws: null, ready: false, practiceId: null, reqId: 1, lastBucket: 0, thr: {}, thrAt: 0, pending: new Map() };
 
@@ -154,13 +163,25 @@ async function updateThresholds() {
     console.log(`ROBO_DEMO: cortes de confiança ${JSON.stringify(st.thr)}`);
 }
 
-async function evaluate(pair, bucket) {
+async function evaluate(pair, bucket, noticia) {
     const { W5 } = require('./scoreShadow');
     const { computeTechnicalSignal } = require('./marketRoutes');
     const c = await m5(pair, 14);
     if (c.length < 100) return null;
     const i = c.length - 1, last = c[i];
     if (last.time + TF !== bucket || last.time - c[i - 60].time !== 60 * TF) return null;
+    // Regras do minerador primeiro (têm prioridade sobre o Score).
+    if (REGRAS_ATIVAS.length) {
+        const minerador = require('./mineradorBacktest');
+        const f = minerador.descreve(c, i, minerador.prep(c), pair, TF);
+        for (const nome of REGRAS_ATIVAS) {
+            const r = REGRAS[nome];
+            if (Object.entries(r.se).every(([k, v]) => f[k] === v)) {
+                return { pair, lado: r.lado, p: r.lado === 'COMPRA' ? 1 : 0, conf: 1, detalhes: { regra: nome } };
+            }
+        }
+    }
+    if (noticia) return null;
     const x = features(c, series(c), i);
     const p = predict(W5[pair], x), conf = Math.abs(p - 0.5);
     const lado = p > 0.5 ? 'COMPRA' : 'VENDA';
@@ -194,7 +215,7 @@ async function tick() {
     if (bucket === st.lastBucket || now - bucket > 20_000) return;
     st.lastBucket = bucket;
     if (!st.ready || !isMarketOpen(new Date(bucket)) || !isMarketOpen(new Date(bucket + TF))) return;
-    if (horarioNoticiaEUA(bucket)) return;
+    const noticia = horarioNoticiaEUA(bucket);
     // Conta só as entradas aceitas; ordens recusadas pela corretora não gastam a vez, mas no máximo (limite + 4) tentativas por dia.
     const { rows } = await pool.query(`SELECT COUNT(*) FILTER (WHERE status NOT LIKE 'recusada%')::int AS ok, COUNT(*)::int AS total
         FROM auto_trades WHERE dia = $1`, [brDay(now)]);
@@ -202,7 +223,7 @@ async function tick() {
     if (now - st.thrAt > 6 * 3600_000) await updateThresholds();
     const cands = [];
     for (const pair of PAIRS) {
-        try { const e = await evaluate(pair, bucket); if (e) cands.push(e); } catch (err) { console.error(`ROBO_DEMO: erro avaliando ${pair}:`, err.message); }
+        try { const e = await evaluate(pair, bucket, noticia); if (e) cands.push(e); } catch (err) { console.error(`ROBO_DEMO: erro avaliando ${pair}:`, err.message); }
     }
     if (!cands.length) return;
     const best = cands.sort((a, b) => b.conf - a.conf)[0];
@@ -226,7 +247,7 @@ async function start() {
     if (process.env.AUTO_TRADE !== '1') return;
     if (!process.env.EXNOVA_EMAIL || !process.env.EXNOVA_PASSWORD) return console.error('ROBO_DEMO: faltam EXNOVA_EMAIL/EXNOVA_PASSWORD.');
     try { await ensureTable(); } catch (err) { return console.error('ROBO_DEMO: erro ao criar a tabela:', err.message); }
-    console.log(`ROBO_DEMO: ligado (máx. ${MAX_POR_DIA} entradas por dia, valor ${VALOR}, só saldo de treino)`);
+    console.log(`ROBO_DEMO: ligado (máx. ${MAX_POR_DIA} entradas por dia, valor ${VALOR}, só saldo de treino, regras extras: ${REGRAS_ATIVAS.join(',') || 'nenhuma'})`);
     connect();
     setInterval(() => tick().catch((err) => console.error('ROBO_DEMO erro:', err.message)), 5_000);
 }
