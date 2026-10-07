@@ -295,6 +295,15 @@ function avaliaNovas(pair, m, mb) {
     return out;
 }
 
+// Horário em que a Exnova deixa operar EURUSD/EURJPY ("-op"): segundo o dono, só até 15h30 de Brasília.
+// AUTO_HORARIO_EURO="HH:MM-HH:MM" (Brasília), padrão 00:00-15:30. O Ouro segue sem limite.
+function ativoAberto(pair, ms) {
+    if (pair === 'XAUUSD') return true;
+    const [ini, fim] = (process.env.AUTO_HORARIO_EURO || '00:00-15:30').split('-').map((x) => { const [h, m] = x.split(':').map(Number); return h * 60 + (m || 0); });
+    const d = new Date(ms - 3 * 3600_000), min = d.getUTCHours() * 60 + d.getUTCMinutes();
+    return ini <= fim ? min >= ini && min < fim : min >= ini || min < fim;
+}
+
 // AUTO_RESET_DESDE (data ISO): o limite do dia passa a contar só as entradas depois dela ("começa de novo").
 async function podeEntrar(now) {
     const desde = Date.parse(process.env.AUTO_RESET_DESDE || '');
@@ -332,7 +341,7 @@ async function tickNovas(now) {
     if (!st.ready || !isMarketOpen(new Date(mb)) || !(await podeEntrar(now))) return;
     const cands = [];
     for (const pair of PAIRS) {
-        if ((st.indisponivel?.[pair] || 0) > now) continue;
+        if ((st.indisponivel?.[pair] || 0) > now || !ativoAberto(pair, now)) continue;
         try {
             const m = await m1Recentes(pair);
             for (const e of avaliaNovas(pair, m, mb)) cands.push({ pair, ...e });
@@ -365,7 +374,7 @@ async function tickRegras(now, bucket, isMarketOpen, horarioNoticiaEUA) {
     if (process.env.AUTO_SCORE === '1' && now - st.thrAt > 6 * 3600_000) await updateThresholds();
     const cands = [];
     for (const pair of PAIRS) {
-        if ((st.indisponivel?.[pair] || 0) > now) continue;
+        if ((st.indisponivel?.[pair] || 0) > now || !ativoAberto(pair, now)) continue;
         try { const e = await evaluate(pair, bucket, noticia); if (e) cands.push(e); } catch (err) { console.error(`ROBO_DEMO: erro avaliando ${pair}:`, err.message); }
     }
     if (!cands.length) return;
