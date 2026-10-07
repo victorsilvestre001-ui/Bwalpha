@@ -290,9 +290,11 @@ function avaliaNovas(pair, m, mb) {
     return out;
 }
 
+// AUTO_RESET_DESDE (data ISO): o limite do dia passa a contar só as entradas depois dela ("começa de novo").
 async function podeEntrar(now) {
+    const desde = Date.parse(process.env.AUTO_RESET_DESDE || '');
     const { rows } = await pool.query(`SELECT COUNT(*) FILTER (WHERE status NOT LIKE 'recusada%')::int AS ok, COUNT(*)::int AS total
-        FROM auto_trades WHERE dia = $1`, [brDay(now)]);
+        FROM auto_trades WHERE dia = $1 AND created_at >= $2`, [brDay(now), new Date(Number.isFinite(desde) ? desde : 0)]);
     return rows[0].ok < MAX_POR_DIA && rows[0].total < MAX_POR_DIA + 4;
 }
 
