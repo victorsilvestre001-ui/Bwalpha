@@ -3,11 +3,6 @@ import { motion } from "framer-motion";
 import { ArrowUpRight, ArrowDownRight, PauseCircle, RefreshCw } from "lucide-react";
 import CandleTimer from "./CandleTimer";
 
-const CONF_STYLE = {
-  Alta: "border-neon/40 bg-neon/10 text-neon",
-  "Média": "border-volt/40 bg-volt/10 text-volt-soft",
-  Baixa: "border-pulse/40 bg-pulse/10 text-pulse-soft"
-};
 
 // Barra de pressão: compradores (verde) x vendedores (vermelho) nos últimos candles.
 function PressureBar({ pressao }) {
@@ -89,9 +84,14 @@ export default function SignalResult({ result, timing, onRetry }) {
               {result.direction}
             </div>
           </div>
-          <span className={`rounded-full border px-3 py-1 font-mono text-xs ${CONF_STYLE[result.confidence] || CONF_STYLE["Média"]}`}>
-            Confiança {result.confidence}
-          </span>
+          {/* Em vez de "confiança Alta/Média/Baixa" (que não acompanhava o acerto real), mostra o acerto
+              histórico de verdade deste ativo e tempo gráfico, de todas as leituras já conferidas. */}
+          {result.acertoHistorico && (
+            <span className="rounded-full border border-void-line bg-void-deep/60 px-3 py-1 text-right font-mono text-xs text-mist-dim">
+              Acerto histórico {result.acertoHistorico.pct}%
+              <span className="block text-[10px] text-mist-faint">{result.acertoHistorico.n} leituras</span>
+            </span>
+          )}
         </div>
       </div>
 

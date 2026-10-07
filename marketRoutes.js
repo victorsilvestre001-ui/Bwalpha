@@ -1291,6 +1291,59 @@ function horarioNoticiaEUA(ms) {
     return (m >= 505 && m < 540) || (m >= 595 && m < 630) || (m >= 835 && m < 870);
 }
 
+// Ajustes de 07/10 (placar real dos sinais: M1 55%; EURJPY 48%; "confiança" Alta 54,7% x Baixa 56,6%):
+//  - SINAL_PAUSADOS (padrão "EURJPY"): ativos sem sinal até voltarem a mostrar acerto;
+//  - a "confiança" na tela vira o acerto histórico real daquele ativo/tempo (acertoHistorico);
+//  - M1 também respeita o horário de notícias dos EUA (FILTRO_NOTICIA_M1=0 desliga);
+//  - M5 só dá entrada nas regras 1 e 2 (08h e 11h de Brasília, com confirmação), as mesmas do robô.
+const PAUSADOS = new Set((process.env.SINAL_PAUSADOS ?? 'EURJPY').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean));
+const acertoCache = { at: 0, map: {} };
+async function acertoHistorico(pair, timeframe) {
+    if (Date.now() - acertoCache.at > 30 * 60_000) {
+        try {
+            const { rows } = await pool.query(`SELECT pair, timeframe, COUNT(*) FILTER (WHERE result = 'win')::int AS w,
+                COUNT(*) FILTER (WHERE result IN ('win', 'loss'))::int AS n FROM analyses GROUP BY 1, 2`);
+            acertoCache.map = Object.fromEntries(rows.map((r) => [`${r.pair}:${r.timeframe}`, r]));
+            acertoCache.at = Date.now();
+        } catch (err) {
+            console.error('acertoHistorico erro:', err.message);
+        }
+    }
+    const r = acertoCache.map[`${pair}:${timeframe}`];
+    return r && r.n >= 30 ? { pct: Math.round((100 * r.w) / r.n), n: r.n } : null;
+}
+
+// M5 pelas regras 1 e 2 (mineradorBacktest/autoTrader): olha o último candle M5 fechado da Exnova antes da entrada.
+const REGRAS_M5 = {
+    regra1: { se: { cores3: 'RVV', hora: '11', vs_anterior: 'acima_max' }, confirma: (f) => f.tendencia === 'alta', lado: 'COMPRA' },
+    regra2: { se: { sequencia: '1', hora: '14', vs_anterior: 'acima_max' }, confirma: (f) => ['0', '-1', '-2'].includes(f.z_media), lado: 'COMPRA' },
+};
+async function sinalRegrasM5(pair, entry) {
+    // O padrão é lido no candle M5 que fecha na hora da entrada (o candle atual), perto do fechamento:
+    // a partir de 4 min dele (dados M1 da Exnova, que o coletor atualiza ao vivo).
+    const TF = 300_000;
+    const { rows } = await pool.query(
+        `SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 AND time > NOW() - INTERVAL '14 hours' ORDER BY time`, [pair]);
+    const m5 = [];
+    for (const r of rows) {
+        const t = new Date(r.time).getTime(), b = Math.floor(t / TF) * TF, last = m5[m5.length - 1];
+        if (last && last.time === b) { last.high = Math.max(last.high, +r.high); last.low = Math.min(last.low, +r.low); last.close = +r.close; last.n++; }
+        else m5.push({ time: b, open: +r.open, high: +r.high, low: +r.low, close: +r.close, n: 1 });
+    }
+    const atual = m5[m5.length - 1];
+    if (!atual || atual.time + TF !== entry) return { semDados: true };
+    if (Date.now() - atual.time < 240_000) return { cedo: true, liberaEm: atual.time + 240_000 };
+    const c = [...m5.slice(0, -1).filter((x) => x.n === 5), atual];
+    const i = c.length - 1;
+    if (i < 60) return { semDados: true };
+    const minerador = require('./mineradorBacktest');
+    const f = minerador.descreve(c, i, minerador.prep(c), pair, TF);
+    for (const [nome, r] of Object.entries(REGRAS_M5)) {
+        if (Object.entries(r.se).every(([k, v]) => f[k] === v) && r.confirma(f)) return { direction: r.lado, confidence: 'Alta', leitura: nome };
+    }
+    return null;
+}
+
 router.post('/signal', authMiddleware, requireSignalAccess, signalLimiter, async (req, res) => {
     const { pair, timeframe } = req.body;
     if (!SIGNAL_PAIRS[pair] || !SIGNAL_INTERVALS[timeframe]) {
@@ -1298,6 +1351,12 @@ router.post('/signal', authMiddleware, requireSignalAccess, signalLimiter, async
     }
     if (!isMarketOpen()) {
         return res.status(409).json({ error: 'Mercado fechado no momento. Os ativos abrem de domingo às 22h até sexta às 22h (horário UTC).', marketClosed: true });
+    }
+    if (PAUSADOS.has(pair)) {
+        return res.json({
+            pair, timeframe, noEntry: true, requestedAt: Date.now(), entry: null, expiry: null, analysisId: null,
+            reason: `${pair} está em pausa: no nosso histórico ele acertou menos da metade das leituras. Use EURUSD ou Ouro por enquanto.`,
+        });
     }
     try {
         const requestedAt = Date.now();
@@ -1312,9 +1371,15 @@ router.post('/signal', authMiddleware, requireSignalAccess, signalLimiter, async
                     releaseAt: bucketStart + M1_MS - M1_RELEASE_BEFORE_CLOSE_MS,
                 });
             }
-            result = await getM1Signal(pair, requestedAt);
             entry = bucketStart + M1_MS;
             expiry = entry + M1_MS;
+            if (process.env.FILTRO_NOTICIA_M1 !== '0' && horarioNoticiaEUA(entry)) {
+                return res.json({
+                    pair, timeframe, noEntry: true, requestedAt, entry: null, expiry: null, analysisId: null,
+                    reason: 'Horário de notícias dos EUA: o mercado costuma ficar instável agora. A leitura volta em alguns minutos.',
+                });
+            }
+            result = await getM1Signal(pair, requestedAt);
             if (result && entry - Date.now() < M1_MIN_ENTRY_LEAD_MS) {
                 // Não dá tempo de entrar neste candle: a entrada vai para o seguinte, com confiança baixa.
                 entry += M1_MS;
@@ -1329,7 +1394,17 @@ router.post('/signal', authMiddleware, requireSignalAccess, signalLimiter, async
                     reason: 'Horário de notícias dos EUA: o mercado costuma ficar instável agora. No M5 a leitura volta em alguns minutos.',
                 });
             }
-            result = await getTechnicalSignal(pair, timeframe);
+            if (timeframe === 'M5' && process.env.M5_REGRAS !== '0') {
+                result = await sinalRegrasM5(pair, entry);
+                if (!result || result.cedo || result.semDados) {
+                    const reason = result?.cedo
+                        ? 'No M5 o padrão é conferido perto do fechamento do candle. Peça de novo a partir de 4 minutos do candle atual.'
+                        : 'No M5 a IA só entra quando aparece um dos padrões que mais acertaram, perto das 08h e das 11h de Brasília. Agora não há padrão: tente o M1 ou volte nesses horários.';
+                    return res.json({ pair, timeframe, noEntry: true, requestedAt, entry: null, expiry: null, analysisId: null, reason });
+                }
+            } else {
+                result = await getTechnicalSignal(pair, timeframe);
+            }
         }
         if (!result) {
             return res.status(502).json({ error: 'Não foi possível calcular o sinal agora. Tente novamente.' });
@@ -1353,7 +1428,7 @@ router.post('/signal', authMiddleware, requireSignalAccess, signalLimiter, async
         }
         const quota = req.signalQuota;
         const freeRemaining = quota.vip ? null : Math.max(0, quota.remaining - (analysisId ? 1 : 0));
-        res.json({ ...result, analysisId, requestedAt, entry, expiry, freeRemaining });
+        res.json({ ...result, acertoHistorico: await acertoHistorico(pair, timeframe), analysisId, requestedAt, entry, expiry, freeRemaining });
     } catch (err) {
         console.error('Erro ao gerar sinal técnico:', err.message);
         res.status(500).json({ error: 'Erro ao gerar sinal técnico' });
