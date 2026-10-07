@@ -136,9 +136,21 @@ const FILTERS = {
 
 // Recomeço do histórico: com HISTORY_RESET_AT (data ISO), o histórico e a taxa de acerto
 // mostram só os sinais a partir dela. Os antigos seguem no banco (o teste grátis não zera).
-function historyStart() {
+// Por conta: users.history_reset_at (definido via HISTORY_RESET_USERS em userLookup.js) recomeça
+// só o histórico daquela pessoa; vale a data mais recente entre as duas.
+function historyStart(userResetAt) {
     const t = Date.parse(process.env.HISTORY_RESET_AT || '');
-    return Number.isFinite(t) ? new Date(t) : new Date(0);
+    const g = Number.isFinite(t) ? t : 0, u = userResetAt ? new Date(userResetAt).getTime() : 0;
+    return new Date(Math.max(g, u));
+}
+
+async function userHistoryStart(userId) {
+    try {
+        const { rows } = await pool.query('SELECT history_reset_at FROM users WHERE id = $1', [userId]);
+        return historyStart(rows[0]?.history_reset_at);
+    } catch {
+        return historyStart(); // coluna ainda não existe
+    }
 }
 
 router.get('/', authMiddleware, async (req, res) => {
@@ -147,6 +159,7 @@ router.get('/', authMiddleware, async (req, res) => {
     try {
         // Confere pendentes antes de responder (no máximo a cada 15s por servidor).
         if (Date.now() - lastResolve > 15_000) await resolvePendingAnalyses();
+        const desde = await userHistoryStart(req.user.id);
 
         const [list, stats] = await Promise.all([
             pool.query(
@@ -156,7 +169,7 @@ router.get('/', authMiddleware, async (req, res) => {
                  WHERE user_id = $1 AND requested_at >= $3 ${FILTERS[filter]}
                  ORDER BY requested_at DESC
                  LIMIT $2`,
-                [req.user.id, limit, historyStart()]
+                [req.user.id, limit, desde]
             ),
             pool.query(
                 `SELECT COUNT(*)::int AS total,
@@ -165,7 +178,7 @@ router.get('/', authMiddleware, async (req, res) => {
                         COUNT(*) FILTER (WHERE result = 'draw')::int AS draws,
                         COUNT(*) FILTER (WHERE result IS NULL)::int AS pending
                  FROM analyses WHERE user_id = $1 AND requested_at >= $2`,
-                [req.user.id, historyStart()]
+                [req.user.id, desde]
             ),
         ]);
 

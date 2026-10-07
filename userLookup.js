@@ -39,9 +39,28 @@ async function grantVip() {
     }
 }
 
+// HISTORY_RESET_USERS="email|2026-10-07T03:40:00Z,...": recomeça o histórico visível dessa conta a partir
+// da data (os sinais antigos continuam no banco para os estudos). Pode ficar ligado: a data é fixa.
+async function resetHistory() {
+    const itens = (process.env.HISTORY_RESET_USERS || '').split(',').map((x) => x.trim().split('|')).filter(([e, d]) => e && d);
+    if (!itens.length) return;
+    try {
+        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS history_reset_at TIMESTAMPTZ');
+        for (const [email, data] of itens) {
+            const t = Date.parse(data);
+            if (!Number.isFinite(t)) continue;
+            const r = await pool.query('UPDATE users SET history_reset_at = $2 WHERE LOWER(email) = $1 RETURNING id', [email.toLowerCase(), new Date(t)]);
+            console.log(`HISTORY_RESET: ${email} ${r.rowCount ? `conta ${r.rows[0].id} a partir de ${new Date(t).toISOString()}` : 'sem conta'}`);
+        }
+    } catch (err) {
+        console.error('HISTORY_RESET erro:', err.message);
+    }
+}
+
 async function run() {
     await fixEmail();
     await grantVip();
+    await resetHistory();
     const q = (process.env.USER_LOOKUP || '').trim().toLowerCase();
     if (!q) return;
     const key = q.split('@')[0].replace(/[^a-z0-9]/g, '').slice(0, 12) || q;
