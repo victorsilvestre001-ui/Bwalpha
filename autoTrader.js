@@ -93,6 +93,12 @@ async function connect() {
             const demo = m.msg.find((b) => Number(b.type) === 4);
             st.practiceId = demo ? Number(demo.id) : null;
             st.ready = !!demo;
+            if (st.balanceCheck) {
+                // Conferência periódica: o saldo de treino pode mudar também por operações manuais do dono.
+                st.balanceCheck = false;
+                if (demo) console.log(`ROBO_DEMO: saldo de treino agora ${demo.amount} ${demo.currency || ''}`);
+                return;
+            }
             console.log(demo
                 ? `ROBO_DEMO: conectado ao saldo de TREINO (saldo ${demo.amount} ${demo.currency || ''})`
                 : 'ROBO_DEMO: saldo de treino não encontrado; o robô NÃO vai operar');
@@ -280,6 +286,12 @@ async function start() {
     console.log(`ROBO_DEMO: ligado (máx. ${MAX_POR_DIA} entradas por dia, valor ${VALOR}, só saldo de treino, regras extras: ${REGRAS_ATIVAS.join(',') || 'nenhuma'})`);
     connect();
     setInterval(() => tick().catch((err) => console.error('ROBO_DEMO erro:', err.message)), 5_000);
+    // A cada 30 min confere o saldo de treino (aparece nos logs para o relatório diário).
+    setInterval(() => {
+        if (!st.ready || !st.ws) return;
+        st.balanceCheck = true;
+        try { send('sendMessage', { name: 'get-balances', version: '1.0', body: { types_ids: [1, 4, 2] } }); } catch { st.balanceCheck = false; }
+    }, 30 * 60_000);
 }
 
 module.exports = { start, evaluate, st };
