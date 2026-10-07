@@ -128,6 +128,11 @@ async function connect() {
             st.pending.delete(m.request_id);
             const ok = m.status == null || m.status === 2000 || m.msg?.id;
             const ordem = m.msg?.id != null ? String(m.msg.id) : null;
+            // Ativo indisponível na Exnova (acontece à tarde/noite com os "-op"): pausa esse ativo por 30 min.
+            if (!(ok && ordem) && /not available/i.test(m.msg?.message || '')) {
+                const pair = st.pairDaOrdem?.get(id);
+                if (pair) { (st.indisponivel ||= {})[pair] = Date.now() + 30 * 60_000; console.log(`ROBO_DEMO: ${pair} indisponível na corretora, pausado por 30 min`); }
+            }
             console.log(`ROBO_DEMO: resposta da ordem #${id}: ${m.name} status=${m.status ?? '-'} ${JSON.stringify(m.msg).slice(0, 300)}`);
             pool.query('UPDATE auto_trades SET status = $2, ordem_id = $3 WHERE id = $1',
                 [id, ok && ordem ? 'aberta' : `recusada: ${String(m.msg?.message || m.status || m.name).slice(0, 80)}`, ordem]).catch(() => {});
@@ -315,6 +320,7 @@ async function abrir(pair, lado, candleTime, expiraMs, prob, detalhes) {
         },
     });
     st.pending.set(req, id);
+    (st.pairDaOrdem ||= new Map()).set(id, pair);
     console.log(`ROBO_DEMO: entrada #${id} ${pair} ${lado} (treino, ${VALOR}) ${JSON.stringify(detalhes)}`);
 }
 
@@ -326,6 +332,7 @@ async function tickNovas(now) {
     if (!st.ready || !isMarketOpen(new Date(mb)) || !(await podeEntrar(now))) return;
     const cands = [];
     for (const pair of PAIRS) {
+        if ((st.indisponivel?.[pair] || 0) > now) continue;
         try {
             const m = await m1Recentes(pair);
             for (const e of avaliaNovas(pair, m, mb)) cands.push({ pair, ...e });
@@ -358,6 +365,7 @@ async function tickRegras(now, bucket, isMarketOpen, horarioNoticiaEUA) {
     if (process.env.AUTO_SCORE === '1' && now - st.thrAt > 6 * 3600_000) await updateThresholds();
     const cands = [];
     for (const pair of PAIRS) {
+        if ((st.indisponivel?.[pair] || 0) > now) continue;
         try { const e = await evaluate(pair, bucket, noticia); if (e) cands.push(e); } catch (err) { console.error(`ROBO_DEMO: erro avaliando ${pair}:`, err.message); }
     }
     if (!cands.length) return;
