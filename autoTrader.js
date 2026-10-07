@@ -210,7 +210,9 @@ async function evaluate(pair, bucket, noticia) {
 }
 
 async function resolveResults() {
-    const { rows } = await pool.query(`SELECT id, pair, candle_time, direction, detalhes FROM auto_trades WHERE result IS NULL AND candle_time < NOW() - INTERVAL '3 minutes'`);
+    // Ordem recusada pela corretora não tem resultado (não foi operada).
+    await pool.query(`UPDATE auto_trades SET result = 'recusada' WHERE result IS NULL AND status LIKE 'recusada%'`);
+    const { rows } = await pool.query(`SELECT id, pair, candle_time, direction, detalhes FROM auto_trades WHERE result IS NULL AND status = 'aberta' AND candle_time < NOW() - INTERVAL '3 minutes'`);
     for (const r of rows) {
         const t = new Date(r.candle_time).getTime();
         if (r.detalhes?.expira) {
