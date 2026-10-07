@@ -6,7 +6,7 @@ const META_PIXEL_IDS = (process.env.NEXT_PUBLIC_META_PIXEL_ID || "18567067288260
   .split(",").map((id) => id.trim()).filter(Boolean);
 const GOOGLE_ADS_ID = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID || "AW-18498114373"; // tag do Google Ads da TradeOn
 const GADS_LABELS = {
-  CompleteRegistration: process.env.NEXT_PUBLIC_GADS_SIGNUP_LABEL || "",
+  CompleteRegistration: process.env.NEXT_PUBLIC_GADS_SIGNUP_LABEL || "AdzKCJvcuJQdEMWmy_RE", // conversão "Inscrição" (07/10)
   InitiateCheckout: process.env.NEXT_PUBLIC_GADS_CHECKOUT_LABEL || "",
   Purchase: process.env.NEXT_PUBLIC_GADS_PURCHASE_LABEL || ""
 };
@@ -79,12 +79,16 @@ export function loadTrackers() {
 }
 
 // Eventos: CompleteRegistration (cadastro), InitiateCheckout (clique em assinar), Purchase (assinatura concluída)
+// O Google Ads recebe a conversão sempre: a tag roda no modo de consentimento (sem cookies quando a
+// pessoa não aceitou) e o Google só modela a conversão. O Pixel da Meta continua só com consentimento.
 export function track(event, params = {}) {
-  if (typeof window === "undefined" || getConsent() !== "all") return;
-  loadTrackers();
-  try { window.fbq?.("track", event, params); } catch {}
+  if (typeof window === "undefined") return;
   const label = GADS_LABELS[event];
   if (GOOGLE_ADS_ID && label) {
+    initGoogleTag();
     try { window.gtag?.("event", "conversion", { send_to: `${GOOGLE_ADS_ID}/${label}`, ...params }); } catch {}
   }
+  if (getConsent() !== "all") return;
+  loadTrackers();
+  try { window.fbq?.("track", event, params); } catch {}
 }
