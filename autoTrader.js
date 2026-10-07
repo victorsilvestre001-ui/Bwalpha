@@ -37,7 +37,7 @@ const REGRAS = {
 };
 const REGRAS_ATIVAS = (process.env.AUTO_REGRAS ?? 'min_h11_rompe,min_h14_rompe').split(',').map((x) => x.trim()).filter((x) => REGRAS[x]);
 
-const st = { ws: null, ready: false, practiceId: null, reqId: 1, lastBucket: 0, thr: {}, thrAt: 0, pending: new Map() };
+const st = { ws: null, ready: false, practiceId: null, reqId: 1, lastBucket: 0, lastMin: 0, thr: {}, thrAt: 0, pending: new Map() };
 
 const brDay = (ms) => new Date(ms - 3 * 3600_000).toISOString().slice(0, 10);
 
@@ -210,9 +210,22 @@ async function evaluate(pair, bucket, noticia) {
 }
 
 async function resolveResults() {
-    const { rows } = await pool.query(`SELECT id, pair, candle_time, direction FROM auto_trades WHERE result IS NULL AND candle_time < NOW() - INTERVAL '6 minutes'`);
+    const { rows } = await pool.query(`SELECT id, pair, candle_time, direction, detalhes FROM auto_trades WHERE result IS NULL AND candle_time < NOW() - INTERVAL '3 minutes'`);
     for (const r of rows) {
         const t = new Date(r.candle_time).getTime();
+        if (r.detalhes?.expira) {
+            // Estratégias de minuto: resultado = preço no fim da expiração x preço da entrada (candles M1 da Exnova).
+            const exp = r.detalhes.expira;
+            if (Date.now() < exp + 60_000) continue;
+            const { rows: f } = await pool.query('SELECT close FROM otc_candles WHERE active = $1 AND time = $2', [r.pair, new Date(exp - 60_000)]);
+            if (!f.length) { if (Date.now() - exp > 3 * 3600_000) await pool.query("UPDATE auto_trades SET result = 'sem_dados' WHERE id = $1", [r.id]); continue; }
+            const fim = +f[0].close, ent = r.detalhes.entrada;
+            const res = fim === ent ? 'empate' : (r.direction === 'COMPRA') === (fim > ent) ? 'acerto' : 'erro';
+            await pool.query('UPDATE auto_trades SET result = $2 WHERE id = $1', [r.id, res]);
+            console.log(`ROBO_DEMO: resultado #${r.id} ${r.pair} ${r.direction} (${r.detalhes.estrategia}): ${res}`);
+            continue;
+        }
+        if (Date.now() - t < 6 * 60_000) continue;
         const c = (await m5(r.pair, 6)).find((x) => x.time === t);
         if (!c) { if (Date.now() - t > 3 * 3600_000) await pool.query("UPDATE auto_trades SET result = 'sem_dados' WHERE id = $1", [r.id]); continue; }
         const res = c.close === c.open ? 'empate' : (r.direction === 'COMPRA') === (c.close > c.open) ? 'acerto' : 'erro';
@@ -221,19 +234,113 @@ async function resolveResults() {
     }
 }
 
+// Estratégias novas (pedido do dono em 07/10), avaliadas no início de cada minuto nos candles M1 da Exnova:
+//   devolve_m5      2º minuto do M5 andou ≥ 2 ATR(M1) → CONTRA, expira no fim do M5 (3 min). 3 ativos.
+//   relogio15_segue 8º minuto do bloco de 15 min andou ≥ 2 ATR(M1) → A FAVOR, expira no fim do bloco (7 min). EURUSD.
+//   pico_volta      minuto com faixa ≥ 3 ATR(M1) → CONTRA a cor dele, expira em 3 min. EURUSD.
+// Dividem o mesmo limite de entradas por dia com as regras 1 e 2. Liga/desliga com AUTO_NOVAS (padrão ligado).
+const NOVAS_ATIVOS = { devolve_m5: ['EURUSD', 'EURJPY', 'XAUUSD'], relogio15_segue: ['EURUSD'], pico_volta: ['EURUSD'] };
+
+async function m1Recentes(pair) {
+    const { rows } = await pool.query(
+        `SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 AND time > NOW() - INTERVAL '4 hours' ORDER BY time`, [pair]);
+    const m1 = rows.map((r) => ({ time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }));
+    const atr = require('./mineradorBacktest').prep(m1).atr;
+    return new Map(m1.map((x, i) => [x.time, { ...x, atr: atr[i] }]));
+}
+
+function avaliaNovas(pair, m, mb) {
+    const out = [];
+    const get = (t) => m.get(t);
+    // Devolução no meio do M5: agora é o início do 3º minuto do bloco.
+    if (NOVAS_ATIVOS.devolve_m5.includes(pair) && mb % 300_000 === 120_000) {
+        const t = mb - 120_000, a = get(t), b = get(t + 60_000);
+        if (a && b) {
+            const mov = (b.close - a.open) / (b.atr || 1e-9);
+            if (Math.abs(mov) >= 2) out.push({ estrategia: 'devolve_m5', lado: mov > 0 ? 'VENDA' : 'COMPRA', entrada: b.close, expira: t + 300_000, forca: Math.abs(mov) });
+        }
+    }
+    // Relógio de 15 min: agora é o início do 9º minuto do bloco.
+    if (NOVAS_ATIVOS.relogio15_segue.includes(pair) && mb % 900_000 === 480_000) {
+        const t = mb - 480_000, mins = Array.from({ length: 8 }, (_, k) => get(t + k * 60_000));
+        if (mins.every(Boolean)) {
+            const mov = (mins[7].close - mins[0].open) / (mins[7].atr || 1e-9);
+            if (Math.abs(mov) >= 2) out.push({ estrategia: 'relogio15_segue', lado: mov > 0 ? 'COMPRA' : 'VENDA', entrada: mins[7].close, expira: t + 900_000, forca: Math.abs(mov) });
+        }
+    }
+    // Pico relâmpago: o minuto que acabou de fechar.
+    if (NOVAS_ATIVOS.pico_volta.includes(pair)) {
+        const x = get(mb - 60_000), ant = get(mb - 120_000);
+        if (x && ant && x.close !== x.open && (x.high - x.low) >= 3 * (ant.atr || Infinity)) {
+            out.push({ estrategia: 'pico_volta', lado: x.close > x.open ? 'VENDA' : 'COMPRA', entrada: x.close, expira: mb + 180_000, forca: (x.high - x.low) / ant.atr });
+        }
+    }
+    return out;
+}
+
+async function podeEntrar(now) {
+    const { rows } = await pool.query(`SELECT COUNT(*) FILTER (WHERE status NOT LIKE 'recusada%')::int AS ok, COUNT(*)::int AS total
+        FROM auto_trades WHERE dia = $1`, [brDay(now)]);
+    return rows[0].ok < MAX_POR_DIA && rows[0].total < MAX_POR_DIA + 4;
+}
+
+async function abrir(pair, lado, candleTime, expiraMs, prob, detalhes) {
+    const now = Date.now();
+    const { rows: ins } = await pool.query(
+        `INSERT INTO auto_trades (dia, pair, candle_time, direction, prob, detalhes, valor, status) VALUES ($1, $2, $3, $4, $5, $6, $7, 'enviando') RETURNING id`,
+        [brDay(now), pair, new Date(candleTime), lado, prob, detalhes, VALOR]);
+    const id = ins[0].id;
+    if (!st.ready || !st.practiceId) return;
+    // Até 5 min: opção turbo (tipo 3). Mais longa (relógio de 15 min, expira no fim do bloco): binária (tipo 1).
+    const tipo = expiraMs - now > 5.5 * 60_000 ? 1 : 3;
+    const req = send('sendMessage', {
+        name: 'binary-options.open-option', version: '1.0',
+        body: {
+            user_balance_id: st.practiceId, active_id: TRADE_IDS[pair], option_type_id: tipo,
+            direction: lado === 'COMPRA' ? 'call' : 'put', expired: Math.floor(expiraMs / 1000), price: VALOR,
+        },
+    });
+    st.pending.set(req, id);
+    console.log(`ROBO_DEMO: entrada #${id} ${pair} ${lado} (treino, ${VALOR}) ${JSON.stringify(detalhes)}`);
+}
+
+async function tickNovas(now) {
+    const { isMarketOpen } = require('./marketRoutes');
+    const mb = Math.floor(now / 60_000) * 60_000;
+    if (process.env.AUTO_NOVAS === '0' || mb === st.lastMin || now - mb > 20_000) return;
+    st.lastMin = mb;
+    if (!st.ready || !isMarketOpen(new Date(mb)) || !(await podeEntrar(now))) return;
+    const cands = [];
+    for (const pair of PAIRS) {
+        try {
+            const m = await m1Recentes(pair);
+            for (const e of avaliaNovas(pair, m, mb)) cands.push({ pair, ...e });
+        } catch (err) { console.error(`ROBO_DEMO: erro nas estratégias novas ${pair}:`, err.message); }
+    }
+    if (!cands.length) return;
+    const e = cands.sort((a, b) => b.forca - a.forca)[0];
+    await abrir(e.pair, e.lado, mb, e.expira, e.lado === 'COMPRA' ? 1 : 0,
+        { estrategia: e.estrategia, entrada: e.entrada, expira: e.expira, forca: +e.forca.toFixed(2) });
+}
+
 async function tick() {
     const { isMarketOpen, horarioNoticiaEUA } = require('./marketRoutes');
     await resolveResults();
     const now = Date.now(), bucket = Math.floor(now / TF) * TF;
+    // As regras 1 e 2 (início do M5) vêm primeiro; depois as estratégias de minuto.
+    try { await tickRegras(now, bucket, isMarketOpen, horarioNoticiaEUA); } finally {
+        await tickNovas(now).catch((err) => console.error('ROBO_DEMO novas erro:', err.message));
+    }
+}
+
+async function tickRegras(now, bucket, isMarketOpen, horarioNoticiaEUA) {
     // Só nos primeiros 20 s do candle, uma vez por candle.
     if (bucket === st.lastBucket || now - bucket > 20_000) return;
     st.lastBucket = bucket;
     if (!st.ready || !isMarketOpen(new Date(bucket)) || !isMarketOpen(new Date(bucket + TF))) return;
     const noticia = horarioNoticiaEUA(bucket);
     // Conta só as entradas aceitas; ordens recusadas pela corretora não gastam a vez, mas no máximo (limite + 4) tentativas por dia.
-    const { rows } = await pool.query(`SELECT COUNT(*) FILTER (WHERE status NOT LIKE 'recusada%')::int AS ok, COUNT(*)::int AS total
-        FROM auto_trades WHERE dia = $1`, [brDay(now)]);
-    if (rows[0].ok >= MAX_POR_DIA || rows[0].total >= MAX_POR_DIA + 4) return;
+    if (!(await podeEntrar(now))) return;
     if (process.env.AUTO_SCORE === '1' && now - st.thrAt > 6 * 3600_000) await updateThresholds();
     const cands = [];
     for (const pair of PAIRS) {
@@ -241,20 +348,7 @@ async function tick() {
     }
     if (!cands.length) return;
     const best = cands.sort((a, b) => b.conf - a.conf)[0];
-    const { rows: ins } = await pool.query(
-        `INSERT INTO auto_trades (dia, pair, candle_time, direction, prob, detalhes, valor, status) VALUES ($1, $2, $3, $4, $5, $6, $7, 'enviando') RETURNING id`,
-        [brDay(now), best.pair, new Date(bucket), best.lado, best.p, best.detalhes, VALOR]);
-    const id = ins[0].id;
-    if (!st.ready || !st.practiceId) return;
-    const req = send('sendMessage', {
-        name: 'binary-options.open-option', version: '1.0',
-        body: {
-            user_balance_id: st.practiceId, active_id: TRADE_IDS[best.pair], option_type_id: 3,
-            direction: best.lado === 'COMPRA' ? 'call' : 'put', expired: Math.floor((bucket + TF) / 1000), price: VALOR,
-        },
-    });
-    st.pending.set(req, id);
-    console.log(`ROBO_DEMO: entrada #${id} ${best.pair} ${best.lado} (treino, ${VALOR}) ${JSON.stringify(best.detalhes)}`);
+    await abrir(best.pair, best.lado, bucket, bucket + TF, best.p, best.detalhes);
 }
 
 // Diagnóstico (AUTO_DIAG_DIA=AAAA-MM-DD): refaz as regras em cada candle M5 do dia e diz nos logs onde a
@@ -284,7 +378,7 @@ async function start() {
     if (process.env.AUTO_TRADE !== '1') return;
     if (!process.env.EXNOVA_EMAIL || !process.env.EXNOVA_PASSWORD) return console.error('ROBO_DEMO: faltam EXNOVA_EMAIL/EXNOVA_PASSWORD.');
     try { await ensureTable(); } catch (err) { return console.error('ROBO_DEMO: erro ao criar a tabela:', err.message); }
-    console.log(`ROBO_DEMO: ligado (máx. ${MAX_POR_DIA} entradas por dia, valor ${VALOR}, só saldo de treino, regras extras: ${REGRAS_ATIVAS.join(',') || 'nenhuma'})`);
+    console.log(`ROBO_DEMO: ligado (máx. ${MAX_POR_DIA} entradas por dia, valor ${VALOR}, só saldo de treino, regras extras: ${REGRAS_ATIVAS.join(',') || 'nenhuma'}, novas: ${process.env.AUTO_NOVAS === '0' ? 'desligadas' : Object.keys(NOVAS_ATIVOS).join(',')})`);
     connect();
     setInterval(() => tick().catch((err) => console.error('ROBO_DEMO erro:', err.message)), 5_000);
     // A cada 30 min confere o saldo de treino (aparece nos logs para o relatório diário).
@@ -295,4 +389,4 @@ async function start() {
     }, 30 * 60_000);
 }
 
-module.exports = { start, evaluate, st };
+module.exports = { start, evaluate, avaliaNovas, st };
