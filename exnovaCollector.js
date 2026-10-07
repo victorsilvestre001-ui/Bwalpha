@@ -212,7 +212,12 @@ async function connect() {
                 }
             }
             for (const [id, v, d] of linhas) pool.query(`INSERT INTO exnova_extras (tipo, active_id, valor, dados) VALUES ('payout', $1, $2, $3)`, [id, v, d]).catch(() => {});
-            if (!state.payoutLogged) { state.payoutLogged = true; console.log(`Exnova OTC: payout ${JSON.stringify(linhas.map(([id, v, d]) => [id, d.nome, v]))}`); }
+            if (!linhas.length && !state.payoutDiag) {
+                state.payoutDiag = true;
+                const t = m.msg.turbo?.actives || {}, k = Object.keys(t);
+                console.log(`Exnova OTC: initialization-data sem os ativos (chaves=${Object.keys(m.msg).slice(0, 10).join(',')} turbo=${k.length} exemplo=${JSON.stringify(k.slice(0, 5).map((id) => [id, t[id]?.name, t[id]?.option?.profit]))})`);
+            }
+            if (linhas.length && !state.payoutLogged) { state.payoutLogged = true; console.log(`Exnova OTC: payout ${JSON.stringify(linhas.map(([id, v, d]) => [id, d.nome, v]))}`); }
         }
     });
     ws.on('close', (code) => {
