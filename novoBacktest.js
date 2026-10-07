@@ -159,7 +159,73 @@ async function runNovo2(pool, deps) {
     }
 }
 
+// ---- Rodada 3 (07/10): melhorar as 3 que sobreviveram + relógio de 30/60 min ----
+// Para cada estratégia: acerto por tempo de expiração (1 a 5 min depois da entrada) e por período do dia.
+function rodada3(m1, isOpen) {
+    const atr = atrSerie(m1), idx = new Map(m1.map((x, i) => [x.time, i])), res = {};
+    const corte = m1[Math.floor(m1.length / 2)]?.time ?? 0;
+    const add = (nome, t, ok) => ((res[nome] ||= { a: [], b: [] })[t < corte ? 'a' : 'b']).push(ok);
+    const periodo = (t) => { const h = new Date(t).getUTCHours(); return h < 7 ? 'asia' : h < 12 ? 'londres' : h < 17 ? 'ny' : 'tarde'; };
+    const at = (t) => { const j = idx.get(t); return j == null ? null : m1[j]; };
+    // fecha(e) = preço de fechamento do minuto que termina em e
+    const fecha = (e) => at(e - 60_000)?.close;
+    for (let i = 20; i < m1.length; i++) {
+        const t = m1[i].time;
+        if (!isOpen(new Date(t))) continue;
+        // Relógio de 30 e 60 min
+        for (const [B, ks] of [[30, [10, 15, 20]], [60, [15, 30, 40]]]) {
+            if (t % (B * 60_000) !== 0) continue;
+            const fim = fecha(t + B * 60_000), abre = m1[i].open;
+            if (fim == null) continue;
+            for (const k of ks) {
+                const e = at(t + (k - 1) * 60_000);
+                if (!e) continue;
+                const mov = (e.close - abre) / atr[idx.get(e.time)];
+                for (const th of [2, 3, 4]) if (Math.abs(mov) >= th && fim !== e.close) add(`relogio${B}_min${k}_${th}atr_segue`, t, Math.sign(fim - e.close) === Math.sign(mov));
+            }
+        }
+        // Devolução no meio do M5 (entrada no fim do 2º minuto, contra)
+        if (t % 300_000 === 0) {
+            const b = at(t + 60_000);
+            if (b) {
+                const mov = (b.close - m1[i].open) / atr[idx.get(b.time)], ent = b.close, entT = t + 120_000;
+                if (Math.abs(mov) >= 2) {
+                    for (const x of [1, 2, 3, 4, 5]) { const f = fecha(entT + x * 60_000); if (f != null && f !== ent) add(`devolve_exp${x}min`, t, Math.sign(f - ent) === -Math.sign(mov)); }
+                    const f3 = fecha(entT + 180_000);
+                    if (f3 != null && f3 !== ent) add(`devolve_3min_${periodo(t)}`, t, Math.sign(f3 - ent) === -Math.sign(mov));
+                }
+            }
+        }
+        // Pico relâmpago (entrada no fechamento do pico, contra)
+        const ant = m1[i - 1], x = m1[i];
+        if (ant && x.time - ant.time === 60_000 && x.close !== x.open && (x.high - x.low) >= 3 * atr[i - 1]) {
+            const entT = t + 60_000;
+            for (const k of [1, 2, 3, 4, 5]) { const f = fecha(entT + k * 60_000); if (f != null && f !== x.close) add(`pico_exp${k}min`, t, Math.sign(f - x.close) === -Math.sign(x.close - x.open)); }
+            const f3 = fecha(entT + 180_000);
+            if (f3 != null && f3 !== x.close) add(`pico_3min_${periodo(t)}`, t, Math.sign(f3 - x.close) === -Math.sign(x.close - x.open));
+        }
+        // Relógio de 15 min por período do dia
+        if (t % 900_000 === 0) {
+            const e = at(t + 420_000), fim = fecha(t + 900_000);
+            if (e && fim != null) {
+                const mov = (e.close - m1[i].open) / atr[idx.get(e.time)];
+                if (Math.abs(mov) >= 2 && fim !== e.close) add(`relogio15_${periodo(t)}`, t, Math.sign(fim - e.close) === Math.sign(mov));
+            }
+        }
+    }
+    return Object.fromEntries(Object.entries(res).sort().map(([k, v]) => [k, { antiga: acc(v.a), nova: acc(v.b) }]));
+}
+
+async function runNovo3(pool, deps) {
+    for (const pair of ['EURUSD', 'EURJPY', 'XAUUSD']) {
+        const { rows } = await pool.query('SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 ORDER BY time', [pair]);
+        const m1 = rows.slice(0, -1).map((r) => ({ time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }));
+        console.log(`NOVO3 ${pair} ${JSON.stringify(rodada3(m1, deps.isMarketOpen))}`);
+    }
+}
+
 async function runNovo(pool, deps) {
+    if (process.env.NOVO_RODADA === '3') return runNovo3(pool, deps);
     if (process.env.NOVO_RODADA === '2') return runNovo2(pool, deps);
     for (const pair of ['EURUSD', 'EURJPY', 'XAUUSD']) {
         const { rows } = await pool.query('SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 ORDER BY time', [pair]);
@@ -171,4 +237,4 @@ async function runNovo(pool, deps) {
     }
 }
 
-module.exports = { runNovo, relogio, markov, rodada2 };
+module.exports = { runNovo, relogio, markov, rodada2, rodada3 };
