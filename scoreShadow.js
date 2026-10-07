@@ -75,7 +75,10 @@ const REGRAS_MIN = [
 // Acerto bem abaixo de 50% num deles quer dizer que o contrário funciona.
 const FLUXO = ['intra_m5', 'correl_m5', 'lag_m5'];
 const PARCEIRO = { EURUSD: 'XAUUSD', XAUUSD: 'EURUSD', EURJPY: 'EURUSD' };
-const NOVOS = ['robo_m5', 'rigida_m5', 'exnova_m5', 'tecnico_m5', ...REGRAS_MIN.map((r) => r.id), ...FLUXO];
+// diverg_ouro (07/10): Ouro da Exnova "descolou" do preço real (Twelve Data) em ≥ 0,7 ATR no candle M5
+// que fechou (sem o desvio fixo, média dos 20 anteriores) → aposta na volta para o lado do real.
+// No estudo de 29/09 a 07/10: 60% e 54,8% nas duas metades (66 casos). Usa 1 consulta à Twelve Data a cada 5 min.
+const NOVOS = ['robo_m5', 'rigida_m5', 'exnova_m5', 'tecnico_m5', ...REGRAS_MIN.map((r) => r.id), ...FLUXO, 'diverg_ouro'];
 const minerador = require('./mineradorBacktest');
 const JANELA_CORTE = 1152; // 96 h de candles M5, igual ao robô
 const novo = { done: {}, wEx: {}, wExAt: 0 };
@@ -191,6 +194,7 @@ async function tickFluxo(now) {
     const prontos = PAIRS.every((p) => d[p].idx.has(bucket - TF));
     if (!prontos && now - bucket < 60_000) return;
     novo.fluxoDone = bucket;
+    await tickDivergencia(now, d).catch((err) => console.error('SCORE_SHADOW divergência erro:', err.message));
     for (const pair of PAIRS) {
         for (const [name, p] of Object.entries(leiturasFluxo(pair, d, bucket - TF))) {
             await pool.query(
@@ -198,6 +202,30 @@ async function tickFluxo(now) {
                 [name, pair, new Date(bucket), p, p > 0.5 ? 'COMPRA' : 'VENDA']);
         }
     }
+}
+
+async function tickDivergencia(now, d) {
+    const bucket = Math.floor(now / TF) * TF;
+    if (novo.divDone === bucket || process.env.SHADOW_DIVERGENCIA === '0') return;
+    const ex = d.XAUUSD, i = ex?.idx.get(bucket - TF);
+    if (i == null || i < 21) return;
+    novo.divDone = bucket;
+    const { fetchTwelveDataCandles, SIGNAL_PAIRS, isMarketOpen } = require('./marketRoutes');
+    if (!isMarketOpen(new Date(bucket)) || !isMarketOpen(new Date(bucket + TF))) return;
+    const td = await fetchTwelveDataCandles(SIGNAL_PAIRS.XAUUSD, '5min', 30);
+    if (!td) return;
+    const tdMap = new Map(td.map((x) => [x.time, x]));
+    const diffs = [];
+    for (let k = i - 20; k <= i; k++) { const r = tdMap.get(ex.c[k].time); diffs.push(r ? ex.c[k].close - r.close : null); }
+    const atual = diffs.pop(), prev = diffs.filter((v) => v != null);
+    if (atual == null || prev.length < 15) return;
+    const desvio = (atual - prev.reduce((a, v) => a + v, 0) / prev.length) / ex.atr[i];
+    if (Math.abs(desvio) < 0.7) return;
+    const p = desvio < 0 ? 1 : 0;
+    console.log(`SCORE_SHADOW diverg_ouro desvio=${desvio.toFixed(2)} → ${p ? 'COMPRA' : 'VENDA'}`);
+    await pool.query(
+        `INSERT INTO shadow_tests (estrategia, pair, candle_time, prob, direction, origem) VALUES ('diverg_ouro', 'XAUUSD', $1, $2, $3, 'ao_vivo') ON CONFLICT DO NOTHING`,
+        [new Date(bucket), p, p ? 'COMPRA' : 'VENDA']);
 }
 
 const resultado = (dir, alvo) => (alvo.close === alvo.open ? 'draw' : (dir === 'COMPRA') === (alvo.close > alvo.open) ? 'win' : 'loss');
