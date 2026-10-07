@@ -1295,7 +1295,7 @@ function horarioNoticiaEUA(ms) {
 //  - SINAL_PAUSADOS (ex.: "EURJPY"; vazio = nenhum): ativos sem sinal até voltarem a mostrar acerto;
 //  - a "confiança" na tela vira o acerto histórico real daquele ativo/tempo (acertoHistorico);
 //  - M1 também respeita o horário de notícias dos EUA (FILTRO_NOTICIA_M1=0 desliga);
-//  - M5 só dá entrada nas regras 1 e 2 (08h e 11h de Brasília, com confirmação), as mesmas do robô.
+//  - M5 normal, mas a regra 1 ou 2 (08h e 11h de Brasília, com confirmação, as mesmas do robô) tem prioridade.
 const PAUSADOS = new Set((process.env.SINAL_PAUSADOS || '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean));
 const acertoCache = { at: 0, map: {} };
 async function acertoHistorico(pair, timeframe) {
@@ -1388,23 +1388,19 @@ router.post('/signal', authMiddleware, requireSignalAccess, signalLimiter, async
             }
         } else {
             ({ entry, expiry } = computeEntry(timeframe, requestedAt));
-            if (process.env.FILTRO_NOTICIA_M5 !== '0' && horarioNoticiaEUA(entry)) {
+            // M5 normal; quando aparece a regra 1 ou 2 (08h e 11h de Brasília, com confirmação), ela tem
+            // prioridade e não passa pelo filtro de notícia (foi validada assim, como no robô).
+            if (process.env.M5_REGRAS !== '0') {
+                const regra = await sinalRegrasM5(pair, entry).catch(() => null);
+                if (regra?.direction) result = regra;
+            }
+            if (!result && process.env.FILTRO_NOTICIA_M5 !== '0' && horarioNoticiaEUA(entry)) {
                 return res.json({
                     pair, timeframe, noEntry: true, requestedAt, entry: null, expiry: null, analysisId: null,
                     reason: 'Horário de notícias dos EUA: o mercado costuma ficar instável agora. No M5 a leitura volta em alguns minutos.',
                 });
             }
-            if (timeframe === 'M5' && process.env.M5_REGRAS !== '0') {
-                result = await sinalRegrasM5(pair, entry);
-                if (!result || result.cedo || result.semDados) {
-                    const reason = result?.cedo
-                        ? 'No M5 o padrão é conferido perto do fechamento do candle. Peça de novo a partir de 4 minutos do candle atual.'
-                        : 'No M5 a IA só entra quando aparece um dos padrões que mais acertaram, perto das 08h e das 11h de Brasília. Agora não há padrão: tente o M1 ou volte nesses horários.';
-                    return res.json({ pair, timeframe, noEntry: true, requestedAt, entry: null, expiry: null, analysisId: null, reason });
-                }
-            } else {
-                result = await getTechnicalSignal(pair, timeframe);
-            }
+            if (!result) result = await getTechnicalSignal(pair, timeframe);
         }
         if (!result) {
             return res.status(502).json({ error: 'Não foi possível calcular o sinal agora. Tente novamente.' });
