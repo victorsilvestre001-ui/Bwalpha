@@ -84,14 +84,6 @@ export default function SignalResult({ result, timing, onRetry }) {
               {result.direction}
             </div>
           </div>
-          {/* Em vez de "confiança Alta/Média/Baixa" (que não acompanhava o acerto real), mostra o acerto
-              histórico de verdade deste ativo e tempo gráfico, de todas as leituras já conferidas. */}
-          {result.acertoHistorico && (
-            <span className="rounded-full border border-void-line bg-void-deep/60 px-3 py-1 text-right font-mono text-xs text-mist-dim">
-              Acerto histórico {result.acertoHistorico.pct}%
-              <span className="block text-[10px] text-mist-faint">{result.acertoHistorico.n} leituras</span>
-            </span>
-          )}
         </div>
       </div>
 
