@@ -1292,11 +1292,11 @@ function horarioNoticiaEUA(ms) {
 }
 
 // Ajustes de 07/10 (placar real dos sinais: M1 55%; EURJPY 48%; "confiança" Alta 54,7% x Baixa 56,6%):
-//  - SINAL_PAUSADOS (padrão "EURJPY"): ativos sem sinal até voltarem a mostrar acerto;
+//  - SINAL_PAUSADOS (ex.: "EURJPY"; vazio = nenhum): ativos sem sinal até voltarem a mostrar acerto;
 //  - a "confiança" na tela vira o acerto histórico real daquele ativo/tempo (acertoHistorico);
 //  - M1 também respeita o horário de notícias dos EUA (FILTRO_NOTICIA_M1=0 desliga);
 //  - M5 só dá entrada nas regras 1 e 2 (08h e 11h de Brasília, com confirmação), as mesmas do robô.
-const PAUSADOS = new Set((process.env.SINAL_PAUSADOS ?? 'EURJPY').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean));
+const PAUSADOS = new Set((process.env.SINAL_PAUSADOS || '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean));
 const acertoCache = { at: 0, map: {} };
 async function acertoHistorico(pair, timeframe) {
     if (Date.now() - acertoCache.at > 30 * 60_000) {
