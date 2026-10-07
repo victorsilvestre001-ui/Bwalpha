@@ -179,7 +179,11 @@ async function evaluate(pair, bucket, noticia) {
         const f = minerador.descreve(c, i, minerador.prep(c), pair, TF);
         for (const nome of REGRAS_ATIVAS) {
             const r = REGRAS[nome];
-            if (Object.entries(r.se).every(([k, v]) => f[k] === v) && (!r.confirma || r.confirma(f))) {
+            const base = Object.entries(r.se).every(([k, v]) => f[k] === v);
+            if (base && r.confirma && !r.confirma(f)) {
+                console.log(`ROBO_DEMO: ${pair} ${nome} apareceu, mas sem confirmação (tendência=${f.tendencia}, z_media=${f.z_media}); não entra`);
+            }
+            if (base && (!r.confirma || r.confirma(f))) {
                 return { pair, lado: r.lado, p: r.lado === 'COMPRA' ? 1 : 0, conf: 1, detalhes: { regra: nome } };
             }
         }
@@ -247,7 +251,29 @@ async function tick() {
     console.log(`ROBO_DEMO: entrada #${id} ${best.pair} ${best.lado} (treino, ${VALOR}) ${JSON.stringify(best.detalhes)}`);
 }
 
+// Diagnóstico (AUTO_DIAG_DIA=AAAA-MM-DD): refaz as regras em cada candle M5 do dia e diz nos logs onde a
+// regra apareceu e se a confirmação passou. Só lê, não opera.
+async function diagnostico() {
+    const dia = process.env.AUTO_DIAG_DIA;
+    if (!dia) return;
+    const minerador = require('./mineradorBacktest');
+    for (const pair of PAIRS) {
+        const c = await m5(pair, 48), P = minerador.prep(c);
+        for (let i = 60; i < c.length; i++) {
+            if (new Date(c[i].time + TF).toISOString().slice(0, 10) !== dia) continue;
+            const f = minerador.descreve(c, i, P, pair, TF);
+            for (const [nome, r] of Object.entries(REGRAS)) {
+                if (!Object.entries(r.se).every(([k, v]) => f[k] === v)) continue;
+                const alvo = c[i + 1];
+                const res = alvo ? (alvo.close > alvo.open ? 'subiu' : alvo.close < alvo.open ? 'caiu' : 'empate') : '?';
+                console.log(`ROBO_DIAG ${pair} entrada ${new Date(c[i].time + TF).toISOString().slice(11, 16)} UTC ${nome} confirmacao=${r.confirma(f) ? 'SIM' : 'NAO'} (tendencia=${f.tendencia}, z=${f.z_media}) candle seguinte ${res}`);
+            }
+        }
+    }
+}
+
 async function start() {
+    diagnostico().catch((err) => console.error('ROBO_DIAG erro:', err.message));
     if (process.env.AUTO_TRADE !== '1') return;
     if (!process.env.EXNOVA_EMAIL || !process.env.EXNOVA_PASSWORD) return console.error('ROBO_DEMO: faltam EXNOVA_EMAIL/EXNOVA_PASSWORD.');
     try { await ensureTable(); } catch (err) { return console.error('ROBO_DEMO: erro ao criar a tabela:', err.message); }
