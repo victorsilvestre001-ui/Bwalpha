@@ -66,7 +66,16 @@ const REGRAS_MIN = [
     { id: 'min_h11_rompe', se: { cores3: 'RVV', hora: '11', vs_anterior: 'acima_max' }, dir: 1 },
     { id: 'min_vrr_forte', se: { cores3: 'VRR', corpo: 'grande', pavio_cima: 'zero' }, dir: 0 },
 ];
-const NOVOS = ['robo_m5', 'rigida_m5', 'exnova_m5', 'tecnico_m5', ...REGRAS_MIN.map((r) => r.id)];
+// Testes de fluxo (07/10, para melhorar o M5 do site):
+//   intra_m5   os 5 candles de 1 min dentro do M5 que fechou: movimento forte (≥ 0,5 ATR), último minuto a favor
+//              e os 2 últimos minutos com ≥ 40% do movimento (acelerando no fim) → segue a direção.
+//   correl_m5  o ativo e o "parceiro" (EURUSD↔Ouro pelo dólar, EURJPY↔EURUSD pelo euro) fecharam o M5 fortes
+//              (≥ 0,3 ATR) para o mesmo lado → segue a direção.
+//   lag_m5     o parceiro andou forte (≥ 0,8 ATR) e o ativo quase não andou (< 0,2 ATR) → o ativo vai atrás.
+// Acerto bem abaixo de 50% num deles quer dizer que o contrário funciona.
+const FLUXO = ['intra_m5', 'correl_m5', 'lag_m5'];
+const PARCEIRO = { EURUSD: 'XAUUSD', XAUUSD: 'EURUSD', EURJPY: 'EURUSD' };
+const NOVOS = ['robo_m5', 'rigida_m5', 'exnova_m5', 'tecnico_m5', ...REGRAS_MIN.map((r) => r.id), ...FLUXO];
 const minerador = require('./mineradorBacktest');
 const JANELA_CORTE = 1152; // 96 h de candles M5, igual ao robô
 const novo = { done: {}, wEx: {}, wExAt: 0 };
@@ -118,6 +127,77 @@ function leituras(pair, c, S, confs, i, wEx, Pm) {
     const velaAFavor = lado === 'COMPRA' ? last.close > last.open : last.close < last.open;
     if (h >= 7 && h < 17 && velaAFavor) out.rigida_m5 = p;
     return out;
+}
+
+// Monta, para os 3 ativos, os candles M5 (com ATR) e os M1 por horário.
+async function dadosFluxo(horas) {
+    const d = {};
+    for (const pair of PAIRS) {
+        const m1 = await m1Candles(pair, horas);
+        const c = aggregate(m1, 5), atr = minerador.prep(c).atr;
+        d[pair] = { c, atr, idx: new Map(c.map((x, i) => [x.time, i])), m1: new Map(m1.map((x) => [x.time, x])) };
+    }
+    return d;
+}
+
+// Leituras de fluxo no candle M5 fechado que começa em t, para o candle seguinte. 1 = COMPRA, 0 = VENDA.
+function leiturasFluxo(pair, d, t) {
+    const { isMarketOpen } = require('./marketRoutes');
+    const me = d[pair], i = me.idx.get(t), out = {};
+    if (i == null || i < 20) return out;
+    const b = t + TF;
+    if (!isMarketOpen(new Date(b)) || !isMarketOpen(new Date(b + TF))) return out;
+    const x = me.c[i], atr = me.atr[i], corpo = (x.close - x.open) / atr;
+    const mins = [0, 1, 2, 3, 4].map((k) => me.m1.get(t + k * 60_000));
+    if (mins.every(Boolean)) {
+        const mov = mins[4].close - mins[0].open, fim = mins[4].close - mins[3].open, ult = mins[4].close - mins[4].open;
+        if (Math.abs(mov) >= 0.5 * atr && Math.sign(ult) === Math.sign(mov) && fim / mov >= 0.4) out.intra_m5 = mov > 0 ? 1 : 0;
+    }
+    const par = d[PARCEIRO[pair]], j = par?.idx.get(t);
+    if (j != null) {
+        const y = par.c[j], corpoPar = (y.close - y.open) / par.atr[j];
+        if (Math.abs(corpo) >= 0.3 && Math.abs(corpoPar) >= 0.3 && Math.sign(corpo) === Math.sign(corpoPar)) out.correl_m5 = corpo > 0 ? 1 : 0;
+        if (Math.abs(corpoPar) >= 0.8 && Math.abs(corpo) < 0.2) out.lag_m5 = corpoPar > 0 ? 1 : 0;
+    }
+    return out;
+}
+
+async function backfillFluxo() {
+    const { rows } = await pool.query(`SELECT 1 FROM shadow_tests WHERE origem = 'historico' AND estrategia = ANY($1) LIMIT 1`, [FLUXO]);
+    if (rows.length) return;
+    const d = await dadosFluxo(30 * 24);
+    for (const pair of PAIRS) {
+        const { c } = d[pair], cont = {};
+        for (let i = 20; i < c.length - 1; i++) {
+            const alvo = c[i + 1];
+            if (alvo.time !== c[i].time + TF) continue;
+            for (const [name, p] of Object.entries(leiturasFluxo(pair, d, c[i].time))) {
+                const dir = p > 0.5 ? 'COMPRA' : 'VENDA';
+                await pool.query(
+                    `INSERT INTO shadow_tests (estrategia, pair, candle_time, prob, direction, result, origem) VALUES ($1, $2, $3, $4, $5, $6, 'historico') ON CONFLICT DO NOTHING`,
+                    [name, pair, new Date(alvo.time), p, dir, resultado(dir, alvo)]);
+                cont[name] = (cont[name] || 0) + 1;
+            }
+        }
+        console.log(`SCORE_SHADOW_HISTORICO_FLUXO ${pair} ${JSON.stringify(cont)}`);
+    }
+}
+
+// Ao vivo: uma vez por candle M5, depois que o anterior fechou nos 3 ativos (até 1 min de espera).
+async function tickFluxo(now) {
+    const bucket = Math.floor(now / TF) * TF;
+    if (novo.fluxoDone === bucket) return;
+    const d = await dadosFluxo(10);
+    const prontos = PAIRS.every((p) => d[p].idx.has(bucket - TF));
+    if (!prontos && now - bucket < 60_000) return;
+    novo.fluxoDone = bucket;
+    for (const pair of PAIRS) {
+        for (const [name, p] of Object.entries(leiturasFluxo(pair, d, bucket - TF))) {
+            await pool.query(
+                `INSERT INTO shadow_tests (estrategia, pair, candle_time, prob, direction, origem) VALUES ($1, $2, $3, $4, $5, 'ao_vivo') ON CONFLICT DO NOTHING`,
+                [name, pair, new Date(bucket), p, p > 0.5 ? 'COMPRA' : 'VENDA']);
+        }
+    }
 }
 
 const resultado = (dir, alvo) => (alvo.close === alvo.open ? 'draw' : (dir === 'COMPRA') === (alvo.close > alvo.open) ? 'win' : 'loss');
@@ -206,6 +286,7 @@ async function tick() {
     }
     await ensureTable();
     await tickNovos(now);
+    await tickFluxo(now).catch((err) => console.error('SCORE_SHADOW fluxo erro:', err.message));
     if (!pending.length) return;
     const cache = {};
     for (const [name, t, pair, tf, bucket] of pending) {
@@ -257,9 +338,9 @@ async function summary() {
 
 function start() {
     if (process.env.SCORE_SHADOW === '0') return;
-    setTimeout(() => ensureTable().then(backfill).then(summary)
+    setTimeout(() => ensureTable().then(backfill).then(backfillFluxo).then(summary)
         .catch((err) => console.error('SCORE_SHADOW_HISTORICO erro:', err.message)), 60_000);
     setInterval(() => tick().catch((err) => console.error('SCORE_SHADOW erro:', err.message)), 20_000);
 }
 
-module.exports = { start, summary, TESTS, W5, leituras, confSerie, pesosExnova };
+module.exports = { start, summary, TESTS, W5, leituras, leiturasFluxo, confSerie, pesosExnova };
