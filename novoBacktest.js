@@ -91,7 +91,76 @@ function markov(c, tfMs, comMinuto) {
     return { amostras: S.length, sequencias_escolhidas: real.sequencias, prova: real.prova, controle_embaralhado: ctrl, exemplos: Object.entries(real.regra).slice(0, 8).map(([k, v]) => `${k}→${v ? 'COMPRA' : 'VENDA'}`) };
 }
 
+// ---- Segunda rodada (07/10) ----
+// Cada teste devolve listas de acerto por metade (antiga/nova). "segue" = o movimento continuou.
+function rodada2(m1, isOpen, outros) {
+    const atr = atrSerie(m1), idx = new Map(m1.map((x, i) => [x.time, i])), res = {};
+    const corte = m1[Math.floor(m1.length / 2)]?.time ?? 0;
+    const add = (nome, t, ok) => ((res[nome] ||= { a: [], b: [] })[t < corte ? 'a' : 'b']).push(ok);
+    for (let i = 20; i < m1.length - 3; i++) {
+        const x = m1[i], t = x.time;
+        if (!isOpen(new Date(t))) continue;
+        const cont3 = m1[i + 3].time === t + 180_000, cont1 = m1[i + 1].time === t + 60_000;
+        // Relógio de 15 min: no minuto k do bloco, movimento ≥ th ATR desde a abertura → segue até o fim?
+        if (t % 900_000 === 0) {
+            const mins = Array.from({ length: 15 }, (_, k) => idx.get(t + k * 60_000));
+            if (mins.every((v) => v != null)) {
+                const abre = m1[mins[0]].open, fim = m1[mins[14]].close;
+                for (const k of [3, 5, 8, 10]) {
+                    const j = mins[k - 1], entrada = m1[j].close, mov = (entrada - abre) / atr[j];
+                    for (const th of [2, 3, 4]) if (Math.abs(mov) >= th && fim !== entrada) add(`relogio15_min${k}_${th}atr_segue`, t, Math.sign(fim - entrada) === Math.sign(mov));
+                }
+            }
+        }
+        // Pico relâmpago: faixa do minuto ≥ 3 ATR → em 3 min o preço segue a cor do pico?
+        if (cont3 && (x.high - x.low) >= 3 * atr[i - 1] && x.close !== x.open && m1[i + 3].close !== x.close) {
+            add('pico_3min_segue', t, Math.sign(m1[i + 3].close - x.close) === Math.sign(x.close - x.open));
+        }
+        // Preço congelado: minuto sem movimento nenhum → cor do próximo minuto igual à do minuto antes do congelamento?
+        if (cont1 && x.high === x.low) {
+            const ant = m1[i - 1], nx = m1[i + 1];
+            if (ant.close !== ant.open && nx.close !== nx.open) add('congelado_proximo_segue_anterior', t, (nx.close > nx.open) === (ant.close > ant.open));
+            const n2 = m1[i + 2];
+            if (n2 && n2.time === t + 120_000 && n2.close !== x.close) add('congelado_2min_sobe', t, n2.close > x.close);
+        }
+        // Calmaria (10 min com faixa < 2 ATR) e rompimento neste minuto → segue por 3 min?
+        if (cont3 && m1[i - 10] && t - m1[i - 10].time === 600_000) {
+            let hi = -Infinity, lo = Infinity;
+            for (let k = i - 10; k < i; k++) { hi = Math.max(hi, m1[k].high); lo = Math.min(lo, m1[k].low); }
+            if (hi - lo < 2 * atr[i - 1] && (x.close > hi || x.close < lo) && m1[i + 3].close !== x.close) {
+                add('calmaria_rompe_3min_segue', t, (m1[i + 3].close > x.close) === (x.close > hi));
+            }
+        }
+        // Choque do dólar (só para EURUSD/XAUUSD): os dois andaram ≥ 1,5 ATR no mesmo minuto para o mesmo lado.
+        if (outros && cont3) {
+            const o = outros.idx.get(t);
+            if (o != null) {
+                const y = outros.m1[o], ca = (x.close - x.open) / atr[i], cb = (y.close - y.open) / outros.atr[o];
+                if (Math.abs(ca) >= 1.5 && Math.abs(cb) >= 1.5 && Math.sign(ca) === Math.sign(cb)) {
+                    if (m1[i + 1].close !== m1[i + 1].open) add('choque_dolar_proximo_segue', t, (m1[i + 1].close > m1[i + 1].open) === (ca > 0));
+                    if (m1[i + 3].close !== x.close) add('choque_dolar_3min_segue', t, Math.sign(m1[i + 3].close - x.close) === Math.sign(ca));
+                }
+            }
+        }
+    }
+    return Object.fromEntries(Object.entries(res).map(([k, v]) => [k, { antiga: acc(v.a), nova: acc(v.b) }]));
+}
+
+async function runNovo2(pool, deps) {
+    const dados = {};
+    for (const pair of ['EURUSD', 'EURJPY', 'XAUUSD']) {
+        const { rows } = await pool.query('SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 ORDER BY time', [pair]);
+        const m1 = rows.slice(0, -1).map((r) => ({ time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }));
+        dados[pair] = { m1, atr: atrSerie(m1), idx: new Map(m1.map((x, i) => [x.time, i])) };
+    }
+    const parceiro = { EURUSD: 'XAUUSD', XAUUSD: 'EURUSD' };
+    for (const pair of Object.keys(dados)) {
+        console.log(`NOVO2 ${pair} ${JSON.stringify(rodada2(dados[pair].m1, deps.isMarketOpen, dados[parceiro[pair]]))}`);
+    }
+}
+
 async function runNovo(pool, deps) {
+    if (process.env.NOVO_RODADA === '2') return runNovo2(pool, deps);
     for (const pair of ['EURUSD', 'EURJPY', 'XAUUSD']) {
         const { rows } = await pool.query('SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 ORDER BY time', [pair]);
         const m1 = rows.slice(0, -1).map((r) => ({ time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }));
@@ -102,4 +171,4 @@ async function runNovo(pool, deps) {
     }
 }
 
-module.exports = { runNovo, relogio, markov };
+module.exports = { runNovo, relogio, markov, rodada2 };
