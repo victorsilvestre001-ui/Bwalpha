@@ -78,7 +78,10 @@ const PARCEIRO = { EURUSD: 'XAUUSD', XAUUSD: 'EURUSD', EURJPY: 'EURUSD' };
 // diverg_ouro (07/10): Ouro da Exnova "descolou" do preço real (Twelve Data) em ≥ 0,7 ATR no candle M5
 // que fechou (sem o desvio fixo, média dos 20 anteriores) → aposta na volta para o lado do real.
 // No estudo de 29/09 a 07/10: 60% e 54,8% nas duas metades (66 casos). Usa 1 consulta à Twelve Data a cada 5 min.
-const NOVOS = ['robo_m5', 'rigida_m5', 'exnova_m5', 'tecnico_m5', ...REGRAS_MIN.map((r) => r.id), ...FLUXO, 'diverg_ouro'];
+// devolve_m5 (07/10, "relógio do candle"): no 2º minuto do M5, se o preço já andou ≥ 2 ATR(M1) desde a
+// abertura, entra CONTRA o movimento com expiração no fim do M5 (3 min). Estudo 29/09–07/10: devolveu em
+// 56,5% de 278 casos, nos 3 ativos e nas duas metades. Gravado com o resultado já conferido (bloco fechado).
+const NOVOS = ['devolve_m5', 'robo_m5', 'rigida_m5', 'exnova_m5', 'tecnico_m5', ...REGRAS_MIN.map((r) => r.id), ...FLUXO, 'diverg_ouro'];
 const minerador = require('./mineradorBacktest');
 const JANELA_CORTE = 1152; // 96 h de candles M5, igual ao robô
 const novo = { done: {}, wEx: {}, wExAt: 0 };
@@ -138,7 +141,8 @@ async function dadosFluxo(horas) {
     for (const pair of PAIRS) {
         const m1 = await m1Candles(pair, horas);
         const c = aggregate(m1, 5), atr = minerador.prep(c).atr;
-        d[pair] = { c, atr, idx: new Map(c.map((x, i) => [x.time, i])), m1: new Map(m1.map((x) => [x.time, x])) };
+        const atr1 = minerador.prep(m1).atr;
+        d[pair] = { c, atr, idx: new Map(c.map((x, i) => [x.time, i])), m1: new Map(m1.map((x, i) => [x.time, { ...x, atr: atr1[i] }])) };
     }
     return d;
 }
@@ -165,7 +169,36 @@ function leiturasFluxo(pair, d, t) {
     return out;
 }
 
+// Devolução no meio do M5 para o bloco que começa em t (já fechado). { dir: 1/0, result } ou null.
+function devolucao(pair, d, t) {
+    const { isMarketOpen } = require('./marketRoutes');
+    const mins = [0, 1, 2, 3, 4].map((k) => d[pair].m1.get(t + k * 60_000));
+    if (mins.some((x) => !x) || !isMarketOpen(new Date(t + 120_000))) return null;
+    const entrada = mins[1].close, mov = (entrada - mins[0].open) / (mins[1].atr || 1e-9), fim = mins[4].close;
+    if (Math.abs(mov) < 2) return null;
+    const dir = mov > 0 ? 0 : 1; // contra o movimento
+    return { dir, result: fim === entrada ? 'draw' : (dir === 1) === (fim > entrada) ? 'win' : 'loss' };
+}
+
+async function gravaDevolucao(pair, d, t, origem) {
+    const r = devolucao(pair, d, t);
+    if (!r) return false;
+    await pool.query(
+        `INSERT INTO shadow_tests (estrategia, pair, candle_time, prob, direction, result, origem) VALUES ('devolve_m5', $1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`,
+        [pair, new Date(t + 120_000), r.dir, r.dir ? 'COMPRA' : 'VENDA', r.result, origem]);
+    return true;
+}
+
 async function backfillFluxo() {
+    const ja = await pool.query(`SELECT 1 FROM shadow_tests WHERE origem = 'historico' AND estrategia = 'devolve_m5' LIMIT 1`);
+    if (!ja.rows.length) {
+        const d = await dadosFluxo(30 * 24);
+        for (const pair of PAIRS) {
+            let n = 0;
+            for (const x of d[pair].c) if (await gravaDevolucao(pair, d, x.time, 'historico')) n++;
+            console.log(`SCORE_SHADOW_HISTORICO_DEVOLVE ${pair} ${n}`);
+        }
+    }
     const { rows } = await pool.query(`SELECT 1 FROM shadow_tests WHERE origem = 'historico' AND estrategia = ANY($1) LIMIT 1`, [FLUXO]);
     if (rows.length) return;
     const d = await dadosFluxo(30 * 24);
@@ -195,6 +228,7 @@ async function tickFluxo(now) {
     if (!prontos && now - bucket < 60_000) return;
     novo.fluxoDone = bucket;
     await tickDivergencia(now, d).catch((err) => console.error('SCORE_SHADOW divergência erro:', err.message));
+    for (const pair of PAIRS) await gravaDevolucao(pair, d, bucket - TF, 'ao_vivo').catch(() => {});
     for (const pair of PAIRS) {
         for (const [name, p] of Object.entries(leiturasFluxo(pair, d, bucket - TF))) {
             await pool.query(
