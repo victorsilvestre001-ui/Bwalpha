@@ -268,8 +268,9 @@ async function diagnostico() {
         for (let i = 60; i < c.length; i++) {
             if (new Date(c[i].time + TF).toISOString().slice(0, 10) !== dia) continue;
             const f = minerador.descreve(c, i, P, pair, TF);
+            const todasHoras = process.env.AUTO_DIAG_TODAS_HORAS === '1';
             for (const [nome, r] of Object.entries(REGRAS)) {
-                if (!Object.entries(r.se).every(([k, v]) => f[k] === v)) continue;
+                if (!Object.entries(r.se).every(([k, v]) => (todasHoras && k === 'hora') || f[k] === v)) continue;
                 const alvo = c[i + 1];
                 const res = alvo ? (alvo.close > alvo.open ? 'subiu' : alvo.close < alvo.open ? 'caiu' : 'empate') : '?';
                 console.log(`ROBO_DIAG ${pair} entrada ${new Date(c[i].time + TF).toISOString().slice(11, 16)} UTC ${nome} confirmacao=${r.confirma(f) ? 'SIM' : 'NAO'} (tendencia=${f.tendencia}, z=${f.z_media}) candle seguinte ${res}`);
