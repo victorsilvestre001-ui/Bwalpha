@@ -13,6 +13,13 @@ let retryMs = 30_000;
 let reqId = 1;
 
 async function ensureTable() {
+    // Dados extras para os estudos de 07/10 (teste): cada mudança de preço com o horário exato, o "humor"
+    // dos traders (% comprando) e o payout de cada ativo. EXNOVA_EXTRAS=0 desliga. Guarda 10 dias.
+    await pool.query(`CREATE TABLE IF NOT EXISTS exnova_ticks (active TEXT NOT NULL, at TIMESTAMPTZ NOT NULL, price DOUBLE PRECISION NOT NULL)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS exnova_ticks_idx ON exnova_ticks (active, at)`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS exnova_extras (tipo TEXT NOT NULL, active_id INT, at TIMESTAMPTZ NOT NULL DEFAULT NOW(), valor DOUBLE PRECISION, dados JSONB)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS exnova_extras_idx ON exnova_extras (tipo, active_id, at)`);
+    await pool.query(`DELETE FROM exnova_ticks WHERE at < NOW() - INTERVAL '10 days'`).catch(() => {});
     await pool.query(`CREATE TABLE IF NOT EXISTS otc_candles (
         active VARCHAR(40) NOT NULL,
         time TIMESTAMPTZ NOT NULL,
@@ -118,7 +125,20 @@ async function connect() {
             send(ws, 'subscribeMessage', { name: 'candle-generated', params: { routingFilters: { active_id: id, size: 60 } } });
         }
         state.actives = { ...state.actives, ...ids };
+        if (process.env.EXNOVA_EXTRAS !== '0') {
+            // Humor dos traders: tenta pelos ids de candle e pelos de operar (os "-op").
+            const tradeIds = (process.env.AUTO_ACTIVE_IDS || 'EURUSD:1861,EURJPY:1864,XAUUSD:1912').split(',').map((x) => Number(x.split(':')[1])).filter(Boolean);
+            for (const id of [...Object.values(ids), ...tradeIds]) {
+                for (const instrument of ['turbo-option', 'binary-option']) {
+                    send(ws, 'subscribeMessage', { name: 'traders-mood-changed', params: { routingFilters: { instrument, asset_id: id } } });
+                }
+            }
+        }
     };
+    // Payout de cada ativo, a cada 5 min (initialization-data traz a comissão: payout = 100 - comissão).
+    const pedePayout = () => { if (process.env.EXNOVA_EXTRAS !== '0' && ws.readyState === 1) send(ws, 'sendMessage', { name: 'get-initialization-data', version: '3.0', body: {} }); };
+    const payoutTimer = setInterval(pedePayout, 5 * 60_000);
+    setTimeout(pedePayout, 20_000);
     // Se a lista de ativos não vier, usa os ids conhecidos (mesma plataforma da IQ Option).
     // EXNOVA_ACTIVE_IDS permite trocar, ex.: "EURUSD-OTC:76,GBPUSD-OTC:81".
     const fallback = setTimeout(() => {
@@ -168,6 +188,9 @@ async function connect() {
             try {
                 feedLive(byId[m.msg.active_id], m.msg);
                 await saveCandle(byId[m.msg.active_id], m.msg);
+                if (process.env.EXNOVA_EXTRAS !== '0' && !byId[m.msg.active_id].endsWith('-OTC')) {
+                    pool.query('INSERT INTO exnova_ticks (active, at, price) VALUES ($1, NOW(), $2)', [byId[m.msg.active_id], Number(m.msg.close)]).catch(() => {});
+                }
                 state.saved++;
                 if (state.saved === 1 || state.saved % 500 === 0) console.log(`Exnova OTC: ${state.saved} atualizações de candle gravadas`);
             } catch (err) {
@@ -175,10 +198,26 @@ async function connect() {
             }
         } else if (m.name === 'heartbeat') {
             send(ws, 'heartbeat', { userTime: Date.now(), heartbeatTime: m.msg });
+        } else if (m.name === 'traders-mood-changed' && m.msg) {
+            pool.query(`INSERT INTO exnova_extras (tipo, active_id, valor, dados) VALUES ('humor', $1, $2, $3)`,
+                [Number(m.msg.asset_id) || null, Number(m.msg.value), { instrument: m.msg.instrument }]).catch(() => {});
+        } else if (m.name === 'initialization-data' && m.msg) {
+            const meus = new Set([...Object.values(state.actives || {}), ...(process.env.AUTO_ACTIVE_IDS || 'EURUSD:1861,EURJPY:1864,XAUUSD:1912').split(',').map((x) => Number(x.split(':')[1]))]);
+            const linhas = [];
+            for (const tipo of ['turbo', 'binary']) {
+                for (const [id, a] of Object.entries(m.msg[tipo]?.actives || {})) {
+                    if (!meus.has(Number(id))) continue;
+                    const com = a?.option?.profit?.commission;
+                    if (com != null) linhas.push([Number(id), 100 - Number(com), { tipo, nome: a.name, ativo: a.enabled }]);
+                }
+            }
+            for (const [id, v, d] of linhas) pool.query(`INSERT INTO exnova_extras (tipo, active_id, valor, dados) VALUES ('payout', $1, $2, $3)`, [id, v, d]).catch(() => {});
+            if (!state.payoutLogged) { state.payoutLogged = true; console.log(`Exnova OTC: payout ${JSON.stringify(linhas.map(([id, v, d]) => [id, d.nome, v]))}`); }
         }
     });
     ws.on('close', (code) => {
         clearTimeout(fallback);
+        clearInterval(payoutTimer);
         state.connected = false;
         console.log(`Exnova OTC: conexão fechada (${code}), reconectando`);
         setTimeout(connect, retryMs);
