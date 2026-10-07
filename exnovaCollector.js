@@ -95,6 +95,25 @@ async function saveCandle(active, c) {
     state.lastCandleAt = Date.now();
 }
 
+// Payout por ativo a partir do initialization-data: procura em qualquer lugar da resposta os ativos com
+// option.profit.commission (payout = 100 - comissão) cujo id é um dos nossos (candle ou "-op").
+function gravaPayout(msg) {
+    const meus = new Set([...Object.values(state.actives || {}), ...(process.env.AUTO_ACTIVE_IDS || 'EURUSD:1861,EURJPY:1864,XAUUSD:1912').split(',').map((x) => Number(x.split(':')[1]))]);
+    const linhas = [];
+    const walk = (node, tipo, depth) => {
+        if (!node || typeof node !== 'object' || depth > 6) return;
+        const com = node.option?.profit?.commission;
+        if (com != null && node.id != null && meus.has(Number(node.id))) linhas.push([Number(node.id), 100 - Number(com), { tipo, nome: node.name, ativo: node.enabled }]);
+        for (const [k, v] of Object.entries(node)) if (v && typeof v === 'object') walk(v, depth === 0 ? k : tipo, depth + 1);
+    };
+    walk(msg, '', 0);
+    for (const [id, v, d] of linhas) pool.query(`INSERT INTO exnova_extras (tipo, active_id, valor, dados) VALUES ('payout', $1, $2, $3)`, [id, v, d]).catch(() => {});
+    if (!state.payoutLogged) {
+        state.payoutLogged = true;
+        console.log(`Exnova OTC: payout ${linhas.length ? JSON.stringify(linhas.map(([id, v, d]) => [id, d.tipo, d.nome, v])) : `não achado (chaves=${Object.keys(msg || {}).slice(0, 12).join(',')})`}`);
+    }
+}
+
 async function connect() {
     // Além dos OTC, grava os pares do mercado aberto que o site analisa: o histórico confere o
     // WIN/RED por eles (analysesRoutes.js). EXNOVA_JUDGE_ACTIVES="" desliga.
@@ -183,6 +202,7 @@ async function connect() {
                 Object.assign(ids, known);
             }
             if (Object.keys(ids).length) { clearTimeout(fallback); subscribe(ids); }
+            if (process.env.EXNOVA_EXTRAS !== '0') gravaPayout(m.msg);
         } else if (m.name === 'candle-generated' && m.msg && byId[m.msg.active_id] && m.msg.size === 60) {
             if (!state.firstLogged?.[m.msg.active_id]) (state.firstLogged ||= {})[m.msg.active_id] = true, console.log(`Exnova OTC: primeiro candle ${byId[m.msg.active_id]} ${JSON.stringify({ from: m.msg.from, open: m.msg.open, close: m.msg.close, min: m.msg.min, max: m.msg.max })}`);
             try {
@@ -201,23 +221,6 @@ async function connect() {
         } else if (m.name === 'traders-mood-changed' && m.msg) {
             pool.query(`INSERT INTO exnova_extras (tipo, active_id, valor, dados) VALUES ('humor', $1, $2, $3)`,
                 [Number(m.msg.asset_id) || null, Number(m.msg.value), { instrument: m.msg.instrument }]).catch(() => {});
-        } else if (m.name === 'initialization-data' && m.msg) {
-            const meus = new Set([...Object.values(state.actives || {}), ...(process.env.AUTO_ACTIVE_IDS || 'EURUSD:1861,EURJPY:1864,XAUUSD:1912').split(',').map((x) => Number(x.split(':')[1]))]);
-            const linhas = [];
-            for (const tipo of ['turbo', 'binary']) {
-                for (const [id, a] of Object.entries(m.msg[tipo]?.actives || {})) {
-                    if (!meus.has(Number(id))) continue;
-                    const com = a?.option?.profit?.commission;
-                    if (com != null) linhas.push([Number(id), 100 - Number(com), { tipo, nome: a.name, ativo: a.enabled }]);
-                }
-            }
-            for (const [id, v, d] of linhas) pool.query(`INSERT INTO exnova_extras (tipo, active_id, valor, dados) VALUES ('payout', $1, $2, $3)`, [id, v, d]).catch(() => {});
-            if (!linhas.length && !state.payoutDiag) {
-                state.payoutDiag = true;
-                const t = m.msg.turbo?.actives || {}, k = Object.keys(t);
-                console.log(`Exnova OTC: initialization-data sem os ativos (chaves=${Object.keys(m.msg).slice(0, 10).join(',')} turbo=${k.length} exemplo=${JSON.stringify(k.slice(0, 5).map((id) => [id, t[id]?.name, t[id]?.option?.profit]))})`);
-            }
-            if (linhas.length && !state.payoutLogged) { state.payoutLogged = true; console.log(`Exnova OTC: payout ${JSON.stringify(linhas.map(([id, v, d]) => [id, d.nome, v]))}`); }
         }
     });
     ws.on('close', (code) => {
