@@ -779,6 +779,11 @@ async function run() {
         console.log('BACKTEST_END');
         return;
     }
+    if (process.env.BACKTEST_SOURCE === 'divergencia') {
+        try { await require('./divergenciaBacktest').runDivergencia(pool, { fetchLongHistory, isMarketOpen }); } catch (err) { console.error('BACKTEST_ERR DIVERGENCIA:', err.message); }
+        console.log('BACKTEST_END');
+        return;
+    }
     if (process.env.BACKTEST_SOURCE === 'confirma') {
         try { await require('./mineradorBacktest').runConfirma(pool, { fetchLongHistory, isMarketOpen }); } catch (err) { console.error('BACKTEST_ERR CONFIRMA:', err.message); }
         console.log('BACKTEST_END');
