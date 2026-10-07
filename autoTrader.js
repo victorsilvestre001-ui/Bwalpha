@@ -239,9 +239,10 @@ async function resolveResults() {
 //   relogio15_segue 8º minuto do bloco de 15 min andou ≥ 2 ATR(M1) → A FAVOR, expira no fim do bloco (7 min). EURUSD.
 //   pico_volta      minuto com faixa ≥ 3 ATR(M1) → CONTRA a cor dele, expira em 3 min. EURUSD.
 // Dividem o mesmo limite de entradas por dia com as regras 1 e 2. Liga/desliga com AUTO_NOVAS (padrão ligado).
-const NOVAS_ATIVOS = { devolve_m5: ['EURUSD', 'EURJPY', 'XAUUSD'], relogio15_segue: ['EURUSD', 'XAUUSD'], pico_volta: ['EURUSD', 'EURJPY'] };
+const NOVAS_ATIVOS = { devolve_m5: ['EURUSD', 'EURJPY', 'XAUUSD'], relogio15_segue: ['EURUSD'], pico_volta: ['EURUSD', 'EURJPY'] };
 // Filtro de horário (estudo de 07/10, por período do dia em UTC: asia 0–7h, londres 7–12h, ny 12–17h, tarde 17–24h):
 //   relógio de 15 min só na madrugada (asia) · pico relâmpago só à tarde · devolução sem Ouro na madrugada e sem EURJPY em Londres.
+// Relógio de 15 min só no EURUSD: expira em 7 min (opção binária) e o Ouro-op não tem binária na Exnova (07/10).
 const periodo = (t) => { const h = new Date(t).getUTCHours(); return h < 7 ? 'asia' : h < 12 ? 'londres' : h < 17 ? 'ny' : 'tarde'; };
 const HORARIO_OK = {
     relogio15_segue: (pair, t) => periodo(t) === 'asia',
