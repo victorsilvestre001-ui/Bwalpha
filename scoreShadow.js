@@ -81,7 +81,12 @@ const PARCEIRO = { EURUSD: 'XAUUSD', XAUUSD: 'EURUSD', EURJPY: 'EURUSD' };
 // devolve_m5 (07/10, "relógio do candle"): no 2º minuto do M5, se o preço já andou ≥ 2 ATR(M1) desde a
 // abertura, entra CONTRA o movimento com expiração no fim do M5 (3 min). Estudo 29/09–07/10: devolveu em
 // 56,5% de 278 casos, nos 3 ativos e nas duas metades. Gravado com o resultado já conferido (bloco fechado).
-const NOVOS = ['devolve_m5', 'robo_m5', 'rigida_m5', 'exnova_m5', 'tecnico_m5', ...REGRAS_MIN.map((r) => r.id), ...FLUXO, 'diverg_ouro'];
+// relogio15_segue / pico_volta (07/10, rodada 2 dos estudos novos; o EURUSD foi o mais consistente):
+//   relogio15_segue  no 8º minuto de um bloco de 15 min, preço andou ≥ 2 ATR(M1) desde a abertura → segue até o
+//                    fim do bloco (7 min). EURUSD: 58% e 62,5% nas duas metades (176 casos).
+//   pico_volta       minuto com faixa ≥ 3 ATR(M1) → em 3 min o preço volta contra a cor do pico. EURUSD: ~60% (82 casos).
+// Gravados para os 3 ativos, com o resultado já conferido.
+const NOVOS = ['relogio15_segue', 'pico_volta', 'devolve_m5', 'robo_m5', 'rigida_m5', 'exnova_m5', 'tecnico_m5', ...REGRAS_MIN.map((r) => r.id), ...FLUXO, 'diverg_ouro'];
 const minerador = require('./mineradorBacktest');
 const JANELA_CORTE = 1152; // 96 h de candles M5, igual ao robô
 const novo = { done: {}, wEx: {}, wExAt: 0 };
@@ -189,7 +194,51 @@ async function gravaDevolucao(pair, d, t, origem) {
     return true;
 }
 
+// Relógio de 15 min para o bloco que começa em t (já fechado).
+function relogio15(pair, d, t) {
+    const mins = Array.from({ length: 15 }, (_, k) => d[pair].m1.get(t + k * 60_000));
+    if (mins.some((x) => !x)) return null;
+    const ent = mins[7], mov = (ent.close - mins[0].open) / (ent.atr || 1e-9), fim = mins[14].close;
+    if (Math.abs(mov) < 2) return null;
+    const dir = mov > 0 ? 1 : 0;
+    return { candle: t + 480_000, dir, result: fim === ent.close ? 'draw' : (dir === 1) === (fim > ent.close) ? 'win' : 'loss' };
+}
+
+// Pico relâmpago no minuto t (já com os 3 minutos seguintes fechados).
+function picoVolta(pair, d, t) {
+    const m = d[pair].m1, x = m.get(t), ant = m.get(t - 60_000), fim = m.get(t + 180_000);
+    if (!x || !ant || !fim || x.close === x.open || (x.high - x.low) < 3 * (ant.atr || Infinity)) return null;
+    const dir = x.close > x.open ? 0 : 1; // contra a cor do pico
+    return { candle: t + 60_000, dir, result: fim.close === x.close ? 'draw' : (dir === 1) === (fim.close > x.close) ? 'win' : 'loss' };
+}
+
+async function gravaExtra(nome, pair, r, origem) {
+    if (!r) return false;
+    await pool.query(
+        `INSERT INTO shadow_tests (estrategia, pair, candle_time, prob, direction, result, origem) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING`,
+        [nome, pair, new Date(r.candle), r.dir, r.dir ? 'COMPRA' : 'VENDA', r.result, origem]);
+    return true;
+}
+
+async function rodadaExtra(d, desde, ate, origem) {
+    const { isMarketOpen } = require('./marketRoutes');
+    const cont = {};
+    for (const pair of PAIRS) {
+        for (let t = Math.ceil(desde / 60_000) * 60_000; t < ate; t += 60_000) {
+            if (!isMarketOpen(new Date(t))) continue;
+            if (t % 900_000 === 0 && t + 900_000 <= ate && await gravaExtra('relogio15_segue', pair, relogio15(pair, d, t), origem)) cont.relogio15 = (cont.relogio15 || 0) + 1;
+            if (t + 240_000 <= ate && await gravaExtra('pico_volta', pair, picoVolta(pair, d, t), origem)) cont.pico = (cont.pico || 0) + 1;
+        }
+    }
+    return cont;
+}
+
 async function backfillFluxo() {
+    const ja2 = await pool.query(`SELECT 1 FROM shadow_tests WHERE origem = 'historico' AND estrategia = 'relogio15_segue' LIMIT 1`);
+    if (!ja2.rows.length) {
+        const d = await dadosFluxo(30 * 24);
+        console.log(`SCORE_SHADOW_HISTORICO_EXTRA ${JSON.stringify(await rodadaExtra(d, Date.now() - 30 * 86_400_000, Math.floor(Date.now() / 300_000) * 300_000, 'historico'))}`);
+    }
     const ja = await pool.query(`SELECT 1 FROM shadow_tests WHERE origem = 'historico' AND estrategia = 'devolve_m5' LIMIT 1`);
     if (!ja.rows.length) {
         const d = await dadosFluxo(30 * 24);
@@ -229,6 +278,8 @@ async function tickFluxo(now) {
     novo.fluxoDone = bucket;
     await tickDivergencia(now, d).catch((err) => console.error('SCORE_SHADOW divergência erro:', err.message));
     for (const pair of PAIRS) await gravaDevolucao(pair, d, bucket - TF, 'ao_vivo').catch(() => {});
+    // Últimos 15 min: picos com resultado já saído e o bloco de 15 min que fechou (ON CONFLICT evita repetir).
+    await rodadaExtra(d, bucket - 900_000, bucket, 'ao_vivo').catch((err) => console.error('SCORE_SHADOW extra erro:', err.message));
     for (const pair of PAIRS) {
         for (const [name, p] of Object.entries(leiturasFluxo(pair, d, bucket - TF))) {
             await pool.query(
