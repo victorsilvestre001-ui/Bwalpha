@@ -239,7 +239,16 @@ async function resolveResults() {
 //   relogio15_segue 8º minuto do bloco de 15 min andou ≥ 2 ATR(M1) → A FAVOR, expira no fim do bloco (7 min). EURUSD.
 //   pico_volta      minuto com faixa ≥ 3 ATR(M1) → CONTRA a cor dele, expira em 3 min. EURUSD.
 // Dividem o mesmo limite de entradas por dia com as regras 1 e 2. Liga/desliga com AUTO_NOVAS (padrão ligado).
-const NOVAS_ATIVOS = { devolve_m5: ['EURUSD', 'EURJPY', 'XAUUSD'], relogio15_segue: ['EURUSD'], pico_volta: ['EURUSD'] };
+const NOVAS_ATIVOS = { devolve_m5: ['EURUSD', 'EURJPY', 'XAUUSD'], relogio15_segue: ['EURUSD', 'XAUUSD'], pico_volta: ['EURUSD', 'EURJPY'] };
+// Filtro de horário (estudo de 07/10, por período do dia em UTC: asia 0–7h, londres 7–12h, ny 12–17h, tarde 17–24h):
+//   relógio de 15 min só na madrugada (asia) · pico relâmpago só à tarde · devolução sem Ouro na madrugada e sem EURJPY em Londres.
+const periodo = (t) => { const h = new Date(t).getUTCHours(); return h < 7 ? 'asia' : h < 12 ? 'londres' : h < 17 ? 'ny' : 'tarde'; };
+const HORARIO_OK = {
+    relogio15_segue: (pair, t) => periodo(t) === 'asia',
+    pico_volta: (pair, t) => periodo(t) === 'tarde',
+    devolve_m5: (pair, t) => !(pair === 'XAUUSD' && periodo(t) === 'asia') && !(pair === 'EURJPY' && periodo(t) === 'londres'),
+};
+const liberada = (nome, pair, t) => NOVAS_ATIVOS[nome].includes(pair) && (process.env.AUTO_FILTRO_HORARIO === '0' || HORARIO_OK[nome](pair, t));
 
 async function m1Recentes(pair) {
     const { rows } = await pool.query(
@@ -253,23 +262,23 @@ function avaliaNovas(pair, m, mb) {
     const out = [];
     const get = (t) => m.get(t);
     // Devolução no meio do M5: agora é o início do 3º minuto do bloco.
-    if (NOVAS_ATIVOS.devolve_m5.includes(pair) && mb % 300_000 === 120_000) {
+    if (mb % 300_000 === 120_000) {
         const t = mb - 120_000, a = get(t), b = get(t + 60_000);
-        if (a && b) {
+        if (a && b && liberada('devolve_m5', pair, t)) {
             const mov = (b.close - a.open) / (b.atr || 1e-9);
             if (Math.abs(mov) >= 2) out.push({ estrategia: 'devolve_m5', lado: mov > 0 ? 'VENDA' : 'COMPRA', entrada: b.close, expira: t + 300_000, forca: Math.abs(mov) });
         }
     }
     // Relógio de 15 min: agora é o início do 9º minuto do bloco.
-    if (NOVAS_ATIVOS.relogio15_segue.includes(pair) && mb % 900_000 === 480_000) {
+    if (mb % 900_000 === 480_000) {
         const t = mb - 480_000, mins = Array.from({ length: 8 }, (_, k) => get(t + k * 60_000));
-        if (mins.every(Boolean)) {
+        if (mins.every(Boolean) && liberada('relogio15_segue', pair, t)) {
             const mov = (mins[7].close - mins[0].open) / (mins[7].atr || 1e-9);
             if (Math.abs(mov) >= 2) out.push({ estrategia: 'relogio15_segue', lado: mov > 0 ? 'COMPRA' : 'VENDA', entrada: mins[7].close, expira: t + 900_000, forca: Math.abs(mov) });
         }
     }
     // Pico relâmpago: o minuto que acabou de fechar.
-    if (NOVAS_ATIVOS.pico_volta.includes(pair)) {
+    if (liberada('pico_volta', pair, mb - 60_000)) {
         const x = get(mb - 60_000), ant = get(mb - 120_000);
         if (x && ant && x.close !== x.open && (x.high - x.low) >= 3 * (ant.atr || Infinity)) {
             out.push({ estrategia: 'pico_volta', lado: x.close > x.open ? 'VENDA' : 'COMPRA', entrada: x.close, expira: mb + 180_000, forca: (x.high - x.low) / ant.atr });
