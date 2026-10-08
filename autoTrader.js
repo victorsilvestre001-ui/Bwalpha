@@ -352,8 +352,23 @@ async function podeReal(now) {
     return r.ok < REAL_MAX_DIA && r.total < REAL_MAX_DIA + 3 && r.erros < REAL_STOP_ERROS && r.abertas === 0;
 }
 
+// Payout atual do ativo (último registro do coletor, até 30 min atrás), no tipo de opção que vai ser usado.
+async function payoutAtual(pair, tipo) {
+    const { rows } = await pool.query(`SELECT valor FROM exnova_extras WHERE tipo = 'payout' AND active_id = $1 AND dados->>'tipo' ILIKE $2
+        AND at > NOW() - INTERVAL '30 minutes' ORDER BY at DESC LIMIT 1`, [TRADE_IDS[pair], tipo === 1 ? '%binary%' : '%turbo%']);
+    return rows.length ? Number(rows[0].valor) : null;
+}
+
 async function abrir(pair, lado, candleTime, expiraMs, prob, detalhes) {
     const now = Date.now();
+    // Pedido do dono em 08/10: com payout de 89% ou mais, não opera (treino nem real). AUTO_PAYOUT_MAX muda o corte.
+    const corte = Number(process.env.AUTO_PAYOUT_MAX) || 89;
+    const payout = await payoutAtual(pair, expiraMs - now > 5.5 * 60_000 ? 1 : 3).catch(() => null);
+    if (payout != null && payout >= corte) {
+        console.log(`ROBO_DEMO: ${pair} ${lado} (${detalhes.estrategia || detalhes.regra || 'score'}) não entra: payout ${payout}% (corte ${corte}%)`);
+        return;
+    }
+    if (payout != null) detalhes = { ...detalhes, payout };
     const { rows: ins } = await pool.query(
         `INSERT INTO auto_trades (dia, pair, candle_time, direction, prob, detalhes, valor, status) VALUES ($1, $2, $3, $4, $5, $6, $7, 'enviando') RETURNING id`,
         [brDay(now), pair, new Date(candleTime), lado, prob, detalhes, VALOR]);
