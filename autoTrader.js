@@ -69,17 +69,22 @@ async function ensureTable() {
     await pool.query(`ALTER TABLE auto_trades ADD COLUMN IF NOT EXISTS conta TEXT DEFAULT 'treino'`);
 }
 
-function send(name, msg) {
-    const request_id = String(st.reqId++);
-    st.ws.send(JSON.stringify({ name, request_id, msg }));
+// Duas sessões na Exnova: a de treino (st, conta EXNOVA_EMAIL, saldo tipo 4) e, com AUTO_REAL=1, a real
+// (sr, conta EXNOVA_REAL_EMAIL/EXNOVA_REAL_PASSWORD, saldo tipo 1). Cada uma com sua conexão.
+const sr = { tag: 'ROBO_REAL', tipoSaldo: 1, nome: 'REAL', email: 'EXNOVA_REAL_EMAIL', senha: 'EXNOVA_REAL_PASSWORD', ws: null, ready: false, balanceId: null, reqId: 1, pending: new Map() };
+Object.assign(st, { tag: 'ROBO_DEMO', tipoSaldo: 4, nome: 'TREINO', email: 'EXNOVA_EMAIL', senha: 'EXNOVA_PASSWORD' });
+
+function send(name, msg, s = st) {
+    const request_id = String(s.reqId++);
+    s.ws.send(JSON.stringify({ name, request_id, msg }));
     return request_id;
 }
 
-async function login() {
+async function login(s) {
     const res = await fetch(AUTH_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: process.env.EXNOVA_EMAIL, password: process.env.EXNOVA_PASSWORD }),
+        body: JSON.stringify({ identifier: process.env[s.email], password: process.env[s.senha] }),
         signal: AbortSignal.timeout(20_000),
     });
     const data = await res.json().catch(() => ({}));
@@ -87,45 +92,41 @@ async function login() {
     return data.ssid;
 }
 
-async function connect() {
+async function connect(s = st) {
     let ssid;
-    try { ssid = await login(); } catch (err) {
-        console.error('ROBO_DEMO: falha no login:', err.message);
-        return setTimeout(connect, 5 * 60_000);
+    try { ssid = await login(s); } catch (err) {
+        console.error(`${s.tag}: falha no login:`, err.message);
+        return setTimeout(() => connect(s), 5 * 60_000);
     }
     const ws = new WebSocket(WS_URL);
-    st.ws = ws;
-    ws.on('open', () => send('ssid', ssid));
+    s.ws = ws;
+    const tx = (name, msg) => send(name, msg, s);
+    ws.on('open', () => tx('ssid', ssid));
     ws.on('message', (raw) => {
         let m; try { m = JSON.parse(raw.toString()); } catch { return; }
         if (m.name === 'profile') {
-            send('sendMessage', { name: 'get-balances', version: '1.0', body: { types_ids: [1, 4, 2] } });
+            tx('sendMessage', { name: 'get-balances', version: '1.0', body: { types_ids: [1, 4, 2] } });
         } else if (m.name === 'balances' && Array.isArray(m.msg)) {
-            // type 4 = saldo de treino. Sem ele, o robô não opera.
-            const demo = m.msg.find((b) => Number(b.type) === 4);
-            const real = REAL ? m.msg.find((b) => Number(b.type) === 1) : null;
-            st.practiceId = demo ? Number(demo.id) : null;
-            st.realId = real ? Number(real.id) : null;
-            st.ready = !!demo;
-            if (st.balanceCheck) {
-                // Conferência periódica: o saldo de treino pode mudar também por operações manuais do dono.
-                st.balanceCheck = false;
-                if (demo) console.log(`ROBO_DEMO: saldo de treino agora ${demo.amount} ${demo.currency || ''}`);
-                if (real) console.log(`ROBO_REAL: saldo real agora ${real.amount} ${real.currency || ''}`);
+            // Treino: type 4 (sem ele o robô não opera). Real: type 1.
+            const bal = m.msg.find((b) => Number(b.type) === s.tipoSaldo);
+            s.balanceId = bal ? Number(bal.id) : null;
+            if (s === st) st.practiceId = s.balanceId;
+            s.ready = !!bal;
+            if (s.balanceCheck) {
+                // Conferência periódica: o saldo pode mudar também por operações manuais do dono.
+                s.balanceCheck = false;
+                if (bal) console.log(`${s.tag}: saldo ${s === st ? 'de treino' : 'real'} agora ${bal.amount} ${bal.currency || ''}`);
                 return;
             }
-            console.log(demo
-                ? `ROBO_DEMO: conectado ao saldo de TREINO (saldo ${demo.amount} ${demo.currency || ''})`
-                : 'ROBO_DEMO: saldo de treino não encontrado; o robô NÃO vai operar');
-            if (REAL) console.log(real
-                ? `ROBO_REAL: conectado ao saldo REAL (saldo ${real.amount} ${real.currency || ''}; ${REAL_MAX_DIA} entradas de ${VALOR_REAL} por dia, para com ${REAL_STOP_ERROS} erros)`
-                : 'ROBO_REAL: saldo real não encontrado; nada será operado no real');
+            console.log(bal
+                ? `${s.tag}: conectado ao saldo ${s.nome} (saldo ${bal.amount} ${bal.currency || ''})${s === sr ? `; ${REAL_MAX_DIA} entradas de ${VALOR_REAL} por dia, para com ${REAL_STOP_ERROS} erros` : ''}`
+                : `${s.tag}: saldo ${s.nome} não encontrado; NÃO vai operar nele`);
             // Ordem de teste (pedido do dono em 06/10), só para ver se a corretora aceita o código do
             // ativo: AUTO_TESTE_AGORA=XAUUSD (ou outro par). Valor mínimo, 1 vez por processo, no treino.
             const testPair = (process.env.AUTO_TESTE_AGORA || '').toUpperCase();
-            if (demo && TRADE_IDS[testPair] && !st.testDone) {
+            if (s === st && bal && TRADE_IDS[testPair] && !st.testDone) {
                 st.testDone = true;
-                const req = send('sendMessage', {
+                const req = tx('sendMessage', {
                     name: 'binary-options.open-option', version: '1.0',
                     body: {
                         user_balance_id: st.practiceId, active_id: TRADE_IDS[testPair], option_type_id: 3, direction: 'call',
@@ -136,35 +137,35 @@ async function connect() {
                 console.log(`ROBO_DEMO: ordem de TESTE enviada ${testPair} (id ${TRADE_IDS[testPair]}, treino, valor 1)`);
             }
         } else if (m.name === 'heartbeat') {
-            send('heartbeat', { userTime: Date.now(), heartbeatTime: m.msg });
-        } else if (/option/i.test(m.name || '') && !st.pending.has(m.request_id)) {
+            tx('heartbeat', { userTime: Date.now(), heartbeatTime: m.msg });
+        } else if (/option/i.test(m.name || '') && !s.pending.has(m.request_id)) {
             // Diagnóstico: avisos da corretora sobre opções (abertura/fechamento).
-            console.log(`ROBO_DEMO: ${m.name} ${JSON.stringify(m.msg).slice(0, 300)}`);
-            // Resultado oficial da corretora (vale para treino e real): win / loose / equal.
+            console.log(`${s.tag}: ${m.name} ${JSON.stringify(m.msg).slice(0, 300)}`);
+            // Resultado oficial da corretora: win / loose / equal.
             const res = { win: 'acerto', loose: 'erro', equal: 'empate' }[m.msg?.result];
             if (m.name === 'option-changed' && res && m.msg.option_id != null) {
-                pool.query(`UPDATE auto_trades SET result = $2 WHERE ordem_id = $1 AND (result IS NULL OR result <> $2) RETURNING id, conta, pair, direction`,
+                pool.query(`UPDATE auto_trades SET result = $2 WHERE ordem_id = $1 AND (result IS NULL OR result <> $2) RETURNING id, pair, direction`,
                     [String(m.msg.option_id), res]).then(({ rows }) => rows.forEach((r) =>
-                    console.log(`${r.conta === 'real' ? 'ROBO_REAL' : 'ROBO_DEMO'}: resultado #${r.id} ${r.pair} ${r.direction} (corretora): ${res}`))).catch(() => {});
+                    console.log(`${s.tag}: resultado #${r.id} ${r.pair} ${r.direction} (corretora): ${res}`))).catch(() => {});
             }
-        } else if (m.request_id && st.pending.has(m.request_id)) {
+        } else if (m.request_id && s.pending.has(m.request_id)) {
             // Resposta ao pedido de abertura.
-            const id = st.pending.get(m.request_id);
-            st.pending.delete(m.request_id);
+            const id = s.pending.get(m.request_id);
+            s.pending.delete(m.request_id);
             const ok = m.status == null || m.status === 2000 || m.msg?.id;
             const ordem = m.msg?.id != null ? String(m.msg.id) : null;
             // Ativo indisponível na Exnova (acontece à tarde/noite com os "-op"): pausa esse ativo por 30 min.
-            if (!(ok && ordem) && /not available/i.test(m.msg?.message || '')) {
+            if (s === st && !(ok && ordem) && /not available/i.test(m.msg?.message || '')) {
                 const pair = st.pairDaOrdem?.get(id);
                 if (pair) { (st.indisponivel ||= {})[pair] = Date.now() + 30 * 60_000; console.log(`ROBO_DEMO: ${pair} indisponível na corretora, pausado por 30 min`); }
             }
-            console.log(`ROBO_DEMO: resposta da ordem #${id}: ${m.name} status=${m.status ?? '-'} ${JSON.stringify(m.msg).slice(0, 300)}`);
+            console.log(`${s.tag}: resposta da ordem #${id}: ${m.name} status=${m.status ?? '-'} ${JSON.stringify(m.msg).slice(0, 300)}`);
             pool.query('UPDATE auto_trades SET status = $2, ordem_id = $3 WHERE id = $1',
                 [id, ok && ordem ? 'aberta' : `recusada: ${String(m.msg?.message || m.status || m.name).slice(0, 80)}`, ordem]).catch(() => {});
         }
     });
-    ws.on('close', () => { st.ready = false; setTimeout(connect, 60_000); });
-    ws.on('error', (err) => console.error('ROBO_DEMO: erro na conexão:', err.message));
+    ws.on('close', () => { s.ready = false; setTimeout(() => connect(s), 60_000); });
+    ws.on('error', (err) => console.error(`${s.tag}: erro na conexão:`, err.message));
 }
 
 function toM5(m1) {
@@ -340,7 +341,7 @@ async function podeEntrar(now) {
 
 // Travas da conta real: limite do dia, parada por erros e nenhuma real ainda aberta.
 async function podeReal(now) {
-    if (!REAL || !st.realId) return false;
+    if (!REAL || !sr.ready || !sr.balanceId) return false;
     const { rows } = await pool.query(`SELECT
             COUNT(*) FILTER (WHERE status NOT LIKE 'recusada%')::int AS ok,
             COUNT(*)::int AS total,
@@ -360,14 +361,14 @@ async function abrir(pair, lado, candleTime, expiraMs, prob, detalhes) {
     if (!st.ready || !st.practiceId) return;
     // Até 5 min: opção turbo (tipo 3). Mais longa (relógio de 15 min, expira no fim do bloco): binária (tipo 1).
     const tipo = expiraMs - now > 5.5 * 60_000 ? 1 : 3;
-    const ordem = (balanceId, valor) => send('sendMessage', {
+    const ordem = (s, valor) => send('sendMessage', {
         name: 'binary-options.open-option', version: '1.0',
         body: {
-            user_balance_id: balanceId, active_id: TRADE_IDS[pair], option_type_id: tipo,
+            user_balance_id: s.balanceId, active_id: TRADE_IDS[pair], option_type_id: tipo,
             direction: lado === 'COMPRA' ? 'call' : 'put', expired: Math.floor(expiraMs / 1000), price: valor,
         },
-    });
-    st.pending.set(ordem(st.practiceId, VALOR), id);
+    }, s);
+    st.pending.set(ordem(st, VALOR), id);
     (st.pairDaOrdem ||= new Map()).set(id, pair);
     console.log(`ROBO_DEMO: entrada #${id} ${pair} ${lado} (treino, ${VALOR}) ${JSON.stringify(detalhes)}`);
     // Mesma entrada no saldo real, se as travas deixarem.
@@ -375,8 +376,7 @@ async function abrir(pair, lado, candleTime, expiraMs, prob, detalhes) {
     const { rows: insR } = await pool.query(
         `INSERT INTO auto_trades (dia, pair, candle_time, direction, prob, detalhes, valor, status, conta) VALUES ($1, $2, $3, $4, $5, $6, $7, 'enviando', 'real') RETURNING id`,
         [brDay(now), pair, new Date(candleTime), lado, prob, { ...detalhes, treino_id: id }, VALOR_REAL]);
-    st.pending.set(ordem(st.realId, VALOR_REAL), insR[0].id);
-    st.pairDaOrdem.set(insR[0].id, pair);
+    sr.pending.set(ordem(sr, VALOR_REAL), insR[0].id);
     console.log(`ROBO_REAL: entrada #${insR[0].id} ${pair} ${lado} (REAL, ${VALOR_REAL}) ${JSON.stringify(detalhes)}`);
 }
 
@@ -457,13 +457,19 @@ async function start() {
     if (!process.env.EXNOVA_EMAIL || !process.env.EXNOVA_PASSWORD) return console.error('ROBO_DEMO: faltam EXNOVA_EMAIL/EXNOVA_PASSWORD.');
     try { await ensureTable(); } catch (err) { return console.error('ROBO_DEMO: erro ao criar a tabela:', err.message); }
     console.log(`ROBO_DEMO: ligado (máx. ${MAX_POR_DIA} entradas por dia, valor ${VALOR}, ${REAL ? `REAL ligado (${REAL_MAX_DIA}x ${VALOR_REAL}/dia, para com ${REAL_STOP_ERROS} erros)` : 'só saldo de treino'}, regras extras: ${REGRAS_ATIVAS.join(',') || 'nenhuma'}, novas: ${process.env.AUTO_NOVAS === '0' ? 'desligadas' : Object.keys(NOVAS_ATIVOS).join(',')})`);
-    connect();
+    connect(st);
+    if (REAL) {
+        if (process.env.EXNOVA_REAL_EMAIL && process.env.EXNOVA_REAL_PASSWORD) connect(sr);
+        else console.error('ROBO_REAL: faltam EXNOVA_REAL_EMAIL/EXNOVA_REAL_PASSWORD; nada será operado no real.');
+    }
     setInterval(() => tick().catch((err) => console.error('ROBO_DEMO erro:', err.message)), 5_000);
-    // A cada 30 min confere o saldo de treino (aparece nos logs para o relatório diário).
+    // A cada 30 min confere os saldos (aparecem nos logs para o relatório diário).
     setInterval(() => {
-        if (!st.ready || !st.ws) return;
-        st.balanceCheck = true;
-        try { send('sendMessage', { name: 'get-balances', version: '1.0', body: { types_ids: [1, 4, 2] } }); } catch { st.balanceCheck = false; }
+        for (const s of [st, sr]) {
+            if (!s.ready || !s.ws) continue;
+            s.balanceCheck = true;
+            try { send('sendMessage', { name: 'get-balances', version: '1.0', body: { types_ids: [1, 4, 2] } }, s); } catch { s.balanceCheck = false; }
+        }
     }, 30 * 60_000);
 }
 
