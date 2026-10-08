@@ -779,6 +779,11 @@ async function run() {
         console.log('BACKTEST_END');
         return;
     }
+    if (process.env.BACKTEST_SOURCE === 'devolve') {
+        try { await require('./devolveBacktest').runDevolve(pool, { isMarketOpen }); } catch (err) { console.error('BACKTEST_ERR DEVOLVE:', err.message); }
+        console.log('BACKTEST_END');
+        return;
+    }
     if (process.env.BACKTEST_SOURCE === 'novo') {
         try { await require('./novoBacktest').runNovo(pool, { isMarketOpen }); } catch (err) { console.error('BACKTEST_ERR NOVO:', err.message); }
         console.log('BACKTEST_END');
