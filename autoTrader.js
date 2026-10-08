@@ -1,7 +1,7 @@
 // Robô de teste na conta DEMO (saldo de treino) da Exnova. Pedido do dono em 06/10:
 // no máximo 2 entradas por dia (horário de Brasília), só quando todas as análises concordam
-// com confiança muito alta. Nunca opera no saldo real: se o saldo de treino não for encontrado,
-// não abre nada. Liga com AUTO_TRADE=1 (usa EXNOVA_EMAIL/EXNOVA_PASSWORD, a mesma conta do coletor).
+// com confiança muito alta. O saldo real só é usado com AUTO_REAL=1 (ver abaixo); se o saldo de treino
+// não for encontrado, não abre nada. Liga com AUTO_TRADE=1 (usa EXNOVA_EMAIL/EXNOVA_PASSWORD, a mesma conta do coletor).
 //
 // Regra de entrada, na abertura de cada candle M5 (candles reais da Exnova, otc_candles):
 //   1. Score M5 entre os 5% mais confiantes dos últimos dias daquele ativo;
@@ -14,6 +14,13 @@
 //   min_h14_rompe  14h UTC (11h Brasília): 1º candle verde depois de vermelho fechando acima da máxima do anterior → COMPRA
 // Cada uma só entra com a sua confirmação (ver REGRAS). O Score antigo fica desligado (AUTO_SCORE=1 religa).
 // Expiração: fim do candle M5 (5 min). Tudo fica gravado na tabela auto_trades.
+//
+// Conta REAL (pedido do dono em 08/10): desligada por padrão. Com AUTO_REAL=1 e AUTO_REAL_VALOR (até 200),
+// as primeiras entradas do dia do robô de treino são repetidas no saldo real, com travas:
+//   no máximo AUTO_REAL_MAX_DIA (padrão 3, teto 5) entradas reais por dia de Brasília;
+//   para no dia ao chegar a AUTO_REAL_STOP_ERROS erros (padrão 2);
+//   só abre uma nova real quando a anterior já fechou.
+// O resultado vem da própria corretora (aviso de opção fechada). Para desligar: AUTO_REAL=0.
 const WebSocket = require('ws');
 const pool = require('./db');
 const { series, features, predict } = require('./scoreBacktest');
@@ -28,6 +35,10 @@ const TRADE_IDS = Object.fromEntries((process.env.AUTO_ACTIVE_IDS || 'EURUSD:186
 const TF = 300_000;
 const MAX_POR_DIA = Math.min(10, parseInt(process.env.AUTO_MAX_DIA, 10) || 2); // padrão 2; o dono pediu 5 em 07/10 (teto 10)
 const VALOR = Number(process.env.AUTO_VALOR) || 5;
+const VALOR_REAL = Number(process.env.AUTO_REAL_VALOR) || 0;
+const REAL = process.env.AUTO_REAL === '1' && VALOR_REAL > 0 && VALOR_REAL <= 200;
+const REAL_MAX_DIA = Math.min(5, parseInt(process.env.AUTO_REAL_MAX_DIA, 10) || 3);
+const REAL_STOP_ERROS = parseInt(process.env.AUTO_REAL_STOP_ERROS, 10) || 2;
 const PCT_TOPO = 0.05; // 5% leituras mais confiantes
 const REGRAS = {
     // Confirmações (estudo de 06/10 no mercado real M5): regra 1 sobe de 67% para 72,5% com tendência de
@@ -55,6 +66,7 @@ async function ensureTable() {
         status TEXT,
         result TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW())`);
+    await pool.query(`ALTER TABLE auto_trades ADD COLUMN IF NOT EXISTS conta TEXT DEFAULT 'treino'`);
 }
 
 function send(name, msg) {
@@ -91,17 +103,23 @@ async function connect() {
         } else if (m.name === 'balances' && Array.isArray(m.msg)) {
             // type 4 = saldo de treino. Sem ele, o robô não opera.
             const demo = m.msg.find((b) => Number(b.type) === 4);
+            const real = REAL ? m.msg.find((b) => Number(b.type) === 1) : null;
             st.practiceId = demo ? Number(demo.id) : null;
+            st.realId = real ? Number(real.id) : null;
             st.ready = !!demo;
             if (st.balanceCheck) {
                 // Conferência periódica: o saldo de treino pode mudar também por operações manuais do dono.
                 st.balanceCheck = false;
                 if (demo) console.log(`ROBO_DEMO: saldo de treino agora ${demo.amount} ${demo.currency || ''}`);
+                if (real) console.log(`ROBO_REAL: saldo real agora ${real.amount} ${real.currency || ''}`);
                 return;
             }
             console.log(demo
                 ? `ROBO_DEMO: conectado ao saldo de TREINO (saldo ${demo.amount} ${demo.currency || ''})`
                 : 'ROBO_DEMO: saldo de treino não encontrado; o robô NÃO vai operar');
+            if (REAL) console.log(real
+                ? `ROBO_REAL: conectado ao saldo REAL (saldo ${real.amount} ${real.currency || ''}; ${REAL_MAX_DIA} entradas de ${VALOR_REAL} por dia, para com ${REAL_STOP_ERROS} erros)`
+                : 'ROBO_REAL: saldo real não encontrado; nada será operado no real');
             // Ordem de teste (pedido do dono em 06/10), só para ver se a corretora aceita o código do
             // ativo: AUTO_TESTE_AGORA=XAUUSD (ou outro par). Valor mínimo, 1 vez por processo, no treino.
             const testPair = (process.env.AUTO_TESTE_AGORA || '').toUpperCase();
@@ -122,6 +140,13 @@ async function connect() {
         } else if (/option/i.test(m.name || '') && !st.pending.has(m.request_id)) {
             // Diagnóstico: avisos da corretora sobre opções (abertura/fechamento).
             console.log(`ROBO_DEMO: ${m.name} ${JSON.stringify(m.msg).slice(0, 300)}`);
+            // Resultado oficial da corretora (vale para treino e real): win / loose / equal.
+            const res = { win: 'acerto', loose: 'erro', equal: 'empate' }[m.msg?.result];
+            if (m.name === 'option-changed' && res && m.msg.option_id != null) {
+                pool.query(`UPDATE auto_trades SET result = $2 WHERE ordem_id = $1 AND (result IS NULL OR result <> $2) RETURNING id, conta, pair, direction`,
+                    [String(m.msg.option_id), res]).then(({ rows }) => rows.forEach((r) =>
+                    console.log(`${r.conta === 'real' ? 'ROBO_REAL' : 'ROBO_DEMO'}: resultado #${r.id} ${r.pair} ${r.direction} (corretora): ${res}`))).catch(() => {});
+            }
         } else if (m.request_id && st.pending.has(m.request_id)) {
             // Resposta ao pedido de abertura.
             const id = st.pending.get(m.request_id);
@@ -217,7 +242,8 @@ async function evaluate(pair, bucket, noticia) {
 async function resolveResults() {
     // Ordem recusada pela corretora não tem resultado (não foi operada).
     await pool.query(`UPDATE auto_trades SET result = 'recusada' WHERE result IS NULL AND status LIKE 'recusada%'`);
-    const { rows } = await pool.query(`SELECT id, pair, candle_time, direction, detalhes FROM auto_trades WHERE result IS NULL AND status = 'aberta' AND candle_time < NOW() - INTERVAL '3 minutes'`);
+    // A conta real usa só o resultado da corretora (não entra aqui).
+    const { rows } = await pool.query(`SELECT id, pair, candle_time, direction, detalhes FROM auto_trades WHERE result IS NULL AND status = 'aberta' AND COALESCE(conta, 'treino') = 'treino' AND candle_time < NOW() - INTERVAL '3 minutes'`);
     for (const r of rows) {
         const t = new Date(r.candle_time).getTime();
         if (r.detalhes?.expira) {
@@ -308,8 +334,21 @@ function ativoAberto(pair, ms) {
 async function podeEntrar(now) {
     const desde = Date.parse(process.env.AUTO_RESET_DESDE || '');
     const { rows } = await pool.query(`SELECT COUNT(*) FILTER (WHERE status NOT LIKE 'recusada%')::int AS ok, COUNT(*)::int AS total
-        FROM auto_trades WHERE dia = $1 AND created_at >= $2`, [brDay(now), new Date(Number.isFinite(desde) ? desde : 0)]);
+        FROM auto_trades WHERE dia = $1 AND created_at >= $2 AND COALESCE(conta, 'treino') = 'treino'`, [brDay(now), new Date(Number.isFinite(desde) ? desde : 0)]);
     return rows[0].ok < MAX_POR_DIA && rows[0].total < MAX_POR_DIA + 4;
+}
+
+// Travas da conta real: limite do dia, parada por erros e nenhuma real ainda aberta.
+async function podeReal(now) {
+    if (!REAL || !st.realId) return false;
+    const { rows } = await pool.query(`SELECT
+            COUNT(*) FILTER (WHERE status NOT LIKE 'recusada%')::int AS ok,
+            COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE result = 'erro')::int AS erros,
+            COUNT(*) FILTER (WHERE result IS NULL AND status NOT LIKE 'recusada%' AND created_at > NOW() - INTERVAL '30 minutes')::int AS abertas
+        FROM auto_trades WHERE dia = $1 AND conta = 'real'`, [brDay(now)]);
+    const r = rows[0];
+    return r.ok < REAL_MAX_DIA && r.total < REAL_MAX_DIA + 3 && r.erros < REAL_STOP_ERROS && r.abertas === 0;
 }
 
 async function abrir(pair, lado, candleTime, expiraMs, prob, detalhes) {
@@ -321,16 +360,24 @@ async function abrir(pair, lado, candleTime, expiraMs, prob, detalhes) {
     if (!st.ready || !st.practiceId) return;
     // Até 5 min: opção turbo (tipo 3). Mais longa (relógio de 15 min, expira no fim do bloco): binária (tipo 1).
     const tipo = expiraMs - now > 5.5 * 60_000 ? 1 : 3;
-    const req = send('sendMessage', {
+    const ordem = (balanceId, valor) => send('sendMessage', {
         name: 'binary-options.open-option', version: '1.0',
         body: {
-            user_balance_id: st.practiceId, active_id: TRADE_IDS[pair], option_type_id: tipo,
-            direction: lado === 'COMPRA' ? 'call' : 'put', expired: Math.floor(expiraMs / 1000), price: VALOR,
+            user_balance_id: balanceId, active_id: TRADE_IDS[pair], option_type_id: tipo,
+            direction: lado === 'COMPRA' ? 'call' : 'put', expired: Math.floor(expiraMs / 1000), price: valor,
         },
     });
-    st.pending.set(req, id);
+    st.pending.set(ordem(st.practiceId, VALOR), id);
     (st.pairDaOrdem ||= new Map()).set(id, pair);
     console.log(`ROBO_DEMO: entrada #${id} ${pair} ${lado} (treino, ${VALOR}) ${JSON.stringify(detalhes)}`);
+    // Mesma entrada no saldo real, se as travas deixarem.
+    if (!(await podeReal(now).catch(() => false))) return;
+    const { rows: insR } = await pool.query(
+        `INSERT INTO auto_trades (dia, pair, candle_time, direction, prob, detalhes, valor, status, conta) VALUES ($1, $2, $3, $4, $5, $6, $7, 'enviando', 'real') RETURNING id`,
+        [brDay(now), pair, new Date(candleTime), lado, prob, { ...detalhes, treino_id: id }, VALOR_REAL]);
+    st.pending.set(ordem(st.realId, VALOR_REAL), insR[0].id);
+    st.pairDaOrdem.set(insR[0].id, pair);
+    console.log(`ROBO_REAL: entrada #${insR[0].id} ${pair} ${lado} (REAL, ${VALOR_REAL}) ${JSON.stringify(detalhes)}`);
 }
 
 async function tickNovas(now) {
@@ -409,7 +456,7 @@ async function start() {
     if (process.env.AUTO_TRADE !== '1') return;
     if (!process.env.EXNOVA_EMAIL || !process.env.EXNOVA_PASSWORD) return console.error('ROBO_DEMO: faltam EXNOVA_EMAIL/EXNOVA_PASSWORD.');
     try { await ensureTable(); } catch (err) { return console.error('ROBO_DEMO: erro ao criar a tabela:', err.message); }
-    console.log(`ROBO_DEMO: ligado (máx. ${MAX_POR_DIA} entradas por dia, valor ${VALOR}, só saldo de treino, regras extras: ${REGRAS_ATIVAS.join(',') || 'nenhuma'}, novas: ${process.env.AUTO_NOVAS === '0' ? 'desligadas' : Object.keys(NOVAS_ATIVOS).join(',')})`);
+    console.log(`ROBO_DEMO: ligado (máx. ${MAX_POR_DIA} entradas por dia, valor ${VALOR}, ${REAL ? `REAL ligado (${REAL_MAX_DIA}x ${VALOR_REAL}/dia, para com ${REAL_STOP_ERROS} erros)` : 'só saldo de treino'}, regras extras: ${REGRAS_ATIVAS.join(',') || 'nenhuma'}, novas: ${process.env.AUTO_NOVAS === '0' ? 'desligadas' : Object.keys(NOVAS_ATIVOS).join(',')})`);
     connect();
     setInterval(() => tick().catch((err) => console.error('ROBO_DEMO erro:', err.message)), 5_000);
     // A cada 30 min confere o saldo de treino (aparece nos logs para o relatório diário).
