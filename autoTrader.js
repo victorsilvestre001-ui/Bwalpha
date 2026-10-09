@@ -295,8 +295,34 @@ async function m1Recentes(pair) {
     const { rows } = await pool.query(
         `SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 AND time > NOW() - INTERVAL '4 hours' ORDER BY time`, [pair]);
     const m1 = rows.map((r) => ({ time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }));
-    const atr = require('./mineradorBacktest').prep(m1).atr;
-    return new Map(m1.map((x, i) => [x.time, { ...x, atr: atr[i] }]));
+    const { atr, e20 } = require('./mineradorBacktest').prep(m1);
+    return new Map(m1.map((x, i) => [x.time, { ...x, atr: atr[i], e20: e20[i] }]));
+}
+
+// Filtros do estudo WIN x RED de 09/10 (comparaBacktest.js), relativos à aposta (s = +1 compra, -1 venda),
+// olhando o minuto que acabou de fechar (x) e a última hora. AUTO_FILTRO_PADRAO=0 desliga.
+//   Devolução: só com o preço no extremo da hora contra a aposta (comprar no fundo, vender no topo) e
+//              esticado ≥ 2 ATR da média 20 → ~59–60% x ~47% quando no meio da faixa / perto da média.
+//   Pico:      só com pavio forte de rejeição no pico (≥ 40% da faixa, 72,5%) ou com a hora lateral (62%).
+function padraoOk(nome, m, mb, s) {
+    if (process.env.AUTO_FILTRO_PADRAO === '0') return true;
+    const x = m.get(mb - 60_000);
+    if (!x) return false;
+    const hora = Array.from({ length: 60 }, (_, k) => m.get(mb - (60 - k) * 60_000)).filter(Boolean);
+    if (hora.length < 50) return false;
+    const a = x.atr || 1e-9;
+    if (nome === 'devolve_m5') {
+        const hi = Math.max(...hora.map((c) => c.high)), lo = Math.min(...hora.map((c) => c.low));
+        const pos = (x.close - lo) / ((hi - lo) || 1e-9);
+        const naPonta = (s > 0 ? pos : 1 - pos) < 0.15;
+        return naPonta && (x.close - x.e20) / a * s < -2;
+    }
+    if (nome === 'pico_volta') {
+        const pavio = s > 0 ? Math.min(x.open, x.close) - x.low : x.high - Math.max(x.open, x.close);
+        const lateral = Math.abs((x.close - hora[0].open) / a) < 4;
+        return pavio / ((x.high - x.low) || 1e-9) >= 0.4 || lateral;
+    }
+    return true;
 }
 
 function avaliaNovas(pair, m, mb) {
@@ -307,7 +333,7 @@ function avaliaNovas(pair, m, mb) {
         const t = mb - 120_000, a = get(t), b = get(t + 60_000);
         if (a && b && liberada('devolve_m5', pair, t)) {
             const mov = (b.close - a.open) / (b.atr || 1e-9);
-            if (Math.abs(mov) >= DEVOLVE_FORCA) out.push({ estrategia: 'devolve_m5', lado: mov > 0 ? 'VENDA' : 'COMPRA', entrada: b.close, expira: t + 300_000, forca: Math.abs(mov) });
+            if (Math.abs(mov) >= DEVOLVE_FORCA && padraoOk('devolve_m5', m, mb, mov > 0 ? -1 : 1)) out.push({ estrategia: 'devolve_m5', lado: mov > 0 ? 'VENDA' : 'COMPRA', entrada: b.close, expira: t + 300_000, forca: Math.abs(mov) });
         }
     }
     // Relógio de 15 min: agora é o início do 9º minuto do bloco.
@@ -321,7 +347,7 @@ function avaliaNovas(pair, m, mb) {
     // Pico relâmpago: o minuto que acabou de fechar.
     if (liberada('pico_volta', pair, mb - 60_000)) {
         const x = get(mb - 60_000), ant = get(mb - 120_000);
-        if (x && ant && x.close !== x.open && (x.high - x.low) >= 3 * (ant.atr || Infinity)) {
+        if (x && ant && x.close !== x.open && (x.high - x.low) >= 3 * (ant.atr || Infinity) && padraoOk('pico_volta', m, mb, x.close > x.open ? -1 : 1)) {
             out.push({ estrategia: 'pico_volta', lado: x.close > x.open ? 'VENDA' : 'COMPRA', entrada: x.close, expira: mb + 180_000, forca: (x.high - x.low) / ant.atr });
         }
     }
