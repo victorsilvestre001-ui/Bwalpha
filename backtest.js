@@ -779,6 +779,11 @@ async function run() {
         console.log('BACKTEST_END');
         return;
     }
+    if (process.env.BACKTEST_SOURCE === 'otc2') {
+        try { await require('./otcEstudo').runOtc2(pool); } catch (err) { console.error('BACKTEST_ERR OTC2:', err.message); }
+        console.log('BACKTEST_END');
+        return;
+    }
     if (process.env.BACKTEST_SOURCE === 'compara') {
         try { await require('./comparaBacktest').runCompara(pool); } catch (err) { console.error('BACKTEST_ERR COMPARA:', err.message); }
         console.log('BACKTEST_END');
