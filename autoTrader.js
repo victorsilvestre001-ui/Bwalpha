@@ -285,7 +285,9 @@ const periodo = (t) => { const h = new Date(t).getUTCHours(); return h < 7 ? 'as
 const HORARIO_OK = {
     relogio15_segue: (pair, t) => periodo(t) === 'asia',
     pico_volta: (pair, t) => periodo(t) === 'tarde',
-    devolve_m5: (pair, t) => new Date(t).getUTCHours() >= 12, // 09h–21h de Brasília
+    // 09h–21h de Brasília; com AUTO_DEVOLVE_MADRUGADA=1 (teste pedido em 09/10) também de madrugada, menos EURJPY em Londres.
+    devolve_m5: (pair, t) => new Date(t).getUTCHours() >= 12
+        || (process.env.AUTO_DEVOLVE_MADRUGADA === '1' && !(pair === 'EURJPY' && periodo(t) === 'londres')),
 };
 const liberada = (nome, pair, t) => NOVAS_ATIVOS[nome].includes(pair) && (process.env.AUTO_FILTRO_HORARIO === '0' || HORARIO_OK[nome](pair, t));
 
