@@ -152,3 +152,78 @@ async function runOtc2(pool) {
 }
 
 module.exports = { runOtc2 };
+
+// Rodada 2 do OTC (09/10, "identifique algo no OTC"): hipóteses próprias de preço gerado pela corretora.
+//   humor      % de traders comprando (traders-mood da Exnova) → o preço vai CONTRA a maioria? (1, 3 e 5 min)
+//   sequencia  depois de N candles da mesma cor (4 a 8), o próximo inverte?
+//   eco        o candle de agora repete a cor de N minutos atrás (ciclos de 5, 15, 30, 60 min)?
+//   cruzado    o candle do outro ativo OTC que acabou de fechar antecipa o próximo deste?
+//   doji       depois de um candle sem corpo, o que vem?
+//   grande     candle ≥ 1,5 / 2 / 3 ATR → volta no próximo (1 min) ou em 3 min?
+// Cada hipótese sai com acerto no estudo (40%), confirmação (30%) e prova (30%) + controle embaralhado.
+// BACKTEST_SOURCE=otc3; logs OTC3_*.
+async function runOtc3(pool) {
+    const { rows: ativos } = await pool.query(`SELECT DISTINCT active FROM otc_candles WHERE active LIKE '%-OTC' ORDER BY active`);
+    const dados = {};
+    for (const { active } of ativos) {
+        const { rows } = await pool.query('SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 ORDER BY time', [active]);
+        const m1 = rows.slice(0, -1).map((r) => ({ time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }));
+        dados[active] = { m1, atr: atrSerie(m1), idx: new Map(m1.map((x, i) => [x.time, i])) };
+    }
+    // Ids da Exnova para o humor: os que o coletor usa (EXNOVA_ACTIVE_IDS) ou os conhecidos.
+    const ids = Object.fromEntries((process.env.EXNOVA_ACTIVE_IDS || 'EURUSD-OTC:76,XAUUSD-OTC:1857').split(',').map((x) => x.split(':')).map(([n, id]) => [n, Number(id)]));
+    const cor = (c) => (c.close > c.open ? 1 : c.close < c.open ? -1 : 0);
+    for (const active of Object.keys(dados)) {
+        const { m1, atr, idx } = dados[active];
+        if (m1.length < 3000) continue;
+        const hip = {}; // nome -> [{t, win}]
+        const add = (nome, t, previsto, real) => { if (real !== 0 && previsto !== 0) (hip[nome] ||= []).push({ t, win: previsto === real }); };
+        const fut = (i, n) => { const j = m1[i + n]; return j && j.time === m1[i].time + n * MIN ? Math.sign(j.close - m1[i].close) : 0; };
+        const outro = Object.keys(dados).find((a) => a !== active);
+        for (let i = 61; i < m1.length - 5; i++) {
+            const x = m1[i], t = x.time, prox = m1[i + 1];
+            if (!prox || prox.time !== t + MIN) continue;
+            const r1 = cor(prox), r3 = fut(i, 3);
+            let seq = 1;
+            while (seq < 9 && cor(m1[i - seq]) === cor(x) && cor(x) !== 0) seq++;
+            for (const n of [4, 5, 6, 7, 8]) if (seq === n) add(`sequencia_${n}_inverte`, t, -cor(x), r1);
+            for (const n of [5, 15, 30, 60]) { const a = m1[i + 1 - n]; if (a && a.time === t + MIN - n * MIN) add(`eco_${n}min`, t, cor(a), r1); }
+            if (cor(x) === 0) { add('doji_segue_anterior', t, cor(m1[i - 1]), r1); }
+            const tam = (x.high - x.low) / atr[i - 1];
+            for (const k of [1.5, 2, 3]) if (tam >= k && cor(x) !== 0) { add(`grande_${k}_volta_1min`, t, -cor(x), r1); add(`grande_${k}_volta_3min`, t, -cor(x), r3); }
+            if (outro) { const o = dados[outro], j = o.idx.get(t); if (j != null) { add('cruzado_segue', t, cor(o.m1[j]), r1); add('cruzado_contra', t, -cor(o.m1[j]), r1); } }
+        }
+        // Humor: valor = fração comprando (0–1); usa o último registro até o fechamento do candle.
+        const id = ids[active];
+        if (id) {
+            const { rows: hum } = await pool.query(`SELECT at, valor FROM exnova_extras WHERE tipo = 'humor' AND active_id = $1 ORDER BY at`, [id]);
+            const hs = hum.map((h) => [new Date(h.at).getTime(), Number(h.valor)]);
+            const vals = hs.map((h) => h[1]).sort((a, b) => a - b);
+            console.log(`OTC3_HUMOR_DADOS ${active} registros=${hs.length} de=${hs[0] ? new Date(hs[0][0]).toISOString().slice(0, 16) : '-'} quantis=${JSON.stringify([0.05, 0.25, 0.5, 0.75, 0.95].map((q) => vals[Math.floor(q * (vals.length - 1))]))}`);
+            let k = 0;
+            for (let i = 0; i < m1.length - 5 && hs.length; i++) {
+                const fim = m1[i].time + MIN;
+                while (k + 1 < hs.length && hs[k + 1][0] <= fim) k++;
+                if (hs[k][0] > fim || fim - hs[k][0] > 2 * MIN) continue;
+                const v = hs[k][1], maioria = v > 0.5 ? 1 : v < 0.5 ? -1 : 0;
+                const forte = Math.abs(v - 0.5) >= 0.2 ? 'forte' : 'leve';
+                const r1 = m1[i + 1]?.time === fim ? cor(m1[i + 1]) : 0;
+                add(`humor_contra_${forte}_1min`, m1[i].time, -maioria, r1);
+                add(`humor_contra_${forte}_3min`, m1[i].time, -maioria, fut(i, 3));
+                add(`humor_contra_${forte}_5min`, m1[i].time, -maioria, fut(i, 5));
+            }
+        }
+        const res = {};
+        for (const [nome, l] of Object.entries(hip)) {
+            // Fases pelos próprios casos da hipótese (o humor só existe desde 07/10).
+            const ts = l.map((s) => s.t).sort((a, b) => a - b), q1 = ts[Math.floor(ts.length * 0.4)], q2 = ts[Math.floor(ts.length * 0.7)];
+            const f = [[0, 0], [0, 0], [0, 0]];
+            for (const s of l) { const p = s.t < q1 ? 0 : s.t < q2 ? 1 : 2; f[p][0]++; if (s.win) f[p][1]++; }
+            // [casos, acerto %] em estudo, confirmação, prova e total
+            res[nome] = { estudo: [f[0][0], pct(f[0][1], f[0][0])], confirmacao: [f[1][0], pct(f[1][1], f[1][0])], prova: [f[2][0], pct(f[2][1], f[2][0])], total: [l.length, pct(l.filter((s) => s.win).length, l.length)] };
+        }
+        console.log(`OTC3_RESULT ${active} ${JSON.stringify(res)}`);
+    }
+}
+
+module.exports.runOtc3 = runOtc3;
