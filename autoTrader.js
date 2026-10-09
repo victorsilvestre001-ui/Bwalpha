@@ -345,6 +345,13 @@ async function podeEntrar(now) {
     return rows[0].ok < MAX_POR_DIA && rows[0].total < MAX_POR_DIA + 4;
 }
 
+// AUTO_REAL_DESDE (data ISO): a partir dela a contagem do dia na conta real recomeça (pedido de 09/10:
+// "mais 3 a partir das 8h"). Antes dela, vale a contagem normal do dia.
+function realDesde(now) {
+    const d = Date.parse(process.env.AUTO_REAL_DESDE || '');
+    return new Date(Number.isFinite(d) && now >= d ? d : 0);
+}
+
 // Travas da conta real: limite do dia, parada por erros e nenhuma real ainda aberta.
 async function podeReal(now) {
     if (!REAL || !sr.ready || !sr.balanceId) return false;
@@ -353,7 +360,7 @@ async function podeReal(now) {
             COUNT(*)::int AS total,
             COUNT(*) FILTER (WHERE result = 'erro')::int AS erros,
             COUNT(*) FILTER (WHERE result IS NULL AND status NOT LIKE 'recusada%' AND created_at > NOW() - INTERVAL '30 minutes')::int AS abertas
-        FROM auto_trades WHERE dia = $1 AND conta = 'real'`, [brDay(now)]);
+        FROM auto_trades WHERE dia = $1 AND conta = 'real' AND created_at >= $2`, [brDay(now), realDesde(now)]);
     const r = rows[0];
     return r.ok < REAL_MAX_DIA && r.total < REAL_MAX_DIA + 3 && r.erros < REAL_STOP_ERROS && r.abertas === 0;
 }
