@@ -8,6 +8,8 @@
 //   Alvos: cor do próximo candle M1 (expiração 1 min) e preço 3 min depois (expiração 3 min).
 // BACKTEST_SOURCE=otc2; logs OTC_*.
 const MIN = 60_000;
+// Alvos (expirações) da busca de padrões; 5 e 15 min entraram em 10/10.
+const ALVOS = (process.env.OTC_ALVOS || 'prox_1min,em_3min,em_5min,em_15min').split(',');
 const faixa = (v, cortes, nomes) => { const i = cortes.findIndex((c) => v < c); return nomes[i === -1 ? nomes.length - 1 : i]; };
 const pct = (w, n) => (n ? +(100 * w / n).toFixed(1) : null);
 
@@ -110,11 +112,13 @@ async function runOtc2(pool) {
         // Parte 2.
         const c1 = m1[Math.floor(m1.length * 0.4)].time, c2 = m1[Math.floor(m1.length * 0.7)].time;
         const amostras = [];
-        for (let i = 20; i < m1.length - 3; i++) {
+        for (let i = 20; i < m1.length - 15; i++) {
             if (m1[i + 3].time !== m1[i].time + 3 * MIN) continue;
             const prox = m1[i + 1], f = caracteristicas(m1, atr, i);
             const fase = m1[i].time < c1 ? 0 : m1[i].time < c2 ? 1 : 2;
-            amostras.push({ f, fase, alvo: { prox_1min: prox.close === prox.open ? null : prox.close > prox.open, em_3min: m1[i + 3].close === m1[i].close ? null : m1[i + 3].close > m1[i].close } });
+            amostras.push({ t: m1[i].time, f, fase, alvo: { prox_1min: prox.close === prox.open ? null : prox.close > prox.open, em_3min: m1[i + 3].close === m1[i].close ? null : m1[i + 3].close > m1[i].close,
+                em_5min: m1[i + 5].time !== m1[i].time + 5 * MIN || m1[i + 5].close === m1[i].close ? null : m1[i + 5].close > m1[i].close,
+                em_15min: m1[i + 15].time !== m1[i].time + 15 * MIN || m1[i + 15].close === m1[i].close ? null : m1[i + 15].close > m1[i].close } });
         }
         const chaves = Object.keys(amostras[0].f);
         const grupos = chaves.map((k) => [k]);
@@ -122,9 +126,12 @@ async function runOtc2(pool) {
         // Busca: direção decidida no estudo; precisa repetir na confirmação e na prova, com casos suficientes.
         const busca = (alvoDe) => {
             const out = [];
-            for (const alvo of ['prox_1min', 'em_3min']) for (const g of grupos) {
+            for (const alvo of ALVOS) for (const g of grupos) {
                 const cont = {};
                 amostras.forEach((s, j) => {
+                    // Sem sobreposição: expiração de N min só conta 1 caso a cada N min (senão os casos se repetem).
+                    const passo = { em_5min: 5, em_15min: 15 }[alvo];
+                    if (passo && (s.t / MIN) % passo !== 0) return;
                     const r = alvoDe(s, j, alvo); if (r == null) return;
                     const o = (cont[g.map((k) => `${k}=${s.f[k]}`).join('&')] ||= [[0, 0], [0, 0], [0, 0]]);
                     o[s.fase][0]++; if (r) o[s.fase][1]++;
@@ -143,7 +150,7 @@ async function runOtc2(pool) {
         // Controle: mesma busca 5 vezes com os resultados embaralhados (quantos "achados" aparecem por puro acaso).
         const acaso = [];
         for (let r = 0; r < 5; r++) {
-            const emb = { prox_1min: amostras.map((s) => s.alvo.prox_1min).sort(() => Math.random() - 0.5), em_3min: amostras.map((s) => s.alvo.em_3min).sort(() => Math.random() - 0.5) };
+            const emb = Object.fromEntries(ALVOS.map((a) => [a, amostras.map((s) => s.alvo[a]).sort(() => Math.random() - 0.5)]));
             acaso.push(busca((s, j, alvo) => emb[alvo][j]).length);
         }
         console.log(`OTC_PADRAO ${active} achados=${achados.length} por_acaso_media=${(acaso.reduce((x, y) => x + y, 0) / acaso.length).toFixed(1)} (${acaso.join(',')})`);

@@ -779,6 +779,11 @@ async function run() {
         console.log('BACKTEST_END');
         return;
     }
+    if (process.env.BACKTEST_SOURCE === 'extra') {
+        try { await require('./estudoExtra').runExtra(pool, { fetchLongHistory, isMarketOpen }); } catch (err) { console.error('BACKTEST_ERR EXTRA:', err.message); }
+        console.log('BACKTEST_END');
+        return;
+    }
     if (process.env.BACKTEST_SOURCE === 'otc3') {
         try { await require('./otcEstudo').runOtc3(pool); } catch (err) { console.error('BACKTEST_ERR OTC3:', err.message); }
         console.log('BACKTEST_END');

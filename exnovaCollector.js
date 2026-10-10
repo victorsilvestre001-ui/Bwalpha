@@ -8,6 +8,8 @@ const pool = require('./db');
 const AUTH_URL = process.env.EXNOVA_AUTH_URL || 'https://auth.trade.exnova.com/api/v2/login';
 const WS_URL = process.env.EXNOVA_WS_URL || 'wss://ws.trade.exnova.com/echo/websocket';
 
+// Ticks também destes OTC (estudo de 10/10: o que acontece segundo a segundo dentro da vela do OTC).
+const TICKS_OTC = new Set((process.env.EXNOVA_TICKS_OTC ?? 'EURUSD-OTC,XAUUSD-OTC').split(',').map((x) => x.trim()).filter(Boolean));
 const state = { connected: false, actives: {}, saved: 0, lastCandleAt: null };
 let retryMs = 30_000;
 let reqId = 1;
@@ -208,7 +210,7 @@ async function connect() {
             try {
                 feedLive(byId[m.msg.active_id], m.msg);
                 await saveCandle(byId[m.msg.active_id], m.msg);
-                if (process.env.EXNOVA_EXTRAS !== '0' && !byId[m.msg.active_id].endsWith('-OTC')) {
+                if (process.env.EXNOVA_EXTRAS !== '0' && (!byId[m.msg.active_id].endsWith('-OTC') || TICKS_OTC.has(byId[m.msg.active_id]))) {
                     pool.query('INSERT INTO exnova_ticks (active, at, price) VALUES ($1, NOW(), $2)', [byId[m.msg.active_id], Number(m.msg.close)]).catch(() => {});
                 }
                 state.saved++;

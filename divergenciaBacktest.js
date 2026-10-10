@@ -64,7 +64,7 @@ async function runDivergencia(pool, deps) {
             ((testes[nome] ||= { a: [], b: [] })[s.t < corte ? 'a' : 'b']).push(ok);
         };
         for (const s of amostras) {
-            for (const k of [0.2, 0.4, 0.7]) {
+            for (const k of [0.2, 0.4, 0.7, 1.0]) {
                 if (Math.abs(s.desvio) >= k) { add(`volta_${k}`, s, s.desvio < 0); add(`segue_${k}`, s, s.desvio > 0); }
             }
             if (Math.abs(s.corpoEx) >= 0.2 && Math.abs(s.corpoReal) >= 0.2 && Math.sign(s.corpoEx) !== Math.sign(s.corpoReal)) add('cor_real', s, s.corpoReal > 0);
