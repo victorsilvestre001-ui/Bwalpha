@@ -390,6 +390,40 @@ async function m1Candles(pair, hours) {
     return rows.map((r) => ({ time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }));
 }
 
+
+// Pistas de 10/10 (estudoExtra.js / otcEstudo.js), só em teste sombra:
+//   noticia_ouro_volta5  Ouro: minuto com faixa ≥ 2 ATR(M1) dentro do horário de notícia dos EUA → contra, 5 min
+//                        (60% e 78% nas duas metades, 43 casos).
+//   otc_grande_volta3    EURUSD-OTC: minuto com faixa ≥ 2 ATR(M1) → contra, 3 min (53/57/57%, 156 casos).
+// Gravadas já com o resultado (a cada 5 min olha as últimas horas); na 1ª vez grava o histórico todo.
+const PISTAS = [
+    { nome: 'noticia_ouro_volta5', ativo: 'XAUUSD', n: 5, ok: (x) => require('./marketRoutes').horarioNoticiaEUA(x.time) },
+    { nome: 'otc_grande_volta3', ativo: 'EURUSD-OTC', n: 3, ok: () => true },
+];
+let pistasAt = 0;
+async function tickPistas(now) {
+    if (now - pistasAt < 300_000) return;
+    const primeira = !pistasAt;
+    pistasAt = now;
+    for (const p of PISTAS) {
+        const hist = primeira && !(await pool.query(`SELECT 1 FROM shadow_tests WHERE estrategia = $1 LIMIT 1`, [p.nome])).rows.length;
+        const { rows } = await pool.query(`SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 AND time > NOW() - ($2::int * INTERVAL '1 hour') ORDER BY time`,
+            [p.ativo, hist ? 24 * 40 : 4]);
+        const m1 = rows.slice(0, -1).map((r) => ({ time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }));
+        const atr = require('./mineradorBacktest').prep(m1).atr;
+        let n = 0;
+        for (let i = 15; i + p.n < m1.length; i++) {
+            const x = m1[i], f = m1[i + p.n];
+            if (f.time !== x.time + p.n * 60_000 || x.close === x.open || (x.high - x.low) < 2 * atr[i - 1] || !p.ok(x)) continue;
+            const dir = x.close > x.open ? 0 : 1, res = f.close === x.close ? 'draw' : (dir === 1) === (f.close > x.close) ? 'win' : 'loss';
+            const r = await pool.query(`INSERT INTO shadow_tests (estrategia, pair, candle_time, prob, direction, result, origem) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING`,
+                [p.nome, p.ativo, new Date(x.time + 60_000), dir, dir ? 'COMPRA' : 'VENDA', res, hist ? 'historico' : 'ao_vivo']);
+            n += r.rowCount;
+        }
+        if (hist) console.log(`SCORE_SHADOW_HISTORICO_PISTA ${p.nome} ${n}`);
+    }
+}
+
 async function tick() {
     const now = Date.now();
     const pending = [];
@@ -400,6 +434,7 @@ async function tick() {
     await ensureTable();
     await tickNovos(now);
     await tickFluxo(now).catch((err) => console.error('SCORE_SHADOW fluxo erro:', err.message));
+    await tickPistas(now).catch((err) => console.error('SCORE_SHADOW pistas erro:', err.message));
     if (!pending.length) return;
     const cache = {};
     for (const [name, t, pair, tf, bucket] of pending) {
