@@ -875,7 +875,7 @@ async function run() {
     if (process.env.BACKTEST_SOURCE !== 'lateral') await dbStats();
     if (process.env.BACKTEST_ONLY_DB === '1') { console.log('BACKTEST_END'); return; }
     const plan = [['M1', parseInt(process.env.BACKTEST_M1_PAGES, 10) || 3], ['M5', parseInt(process.env.BACKTEST_M5_PAGES, 10) || 2]];
-    for (const pair of Object.keys(SIGNAL_PAIRS)) {
+    for (const pair of Object.keys(SIGNAL_PAIRS).filter((p) => !SIGNAL_PAIRS[p].otc)) {
         for (const [tf, pages] of plan) {
             try {
                 const candles = await fetchLongHistory(pair, tf, pages);

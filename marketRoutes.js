@@ -185,6 +185,11 @@ async function getHistory() {
 // ---- Sinal técnico (EMA9/EMA21 + RSI14 + MACD) para EURUSD/EURJPY/XAUUSD em M1/M5 ----
 
 const SIGNAL_PAIRS = Object.fromEntries(PAIRS.map((p) => [p.label, p]));
+// OTC da Exnova no painel (pedido do dono em 10/10): candles da própria corretora (otc_candles, gravados pelo
+// coletor), funciona 24h. O sinal usa a mesma leitura técnica do site. SINAL_OTC (lista, vazio desliga).
+for (const label of (process.env.SINAL_OTC ?? 'EURUSD-OTC,EURJPY-OTC,XAUUSD-OTC').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean)) {
+    SIGNAL_PAIRS[label] = { label, otc: true };
+}
 const SIGNAL_INTERVALS = { M1: '1min', M5: '5min' };
 
 // Forex opera 24h de segunda a sexta. Fecha sexta 22h UTC, reabre domingo 22h UTC.
@@ -301,6 +306,7 @@ async function fetchExnovaCandles(pairLabel, timeframeLabel, outputsize = 100) {
 const exnovaFallbackLog = {};
 async function fetchIntradayCandles(pairLabel, timeframeLabel, outputsize = 100) {
     const pair = SIGNAL_PAIRS[pairLabel];
+    if (pair?.otc) return fetchExnovaCandles(pairLabel, timeframeLabel, outputsize);
     const interval = SIGNAL_INTERVALS[timeframeLabel];
     if (TD_KEY()) {
         const td = await fetchTwelveDataCandles(pair, interval, outputsize).catch(() => null);
@@ -1349,7 +1355,8 @@ router.post('/signal', authMiddleware, requireSignalAccess, signalLimiter, async
     if (!SIGNAL_PAIRS[pair] || !SIGNAL_INTERVALS[timeframe]) {
         return res.status(400).json({ error: 'Par ou timeframe inválido. Use EURUSD/EURJPY/XAUUSD e M1/M5.' });
     }
-    if (!isMarketOpen()) {
+    const otc = !!SIGNAL_PAIRS[pair].otc;
+    if (!otc && !isMarketOpen()) {
         return res.status(409).json({ error: 'Mercado fechado no momento. Os ativos abrem de domingo às 22h até sexta às 22h (horário UTC).', marketClosed: true });
     }
     if (PAUSADOS.has(pair)) {
@@ -1373,13 +1380,14 @@ router.post('/signal', authMiddleware, requireSignalAccess, signalLimiter, async
             }
             entry = bucketStart + M1_MS;
             expiry = entry + M1_MS;
-            if (process.env.FILTRO_NOTICIA_M1 !== '0' && horarioNoticiaEUA(entry)) {
+            if (!otc && process.env.FILTRO_NOTICIA_M1 !== '0' && horarioNoticiaEUA(entry)) {
                 return res.json({
                     pair, timeframe, noEntry: true, requestedAt, entry: null, expiry: null, analysisId: null,
                     reason: 'Horário de notícias dos EUA: o mercado costuma ficar instável agora. A leitura volta em alguns minutos.',
                 });
             }
-            result = await getM1Signal(pair, requestedAt);
+            // OTC: leitura técnica nos candles da corretora (não há streaming nem Twelve Data para o OTC).
+            result = otc ? await getTechnicalSignal(pair, 'M1') : await getM1Signal(pair, requestedAt);
             if (result && entry - Date.now() < M1_MIN_ENTRY_LEAD_MS) {
                 // Não dá tempo de entrar neste candle: a entrada vai para o seguinte, com confiança baixa.
                 entry += M1_MS;
@@ -1390,11 +1398,11 @@ router.post('/signal', authMiddleware, requireSignalAccess, signalLimiter, async
             ({ entry, expiry } = computeEntry(timeframe, requestedAt));
             // M5 normal; quando aparece a regra 1 ou 2 (08h e 11h de Brasília, com confirmação), ela tem
             // prioridade e não passa pelo filtro de notícia (foi validada assim, como no robô).
-            if (process.env.M5_REGRAS !== '0') {
+            if (!otc && process.env.M5_REGRAS !== '0') {
                 const regra = await sinalRegrasM5(pair, entry).catch(() => null);
                 if (regra?.direction) result = regra;
             }
-            if (!result && process.env.FILTRO_NOTICIA_M5 !== '0' && horarioNoticiaEUA(entry)) {
+            if (!result && !otc && process.env.FILTRO_NOTICIA_M5 !== '0' && horarioNoticiaEUA(entry)) {
                 return res.json({
                     pair, timeframe, noEntry: true, requestedAt, entry: null, expiry: null, analysisId: null,
                     reason: 'Horário de notícias dos EUA: o mercado costuma ficar instável agora. No M5 a leitura volta em alguns minutos.',

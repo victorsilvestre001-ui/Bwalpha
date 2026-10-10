@@ -4,7 +4,7 @@ import { AnimatePresence } from "framer-motion";
 import { Sparkles, AlertTriangle, Lock, Crown, Loader2, Info, Gift } from "lucide-react";
 import { api, updateSessionUser } from "@/lib/api";
 import { formatCpf, isValidCpf } from "@/lib/cpf";
-import { ASSETS, ASSET_LIST } from "@/lib/assets";
+import { ASSETS, ASSET_LIST, isOtc } from "@/lib/assets";
 import LiveChart from "./LiveChart";
 import AnalyzingOverlay from "./AnalyzingOverlay";
 import CandleWatch from "./CandleWatch";
@@ -96,6 +96,9 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
     loadQuota();
   }, [isVip]);
 
+  // OTC funciona 24h: não segue o horário do mercado aberto.
+  const otc = isOtc(pair);
+  const open = otc ? true : marketOpen;
   const needsCpf = !isVip && quota?.cpfRequired && quota.remaining > 0;
   const canAnalyze = isVip || (quota != null && quota.remaining > 0 && !quota.cpfRequired);
 
@@ -141,7 +144,7 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
       const expiry = data.expiry ?? local.expiry;
       setTiming({ requestedAt: data.requestedAt ?? started, entry, expiry });
     } catch (err) {
-      if (err.data?.marketClosed) setMarketOpen(false);
+      if (err.data?.marketClosed && !otc) setMarketOpen(false);
       if (err.data?.freeLimitReached) setQuota((q) => q && { ...q, remaining: 0, used: q.limit });
       if (err.data?.cpfRequired) setQuota((q) => q && { ...q, cpfRequired: true });
       setError(err.message || "Não foi possível gerar o sinal agora.");
@@ -158,10 +161,10 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
 
           <div className="flex items-center justify-between">
             <h2 className="font-display text-lg font-semibold text-mist">Nova análise</h2>
-            {marketOpen != null && (
-              <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider ${marketOpen ? "bg-neon/10 text-neon" : "bg-ember/10 text-ember-soft"}`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${marketOpen ? "bg-neon" : "bg-ember"}`} />
-                {marketOpen ? "Mercado aberto" : "Mercado fechado"}
+            {open != null && (
+              <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider ${open ? "bg-neon/10 text-neon" : "bg-ember/10 text-ember-soft"}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${open ? "bg-neon" : "bg-ember"}`} />
+                {otc ? "OTC · 24h" : open ? "Mercado aberto" : "Mercado fechado"}
               </span>
             )}
           </div>
@@ -171,6 +174,13 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
             <Dropdown label="Ativo" options={ASSET_OPTIONS} value={pair} onChange={(v) => { cancelWatch(); setPair(v); setResult(null); }} />
             <Dropdown label="Timeframe" options={TIMEFRAME_OPTIONS} value={timeframe} onChange={(v) => { cancelWatch(); setTimeframe(v); setResult(null); }} />
           </div>
+
+          {otc && (
+            <div className="mt-4 flex items-start gap-2 rounded-lg border border-volt/30 bg-volt/10 px-3 py-2 text-xs text-volt-soft">
+              <Info size={14} className="mt-0.5 shrink-0" />
+              <span>OTC é o preço da própria corretora (24h). Os sinais de OTC são novos e ainda estão em fase de teste.</span>
+            </div>
+          )}
 
           {timeframe === "M5" && (
             <div className="mt-4 flex items-start gap-2 rounded-lg border border-volt/30 bg-volt/10 px-3 py-2 text-xs text-volt-soft">
@@ -183,10 +193,10 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
             <CpfGate onDone={loadQuota} />
           ) : canAnalyze ? (
             <>
-              <button onClick={analyze} disabled={loading || !!watching || marketOpen === false} className="btn-primary mt-6 w-full !py-4 text-base disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none">
-                <Sparkles size={18} /> {marketOpen === false ? "Mercado fechado" : "Analisar com IA"}
+              <button onClick={analyze} disabled={loading || !!watching || open === false} className="btn-primary mt-6 w-full !py-4 text-base disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none">
+                <Sparkles size={18} /> {open === false ? "Mercado fechado" : "Analisar com IA"}
               </button>
-              {marketOpen === false && <p className="mt-2 text-center text-xs text-mist-faint">As análises voltam quando o mercado abrir (domingo, 19h de Brasília).</p>}
+              {open === false && <p className="mt-2 text-center text-xs text-mist-faint">As análises voltam quando o mercado abrir (domingo, 19h de Brasília).</p>}
               {!isVip && quota && (
                 <div className="mt-3 flex items-center justify-between gap-3 text-xs">
                   <span className="flex items-center gap-1.5 text-mist-dim">
@@ -227,7 +237,7 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
       </div>
 
       <div className="panel h-[460px] overflow-hidden p-1 md:h-[620px] xl:h-auto xl:min-h-[640px]">
-        <LiveChart pair={pair} timeframe={timeframe} live={marketOpen !== false} />
+        <LiveChart pair={pair} timeframe={timeframe} live={open !== false} />
       </div>
     </div>
   );
