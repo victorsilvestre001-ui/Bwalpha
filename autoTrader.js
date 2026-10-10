@@ -289,7 +289,9 @@ const HORARIO_OK = {
     devolve_m5: (pair, t) => new Date(t).getUTCHours() >= 12
         || (process.env.AUTO_DEVOLVE_MADRUGADA === '1' && !(pair === 'EURJPY' && periodo(t) === 'londres')),
 };
-const liberada = (nome, pair, t) => NOVAS_ATIVOS[nome].includes(pair) && (process.env.AUTO_FILTRO_HORARIO === '0' || HORARIO_OK[nome](pair, t));
+// Estratégias desligadas no robô (continuam no teste sombra). 10/10: Relógio 15 com 41% ao vivo (211 casos) → fora.
+const NOVAS_DESLIGADAS = new Set((process.env.AUTO_NOVAS_DESLIGADAS ?? 'relogio15_segue').split(',').map((x) => x.trim()).filter(Boolean));
+const liberada = (nome, pair, t) => !NOVAS_DESLIGADAS.has(nome) && NOVAS_ATIVOS[nome].includes(pair) && (process.env.AUTO_FILTRO_HORARIO === '0' || HORARIO_OK[nome](pair, t));
 
 async function m1Recentes(pair) {
     const { rows } = await pool.query(
