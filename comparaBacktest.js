@@ -47,6 +47,8 @@ function descreve(D, pair, E, s) {
         mov_5min: lado(mov(5), s) + (Math.abs(mov(5)) >= 2 ? '_forte' : '_fraco'),
         mov_15min: lado(mov(15), s) + (Math.abs(mov(15)) >= 3 ? '_forte' : '_fraco'),
         tendencia_1h: Math.abs(mov(60)) < 4 ? 'lateral' : lado(mov(60), s),
+        // 12/10: tendência mais longa (3h), para a trava de tendência da Devolução.
+        tendencia_3h: (() => { const v = mov(180); return Math.abs(v) < 6 ? 'lateral' : lado(v, s) + (Math.abs(v) >= 12 ? '_forte' : '_fraca'); })(),
         // Onde está o preço na faixa da última hora: "na_ponta_contra" = no extremo oposto à aposta
         // (ex.: compra com o preço no fundo da hora).
         posicao_hora: faixa(s > 0 ? pos : 1 - pos, [0.15, 0.4, 0.6, 0.85], ['na_ponta_contra', 'lado_contra', 'meio', 'lado_a_favor', 'na_ponta_a_favor']),
@@ -115,6 +117,8 @@ async function runCompara(pool) {
             if (f) lista.push({ t: E, win: r.result === 'win', f });
         }
         compara(lista, `SOMBRA_${est}`, true);
+        // 12/10: a Devolução só com o filtro que está no robô (ponta da hora + esticada), para ver a tendência nela.
+        if (est === 'devolve_m5') compara(lista.filter((x) => x.f.posicao_hora === 'na_ponta_contra' && x.f.dist_media20 === 'muito_contra'), 'SOMBRA_devolve_filtrada', true);
     }
 }
 
