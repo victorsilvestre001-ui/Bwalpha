@@ -295,16 +295,21 @@ const liberada = (nome, pair, t) => !NOVAS_DESLIGADAS.has(nome) && NOVAS_ATIVOS[
 
 async function m1Recentes(pair) {
     const { rows } = await pool.query(
-        `SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 AND time > NOW() - INTERVAL '4 hours' ORDER BY time`, [pair]);
+        `SELECT * FROM (SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 ORDER BY time DESC LIMIT 1500) x ORDER BY time`, [pair]);
     const m1 = rows.map((r) => ({ time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }));
     const { atr, e20 } = require('./mineradorBacktest').prep(m1);
-    return new Map(m1.map((x, i) => [x.time, { ...x, atr: atr[i], e20: e20[i] }]));
+    const m = new Map(m1.map((x, i) => [x.time, { ...x, atr: atr[i], e20: e20[i] }]));
+    // Mediana do ATR nos 1440 minutos antes do último (mesma conta do comparaBacktest.js), para o filtro de volatilidade.
+    const viz = atr.slice(Math.max(0, atr.length - 1441), -1).filter(Number.isFinite).sort((p, q) => p - q);
+    m.atrMediana = viz.length >= 1000 ? viz[Math.floor(viz.length / 2)] : null;
+    return m;
 }
 
 // Filtros do estudo WIN x RED de 09/10 (comparaBacktest.js), relativos à aposta (s = +1 compra, -1 venda),
 // olhando o minuto que acabou de fechar (x) e a última hora. AUTO_FILTRO_PADRAO=0 desliga.
 //   Devolução: só com o preço no extremo da hora contra a aposta (comprar no fundo, vender no topo) e
 //              esticado ≥ 2 ATR da média 20 → ~59–60% x ~47% quando no meio da faixa / perto da média.
+//              + volatilidade normal (12/10).
 //   Pico:      só com pavio forte de rejeição no pico (≥ 40% da faixa, 72,5%) ou com a hora lateral (62%).
 function padraoOk(nome, m, mb, s) {
     if (process.env.AUTO_FILTRO_PADRAO === '0') return true;
@@ -317,7 +322,11 @@ function padraoOk(nome, m, mb, s) {
         const hi = Math.max(...hora.map((c) => c.high)), lo = Math.min(...hora.map((c) => c.low));
         const pos = (x.close - lo) / ((hi - lo) || 1e-9);
         const naPonta = (s > 0 ? pos : 1 - pos) < 0.15;
-        return naPonta && (x.close - x.e20) / a * s < -2;
+        // 12/10: só com volatilidade normal (ATR entre 0,8 e 1,3x a mediana do último dia): 68% em 57 casos
+        // (67% e 71% nas duas metades) x 53% com o mercado parado. AUTO_FILTRO_VOL=0 desliga.
+        const vol = m.atrMediana ? a / m.atrMediana : null;
+        const volOk = process.env.AUTO_FILTRO_VOL === '0' || (vol != null && vol >= 0.8 && vol < 1.3);
+        return naPonta && (x.close - x.e20) / a * s < -2 && volOk;
     }
     if (nome === 'pico_volta') {
         const pavio = s > 0 ? Math.min(x.open, x.close) - x.low : x.high - Math.max(x.open, x.close);
