@@ -22,9 +22,12 @@ const HORIZ = [1, 3, 5];
 const pct = (w, n) => (n ? +(100 * w / n).toFixed(1) : null);
 const cor = (c) => (c.close > c.open ? 1 : c.close < c.open ? -1 : 0);
 
+// PROF_JANELA="HH:MM-HH:MM" (Brasília) limita o estudo a uma janela do dia (13/10: "estratégia para operar de manhã").
+const JANELA = (() => { const j = process.env.PROF_JANELA; if (!j) return null; const [a, b] = j.split('-').map((x) => { const [h, m] = x.split(':').map(Number); return h * 60 + (m || 0); }); return [a, b]; })();
 function operavel(pair, t) {
-    if (pair === 'XAUUSD') return true;
     const d = new Date(t - 3 * 3600_000), m = d.getUTCHours() * 60 + d.getUTCMinutes();
+    if (JANELA && !(m >= JANELA[0] && m < JANELA[1])) return false;
+    if (pair === 'XAUUSD') return true;
     return m >= 22 * 60 || m < 15 * 60 + 30;
 }
 
@@ -96,6 +99,20 @@ async function runProfundo(pool) {
             // Aceleração: 3 candles da mesma cor, corpos crescentes.
             const c2 = m1[i - 2], b2 = Math.abs(c2.close - c2.open), b1 = Math.abs(p.close - p.open), b0 = Math.abs(x.close - x.open);
             if (cx && cor(p) === cx && cor(c2) === cx && b0 > b1 && b1 > b2 && b0 >= a) { add('aceleracao_segue', i, cx); add('aceleracao_cansa', i, -cx); }
+            // 13/10 (janela da manhã): as estratégias de minuto já conhecidas, para ver como vão só nesse horário.
+            if (x.time % 300_000 === 60_000) { const mv = (x.close - p.open) / a; if (Math.abs(mv) >= 2.5) add('devolucao', i, -Math.sign(mv)); }
+            if (cx && (x.high - x.low) >= 3 * a) add('pico_volta', i, -cx);
+            // Sequência de cores: N velas iguais → inverte ou segue.
+            let seq = 1; while (seq < 8 && cor(m1[i - seq]) === cx && cx) seq++;
+            if (seq >= 4 && seq <= 7) { add(`sequencia${seq}_inverte`, i, -cx); add(`sequencia${seq}_segue`, i, cx); }
+            // Esticada na hora: movimento de 60 min ≥ 4 ATR → volta ou segue.
+            const m60 = (x.close - m1[i - 15].close) / a; // 15 min (a janela que temos garantida acima)
+            if (Math.abs(m60) >= 4) { add('esticada15_volta', i, -Math.sign(m60)); add('esticada15_segue', i, Math.sign(m60)); }
+            // Abertura de Londres (04h de Brasília) e de Nova York (09h30 de Brasília): direção dos 15 primeiros minutos.
+            for (const [nome, hm] of [['abertura_londres', 4 * 60], ['abertura_ny', 9 * 60 + 30]]) {
+                const d = new Date(x.time + MIN - 3 * 3600_000), mm = d.getUTCHours() * 60 + d.getUTCMinutes();
+                if (mm === hm + 15) { const mv = Math.sign(x.close - m1[i - 14].open); add(`${nome}_segue`, i, mv); add(`${nome}_volta`, i, -mv); }
+            }
         }
 
         // Humor dos traders no ativo de operar ("-op"): valor = fração comprando.
