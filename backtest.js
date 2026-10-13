@@ -779,6 +779,11 @@ async function run() {
         console.log('BACKTEST_END');
         return;
     }
+    if (process.env.BACKTEST_SOURCE === 'horario') {
+        try { await require('./estudoHorario').runHorario(pool, { fetchLongHistory }); } catch (err) { console.error('BACKTEST_ERR HORARIO:', err.message); }
+        console.log('BACKTEST_END');
+        return;
+    }
     if (process.env.BACKTEST_SOURCE === 'devolve2') {
         try { await require('./devolveProximo').runDevolve2(pool); } catch (err) { console.error('BACKTEST_ERR DEVOLVE2:', err.message); }
         console.log('BACKTEST_END');
