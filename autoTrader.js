@@ -285,8 +285,10 @@ const periodo = (t) => { const h = new Date(t).getUTCHours(); return h < 7 ? 'as
 const HORARIO_OK = {
     relogio15_segue: (pair, t) => periodo(t) === 'asia',
     pico_volta: (pair, t) => periodo(t) === 'tarde',
-    // 09h–21h de Brasília; com AUTO_DEVOLVE_MADRUGADA=1 (teste pedido em 09/10) também de madrugada, menos EURJPY em Londres.
-    devolve_m5: (pair, t) => new Date(t).getUTCHours() >= 12
+    // 13/10 (devolveProximo.js, 152 casos): à tarde 65% (igual nas duas metades) x 54% das 9h às 14h → só a partir das
+    // 14h de Brasília (17h UTC; os EUR fecham às 15h30 pelo ativoAberto). AUTO_DEVOLVE_HORA_UTC muda a hora de início.
+    // Com AUTO_DEVOLVE_MADRUGADA=1 (teste pedido em 09/10) também de madrugada, menos EURJPY em Londres.
+    devolve_m5: (pair, t) => new Date(t).getUTCHours() >= (Number(process.env.AUTO_DEVOLVE_HORA_UTC) || 17)
         || (process.env.AUTO_DEVOLVE_MADRUGADA === '1' && !(pair === 'EURJPY' && periodo(t) === 'londres')),
 };
 // Estratégias desligadas no robô (continuam no teste sombra). 10/10: Relógio 15 com 41% ao vivo (211 casos) → fora.
