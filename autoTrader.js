@@ -145,9 +145,11 @@ async function connect(s = st) {
             // Resultado oficial da corretora: win / loose / equal.
             const res = { win: 'acerto', loose: 'erro', equal: 'empate' }[m.msg?.result];
             if (m.name === 'option-changed' && res && m.msg.option_id != null) {
-                pool.query(`UPDATE auto_trades SET result = $2 WHERE ordem_id = $1 AND (result IS NULL OR result <> $2) RETURNING id, pair, direction`,
-                    [String(m.msg.option_id), res]).then(({ rows }) => rows.forEach((r) =>
-                    console.log(`${s.tag}: resultado #${r.id} ${r.pair} ${r.direction} (corretora): ${res}`))).catch(() => {});
+                pool.query(`UPDATE auto_trades SET result = $2 WHERE ordem_id = $1 AND (result IS NULL OR result <> $2) RETURNING id, pair, direction, detalhes, conta`,
+                    [String(m.msg.option_id), res]).then(({ rows }) => rows.forEach((r) => {
+                    console.log(`${s.tag}: resultado #${r.id} ${r.pair} ${r.direction} (corretora): ${res}`);
+                    if (s === st && res === 'erro' && (r.conta || 'treino') === 'treino') fazGale(r).catch((err) => console.error('ROBO_DEMO gale erro:', err.message));
+                })).catch(() => {});
             }
         } else if (m.request_id && s.pending.has(m.request_id)) {
             // Resposta ao pedido de abertura.
@@ -252,6 +254,7 @@ async function resolveResults() {
             // Estratégias de minuto: resultado = preço no fim da expiração x preço da entrada (candles M1 da Exnova).
             const exp = r.detalhes.expira;
             if (Date.now() < exp + 60_000) continue;
+            if (r.detalhes.entrada == null) { if (Date.now() - exp > 3 * 3600_000) await pool.query("UPDATE auto_trades SET result = 'sem_dados' WHERE id = $1", [r.id]); continue; } // gale: vale o resultado da corretora
             const { rows: f } = await pool.query('SELECT close FROM otc_candles WHERE active = $1 AND time = $2', [r.pair, new Date(exp - 60_000)]);
             if (!f.length) { if (Date.now() - exp > 3 * 3600_000) await pool.query("UPDATE auto_trades SET result = 'sem_dados' WHERE id = $1", [r.id]); continue; }
             const fim = +f[0].close, ent = r.detalhes.entrada;
@@ -338,6 +341,27 @@ function padraoOk(nome, m, mb, s) {
     return true;
 }
 
+// Gale (pedido do dono em 13/10, SÓ NA DEMO): nos horários fixos e no pico do ouro, se a entrada dá RED na corretora,
+// entra de novo na mesma direção e com a mesma duração, valendo 2,2x a anterior; no máximo 2 gales (500 → 1100 → 2420).
+// Não leva perda para o sinal seguinte. AUTO_GALE_MAX muda o limite (0 desliga).
+const GALE_MAX = Number(process.env.AUTO_GALE_MAX ?? 2);
+const GALE_MULT = [1, 2.2, 4.84];
+async function fazGale(r) {
+    const d = r.detalhes || {};
+    const g = (d.gale || 0) + 1;
+    if (!d.gale_ok || g > GALE_MAX || !d.duracao) return;
+    const now = Date.now();
+    let expira = Math.floor(now / 60_000) * 60_000 + d.duracao;
+    if (expira - now < 40_000) expira += 60_000; // pouco tempo até o fim do minuto: vai para o seguinte
+    console.log(`ROBO_DEMO: gale ${g} da entrada #${d.origem || r.id} ${r.pair} ${r.direction}`);
+    await abrir(r.pair, r.direction, Math.floor(now / 60_000) * 60_000, expira, r.direction === 'COMPRA' ? 1 : 0,
+        { ...d, gale: g, origem: d.origem || r.id, expira, entrada: null }, { valor: Math.round(VALOR * GALE_MULT[g] * 100) / 100, gale: true, soTreino: true });
+}
+
+// Pico do ouro (estudoProfundo.js com gale, 13/10): minuto do Ouro com faixa ≥ 3 ATR → contra, expira em 1 min.
+// Lucrou com gale 2 nas 3 fases da Exnova, mas sem força estatística (88 casos). Só na demo, com gale.
+// AUTO_NOVAS_DESLIGADAS=pico_ouro desliga.
+
 // Horários fixos (estudoHorario.js, 13/10, 3 meses de M1): faixas de 5 min que subiram/caíram em ~67–69% dos dias
 // nas 3 fases. ATENÇÃO: a mesma busca com dados embaralhados também "aprova" 6–9 faixas, então podem ser sorte;
 // entram na demo a pedido do dono para ver ao vivo. Entra no início da faixa, expira 5 min depois.
@@ -347,12 +371,20 @@ const HORARIOS_FIXOS = (process.env.AUTO_HORARIOS ?? 'XAUUSD|06:25|VENDA,XAUUSD|
 
 function avaliaNovas(pair, m, mb) {
     const out = [];
+    // Pico do ouro: o minuto que acabou de fechar (uma de cada vez; espera a anterior expirar).
+    if (pair === 'XAUUSD' && !NOVAS_DESLIGADAS.has('pico_ouro') && !(st.picoOuroAte > mb)) {
+        const x = get(mb - 60_000), ant = get(mb - 120_000);
+        if (x && ant && x.close !== x.open && (x.high - x.low) >= 3 * (ant.atr || Infinity)) {
+            st.picoOuroAte = mb + 60_000;
+            out.push({ estrategia: 'pico_ouro', lado: x.close > x.open ? 'VENDA' : 'COMPRA', entrada: x.close, expira: mb + 60_000, forca: 1, gale_ok: true, duracao: 60_000 });
+        }
+    }
     // Horário fixo: agora é o início da faixa (horário de Brasília).
     if (!NOVAS_DESLIGADAS.has('horario_fixo')) {
         const d = new Date(mb - 3 * 3600_000), hm = `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
         for (const [p, h, lado] of HORARIOS_FIXOS) {
             const x = m.get(mb - 60_000);
-            if (p === pair && h === hm && x) out.push({ estrategia: 'horario_fixo', lado, entrada: x.close, expira: mb + 300_000, forca: 1, faixa: hm });
+            if (p === pair && h === hm && x) out.push({ estrategia: 'horario_fixo', lado, entrada: x.close, expira: mb + 300_000, forca: 1, faixa: hm, gale_ok: true, duracao: 300_000 });
         }
     }
     const get = (t) => m.get(t);
@@ -426,19 +458,20 @@ async function payoutAtual(pair, tipo) {
     return rows.length ? Number(rows[0].valor) : null;
 }
 
-async function abrir(pair, lado, candleTime, expiraMs, prob, detalhes) {
+async function abrir(pair, lado, candleTime, expiraMs, prob, detalhes, opcoes = {}) {
     const now = Date.now();
+    const valor = opcoes.valor || VALOR;
     // Pedido do dono em 08/10: com payout de 89% ou mais, não opera (treino nem real). AUTO_PAYOUT_MAX muda o corte.
     const corte = Number(process.env.AUTO_PAYOUT_MAX) || 89;
     const payout = await payoutAtual(pair, expiraMs - now > 5.5 * 60_000 ? 1 : 3).catch(() => null);
-    if (payout != null && payout >= corte) {
+    if (payout != null && payout >= corte && !opcoes.gale) {
         console.log(`ROBO_DEMO: ${pair} ${lado} (${detalhes.estrategia || detalhes.regra || 'score'}) não entra: payout ${payout}% (corte ${corte}%)`);
         return;
     }
     if (payout != null) detalhes = { ...detalhes, payout };
     const { rows: ins } = await pool.query(
         `INSERT INTO auto_trades (dia, pair, candle_time, direction, prob, detalhes, valor, status) VALUES ($1, $2, $3, $4, $5, $6, $7, 'enviando') RETURNING id`,
-        [brDay(now), pair, new Date(candleTime), lado, prob, detalhes, VALOR]);
+        [brDay(now), pair, new Date(candleTime), lado, prob, detalhes, valor]);
     const id = ins[0].id;
     if (!st.ready || !st.practiceId) return;
     // Até 5 min: opção turbo (tipo 3). Mais longa (relógio de 15 min, expira no fim do bloco): binária (tipo 1).
@@ -450,10 +483,11 @@ async function abrir(pair, lado, candleTime, expiraMs, prob, detalhes) {
             direction: lado === 'COMPRA' ? 'call' : 'put', expired: Math.floor(expiraMs / 1000), price: valor,
         },
     }, s);
-    st.pending.set(ordem(st, VALOR), id);
+    st.pending.set(ordem(st, valor), id);
     (st.pairDaOrdem ||= new Map()).set(id, pair);
-    console.log(`ROBO_DEMO: entrada #${id} ${pair} ${lado} (treino, ${VALOR}) ${JSON.stringify(detalhes)}`);
-    // Mesma entrada no saldo real, se as travas deixarem.
+    console.log(`ROBO_DEMO: entrada #${id} ${pair} ${lado} (treino, ${valor}) ${JSON.stringify(detalhes)}`);
+    // Mesma entrada no saldo real, se as travas deixarem (gale e estratégias só de treino nunca vão para a real).
+    if (opcoes.soTreino || detalhes.gale_ok) return;
     if (!(await podeReal(now).catch(() => false))) return;
     const { rows: insR } = await pool.query(
         `INSERT INTO auto_trades (dia, pair, candle_time, direction, prob, detalhes, valor, status, conta) VALUES ($1, $2, $3, $4, $5, $6, $7, 'enviando', 'real') RETURNING id`,
@@ -477,12 +511,13 @@ async function tickNovas(now) {
         } catch (err) { console.error(`ROBO_DEMO: erro nas estratégias novas ${pair}:`, err.message); }
     }
     if (!cands.length) return;
-    // Horários fixos entram sempre (um por faixa); das outras, só a mais forte do minuto.
-    const fixos = cands.filter((c) => c.estrategia === 'horario_fixo'), outras = cands.filter((c) => c.estrategia !== 'horario_fixo');
+    // Horários fixos e pico do ouro entram sempre; das outras, só a mais forte do minuto.
+    const sempre = (c) => c.estrategia === 'horario_fixo' || c.estrategia === 'pico_ouro';
+    const fixos = cands.filter(sempre), outras = cands.filter((c) => !sempre(c));
     const lista = [...fixos, ...(outras.length ? [outras.sort((a, b) => b.forca - a.forca)[0]] : [])];
     for (const e of lista) {
         await abrir(e.pair, e.lado, mb, e.expira, e.lado === 'COMPRA' ? 1 : 0,
-            { estrategia: e.estrategia, entrada: e.entrada, expira: e.expira, forca: +e.forca.toFixed(2), ...(e.faixa ? { faixa: e.faixa } : {}) });
+            { estrategia: e.estrategia, entrada: e.entrada, expira: e.expira, forca: +e.forca.toFixed(2), ...(e.faixa ? { faixa: e.faixa } : {}), ...(e.gale_ok ? { gale_ok: true, duracao: e.duracao, gale: 0 } : {}) });
     }
 }
 
