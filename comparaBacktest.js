@@ -122,4 +122,4 @@ async function runCompara(pool) {
     }
 }
 
-module.exports = { runCompara, descreve };
+module.exports = { runCompara, descreve, carrega };
