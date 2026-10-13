@@ -338,8 +338,23 @@ function padraoOk(nome, m, mb, s) {
     return true;
 }
 
+// Horários fixos (estudoHorario.js, 13/10, 3 meses de M1): faixas de 5 min que subiram/caíram em ~67–69% dos dias
+// nas 3 fases. ATENÇÃO: a mesma busca com dados embaralhados também "aprova" 6–9 faixas, então podem ser sorte;
+// entram na demo a pedido do dono para ver ao vivo. Entra no início da faixa, expira 5 min depois.
+// AUTO_HORARIOS="PAR|HH:MM|LADO,..." (Brasília) troca a lista; AUTO_HORARIOS=0 desliga.
+const HORARIOS_FIXOS = (process.env.AUTO_HORARIOS ?? 'XAUUSD|06:25|VENDA,XAUUSD|15:50|COMPRA,XAUUSD|22:05|COMPRA,EURJPY|11:45|COMPRA,XAUUSD|01:15|VENDA,XAUUSD|07:20|COMPRA,EURUSD|11:10|COMPRA')
+    .split(',').map((x) => x.trim().split('|')).filter((x) => x.length === 3);
+
 function avaliaNovas(pair, m, mb) {
     const out = [];
+    // Horário fixo: agora é o início da faixa (horário de Brasília).
+    if (!NOVAS_DESLIGADAS.has('horario_fixo')) {
+        const d = new Date(mb - 3 * 3600_000), hm = `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+        for (const [p, h, lado] of HORARIOS_FIXOS) {
+            const x = m.get(mb - 60_000);
+            if (p === pair && h === hm && x) out.push({ estrategia: 'horario_fixo', lado, entrada: x.close, expira: mb + 300_000, forca: 1, faixa: hm });
+        }
+    }
     const get = (t) => m.get(t);
     // Devolução no meio do M5: agora é o início do 3º minuto do bloco.
     if (mb % 300_000 === 120_000) {
@@ -462,9 +477,13 @@ async function tickNovas(now) {
         } catch (err) { console.error(`ROBO_DEMO: erro nas estratégias novas ${pair}:`, err.message); }
     }
     if (!cands.length) return;
-    const e = cands.sort((a, b) => b.forca - a.forca)[0];
-    await abrir(e.pair, e.lado, mb, e.expira, e.lado === 'COMPRA' ? 1 : 0,
-        { estrategia: e.estrategia, entrada: e.entrada, expira: e.expira, forca: +e.forca.toFixed(2) });
+    // Horários fixos entram sempre (um por faixa); das outras, só a mais forte do minuto.
+    const fixos = cands.filter((c) => c.estrategia === 'horario_fixo'), outras = cands.filter((c) => c.estrategia !== 'horario_fixo');
+    const lista = [...fixos, ...(outras.length ? [outras.sort((a, b) => b.forca - a.forca)[0]] : [])];
+    for (const e of lista) {
+        await abrir(e.pair, e.lado, mb, e.expira, e.lado === 'COMPRA' ? 1 : 0,
+            { estrategia: e.estrategia, entrada: e.entrada, expira: e.expira, forca: +e.forca.toFixed(2), ...(e.faixa ? { faixa: e.faixa } : {}) });
+    }
 }
 
 async function tick() {
