@@ -33,13 +33,21 @@ function resumo(lista) {
 
 async function runGale(pool, { fetchLongHistory }) {
     const paginas = Number(process.env.HOR_PAGINAS) || 25;
+    // GALE_FONTE=exnova usa os candles da própria corretora (otc_candles), em vez da Twelve Data.
+    if (process.env.GALE_FONTE === 'exnova') {
+        fetchLongHistory = async (pair) => {
+            const { rows } = await pool.query('SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 ORDER BY time', [pair]);
+            return rows.slice(0, -1).map((r) => ({ time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }));
+        };
+    }
+    console.log(`GALE_FONTE ${process.env.GALE_FONTE || 'twelve'}`);
     const minerador = require('./mineradorBacktest');
     const casos = {}; // nome -> [[r1, r2, r3], ...] (+1 ganhou, -1 perdeu, 0 empate/sem dado)
     const add = (nome, rs) => (casos[nome] ||= []).push(rs);
     for (const pair of ['EURUSD', 'EURJPY', 'XAUUSD']) {
         let m1;
         try { m1 = await fetchLongHistory(pair, 'M1', paginas); } catch (err) { console.log(`GALE_ERRO ${pair} ${err.message}`); continue; }
-        if (!m1 || m1.length < 20000) { console.log(`GALE_DADOS ${pair} poucos candles`); continue; }
+        if (!m1 || m1.length < 5000) { console.log(`GALE_DADOS ${pair} poucos candles`); continue; }
         const P = minerador.prep(m1), { atr, e20 } = P;
         const idx = new Map(m1.map((c, i) => [c.time, i]));
         const close = (t) => { const j = idx.get(t - MIN); return j == null ? null : m1[j].close; }; // preço no instante t (fechamento do minuto anterior)
@@ -81,6 +89,19 @@ async function runGale(pool, { fetchLongHistory }) {
                     add('pico_sem_filtro_dia_todo', rs);
                     if (pavio / ((x.high - x.low) || 1e-9) >= 0.4 || lateral) { add('pico_robo_dia_todo', rs); if (tarde(t)) add('pico_robo_14h_15h30', rs); }
                 }
+            }
+        }
+        // Horários fixos do robô (entrada no início da faixa, 5 min).
+        for (const [p, h, lado] of [['XAUUSD', '06:25', -1], ['XAUUSD', '15:50', 1], ['XAUUSD', '22:05', 1], ['EURJPY', '11:45', 1], ['XAUUSD', '01:15', -1], ['XAUUSD', '07:20', 1], ['EURUSD', '11:10', 1]]) {
+            if (p !== pair) continue;
+            const [hh, mm] = h.split(':').map(Number);
+            for (const c of m1) {
+                const t = c.time;
+                if (brt(t) !== hh * 60 + mm) continue;
+                const dia = new Date(t - 3 * 3600_000).getUTCDay();
+                if (dia === 0 || dia === 6) continue;
+                add(`horario_${p}_${h}`, tres(t, 5 * MIN, lado));
+                add('horarios_todos', tres(t, 5 * MIN, lado));
             }
         }
         // Regras 1 e 2 (M5): cada candle M5 fechado; COMPRA no candle M5 seguinte.
