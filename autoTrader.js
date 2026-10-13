@@ -424,7 +424,22 @@ function ativoAberto(pair, ms) {
 }
 
 // AUTO_RESET_DESDE (data ISO): o limite do dia passa a contar só as entradas depois dela ("começa de novo").
+// Meta do dia (pedido do dono em 13/10): com o lucro do dia no treino ≥ AUTO_META_DIA (padrão 400), não abre
+// novos sinais até o dia seguinte (gales de um ciclo em andamento continuam). AUTO_META_DIA=0 desliga.
+async function lucroDoDia(now) {
+    const { rows } = await pool.query(`SELECT result, valor, detalhes FROM auto_trades WHERE dia = $1 AND COALESCE(conta, 'treino') = 'treino' AND result IN ('acerto', 'erro')`, [brDay(now)]);
+    return rows.reduce((a, r) => a + (r.result === 'acerto' ? Number(r.valor) * (Number(r.detalhes?.payout) || 84) / 100 : -Number(r.valor)), 0);
+}
+async function metaBatida(now) {
+    const meta = Number(process.env.AUTO_META_DIA ?? 400);
+    if (!meta) return false;
+    const lucro = await lucroDoDia(now);
+    if (lucro >= meta && st.metaDia !== brDay(now)) { st.metaDia = brDay(now); console.log(`ROBO_DEMO: meta do dia batida (lucro ${lucro.toFixed(2)} >= ${meta}); sem novas entradas até amanhã`); }
+    return lucro >= meta;
+}
+
 async function podeEntrar(now) {
+    if (await metaBatida(now).catch(() => false)) return false;
     const desde = Date.parse(process.env.AUTO_RESET_DESDE || '');
     const { rows } = await pool.query(`SELECT COUNT(*) FILTER (WHERE status NOT LIKE 'recusada%')::int AS ok, COUNT(*)::int AS total
         FROM auto_trades WHERE dia = $1 AND created_at >= $2 AND COALESCE(conta, 'treino') = 'treino'`, [brDay(now), new Date(Number.isFinite(desde) ? desde : 0)]);
