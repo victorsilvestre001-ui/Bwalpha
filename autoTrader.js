@@ -382,16 +382,22 @@ function avaliaNovas(pair, m, mb) {
         }
     }
     // Indicador bwalpha do dono, "COMPRA/VENDA AGORA" (padrão dos 5 candles, mínimo 5 a favor; 13/10, só na demo,
-    // com gale): 5 velas M1 fechadas todas verdes e subindo → COMPRA a vela seguinte (1 min); todas vermelhas e
-    // caindo → VENDA. Um ciclo por vez por ativo. Ativos: AUTO_BW_ATIVOS (padrão XAUUSD,EURJPY).
-    if (BW_ATIVOS.includes(pair) && !NOVAS_DESLIGADAS.has('bw_padrao5') && !((st.bwAte ||= {})[pair] > mb)) {
-        const v = [1, 2, 3, 4, 5].map((k) => m.get(mb - k * 60_000));
+    // com gale, NO M5 a pedido do dono): no início de cada vela de 5 min, se as 5 velas M5 fechadas antes dela são todas
+    // verdes e subindo → COMPRA (expira em 5 min); todas vermelhas e caindo → VENDA. Gale nas velas M5 seguintes.
+    // Um ciclo por vez por ativo. Ativos: AUTO_BW_ATIVOS (padrão XAUUSD,EURJPY).
+    if (mb % 300_000 === 0 && BW_ATIVOS.includes(pair) && !NOVAS_DESLIGADAS.has('bw_padrao5') && !((st.bwAte ||= {})[pair] > mb)) {
+        const vela5 = (ini) => {
+            const p = [0, 1, 2, 3, 4].map((k) => m.get(ini + k * 60_000));
+            if (!p.every(Boolean)) return null;
+            return { open: p[0].open, close: p[4].close };
+        };
+        const v = [1, 2, 3, 4, 5].map((k) => vela5(mb - k * 300_000));
         if (v.every(Boolean)) {
             const verdes = v.every((c) => c.close > c.open), vermelhas = v.every((c) => c.close < c.open);
             const lado = verdes && v[0].close > v[4].close ? 'COMPRA' : vermelhas && v[0].close < v[4].close ? 'VENDA' : null;
             if (lado) {
-                st.bwAte[pair] = mb + 3 * 60_000;
-                out.push({ estrategia: 'bw_padrao5', lado, entrada: v[0].close, expira: mb + 60_000, forca: 1, gale_ok: true, duracao: 60_000 });
+                st.bwAte[pair] = mb + 15 * 60_000;
+                out.push({ estrategia: 'bw_padrao5', lado, entrada: v[0].close, expira: mb + 300_000, forca: 1, gale_ok: true, duracao: 300_000 });
             }
         }
     }
