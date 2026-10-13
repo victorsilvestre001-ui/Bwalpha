@@ -369,6 +369,8 @@ async function fazGale(r) {
 const HORARIOS_FIXOS = (process.env.AUTO_HORARIOS ?? 'XAUUSD|06:25|VENDA,XAUUSD|15:50|COMPRA,XAUUSD|22:05|COMPRA,EURJPY|11:45|COMPRA,XAUUSD|01:15|VENDA,XAUUSD|07:20|COMPRA')
     .split(',').map((x) => x.trim().split('|')).filter((x) => x.length === 3);
 
+const BW_ATIVOS = (process.env.AUTO_BW_ATIVOS || 'XAUUSD,EURJPY').split(',').map((x) => x.trim());
+
 function avaliaNovas(pair, m, mb) {
     const out = [];
     // Pico do ouro: o minuto que acabou de fechar (uma de cada vez; espera a anterior expirar).
@@ -377,6 +379,20 @@ function avaliaNovas(pair, m, mb) {
         if (x && ant && x.close !== x.open && (x.high - x.low) >= 3 * (ant.atr || Infinity)) {
             st.picoOuroAte = mb + 60_000;
             out.push({ estrategia: 'pico_ouro', lado: x.close > x.open ? 'VENDA' : 'COMPRA', entrada: x.close, expira: mb + 60_000, forca: 1, gale_ok: true, duracao: 60_000 });
+        }
+    }
+    // Indicador bwalpha do dono, "COMPRA/VENDA AGORA" (padrão dos 5 candles, mínimo 5 a favor; 13/10, só na demo,
+    // com gale): 5 velas M1 fechadas todas verdes e subindo → COMPRA a vela seguinte (1 min); todas vermelhas e
+    // caindo → VENDA. Um ciclo por vez por ativo. Ativos: AUTO_BW_ATIVOS (padrão XAUUSD,EURJPY).
+    if (BW_ATIVOS.includes(pair) && !NOVAS_DESLIGADAS.has('bw_padrao5') && !((st.bwAte ||= {})[pair] > mb)) {
+        const v = [1, 2, 3, 4, 5].map((k) => m.get(mb - k * 60_000));
+        if (v.every(Boolean)) {
+            const verdes = v.every((c) => c.close > c.open), vermelhas = v.every((c) => c.close < c.open);
+            const lado = verdes && v[0].close > v[4].close ? 'COMPRA' : vermelhas && v[0].close < v[4].close ? 'VENDA' : null;
+            if (lado) {
+                st.bwAte[pair] = mb + 3 * 60_000;
+                out.push({ estrategia: 'bw_padrao5', lado, entrada: v[0].close, expira: mb + 60_000, forca: 1, gale_ok: true, duracao: 60_000 });
+            }
         }
     }
     // Horário fixo: agora é o início da faixa (horário de Brasília).
@@ -527,7 +543,7 @@ async function tickNovas(now) {
     }
     if (!cands.length) return;
     // Horários fixos e pico do ouro entram sempre; das outras, só a mais forte do minuto.
-    const sempre = (c) => c.estrategia === 'horario_fixo' || c.estrategia === 'pico_ouro';
+    const sempre = (c) => c.estrategia === 'horario_fixo' || c.estrategia === 'pico_ouro' || c.estrategia === 'bw_padrao5';
     const fixos = cands.filter(sempre), outras = cands.filter((c) => !sempre(c));
     const lista = [...fixos, ...(outras.length ? [outras.sort((a, b) => b.forca - a.forca)[0]] : [])];
     for (const e of lista) {
