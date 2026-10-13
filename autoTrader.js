@@ -365,8 +365,8 @@ async function fazGale(r) {
 // Horários fixos (estudoHorario.js, 13/10, 3 meses de M1): faixas de 5 min que subiram/caíram em ~67–69% dos dias
 // nas 3 fases. ATENÇÃO: a mesma busca com dados embaralhados também "aprova" 6–9 faixas, então podem ser sorte;
 // entram na demo a pedido do dono para ver ao vivo. Entra no início da faixa, expira 5 min depois.
-// AUTO_HORARIOS="PAR|HH:MM|LADO,..." (Brasília) troca a lista; AUTO_HORARIOS=0 desliga.
-const HORARIOS_FIXOS = (process.env.AUTO_HORARIOS ?? 'XAUUSD|06:25|VENDA,XAUUSD|15:50|COMPRA,XAUUSD|22:05|COMPRA,EURJPY|11:45|COMPRA,XAUUSD|01:15|VENDA,XAUUSD|07:20|COMPRA,EURUSD|11:10|COMPRA')
+// AUTO_HORARIOS="PAR|HH:MM|LADO,..." (Brasília) troca a lista; AUTO_HORARIOS=0 desliga. 13/10: EURUSD 11:10 tirado a pedido do dono.
+const HORARIOS_FIXOS = (process.env.AUTO_HORARIOS ?? 'XAUUSD|06:25|VENDA,XAUUSD|15:50|COMPRA,XAUUSD|22:05|COMPRA,EURJPY|11:45|COMPRA,XAUUSD|01:15|VENDA,XAUUSD|07:20|COMPRA')
     .split(',').map((x) => x.trim().split('|')).filter((x) => x.length === 3);
 
 function avaliaNovas(pair, m, mb) {
