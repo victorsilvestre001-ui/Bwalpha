@@ -43,7 +43,7 @@ async function runGale(pool, { fetchLongHistory }) {
     console.log(`GALE_FONTE ${process.env.GALE_FONTE || 'twelve'}`);
     const minerador = require('./mineradorBacktest');
     const casos = {}; // nome -> [[r1, r2, r3], ...] (+1 ganhou, -1 perdeu, 0 empate/sem dado)
-    const add = (nome, rs) => (casos[nome] ||= []).push(rs);
+    const add = (nome, rs, t) => { rs.t = t; (casos[nome] ||= []).push(rs); };
     for (const pair of ['EURUSD', 'EURJPY', 'XAUUSD']) {
         let m1;
         try { m1 = await fetchLongHistory(pair, 'M1', paginas); } catch (err) { console.log(`GALE_ERRO ${pair} ${err.message}`); continue; }
@@ -100,8 +100,8 @@ async function runGale(pool, { fetchLongHistory }) {
                 if (brt(t) !== hh * 60 + mm) continue;
                 const dia = new Date(t - 3 * 3600_000).getUTCDay();
                 if (dia === 0 || dia === 6) continue;
-                add(`horario_${p}_${h}`, tres(t, 5 * MIN, lado));
-                add('horarios_todos', tres(t, 5 * MIN, lado));
+                add(`horario_${p}_${h}`, tres(t, 5 * MIN, lado), t);
+                add('horarios_todos', tres(t, 5 * MIN, lado), t);
             }
         }
         // Regras 1 e 2 (M5): cada candle M5 fechado; COMPRA no candle M5 seguinte.
@@ -124,34 +124,35 @@ async function runGale(pool, { fetchLongHistory }) {
                 if (!Object.entries(r.se).every(([k, v]) => f[k] === v) || !r.ok(f)) continue;
                 // Resultado = cor de cada candle M5 seguinte (como o robô confere).
                 const rs = [1, 2, 3, 4, 5, 6, 7, 8].map((k) => { const c = m5[i + k]; return c && c.time === m5[i].time + k * M5 && c.close !== c.open ? (c.close > c.open ? 1 : -1) : 0; });
-                add(nome, rs);
+                add(nome, rs, m5[i].time + M5);
             }
         }
     }
     for (const [nome, l] of Object.entries(casos)) console.log(`GALE_RESULT ${nome} casos=${l.length} ${JSON.stringify(resumo(l))}`);
-    // "Até sair no lucro" (13/10): cada entrada cobre as perdas do ciclo + META (lucro alvo); para no 1º WIN.
-    // Mostra quantas entradas cada ciclo precisou, o maior valor exigido e o resultado com um saldo limitado.
+    // Recuperação com limite (13/10, pedido do dono): em cada sinal entra e faz até o gale 2 (3 entradas). Se as 3
+    // perderem, para e leva a perda para o PRÓXIMO sinal; cada entrada vale (perda acumulada + META) / payout.
+    // Quando um WIN acontece, o total volta a +META e zera. Sinais em ordem de horário.
     const META = Number(process.env.GALE_META) || 400, SALDO = Number(process.env.GALE_SALDO) || 7960;
     for (const nome of ['regra1', 'horarios_todos', ...Object.keys(casos).filter((k) => k.startsWith('horario_'))]) {
-        const l = casos[nome]; if (!l) continue;
-        const precisou = {}; let saldo = SALDO, quebrou = null, maiorEntrada = 0, lucro = 0, ciclos = 0;
+        const l = (casos[nome] || []).slice().sort((p, q) => p.t - q.t);
+        if (!l.length) continue;
+        let deficit = 0, metas = 0, maiorEntrada = 0, maiorDeficit = 0, sinaisSeguidosSemLucro = 0, pior = 0, quebrou = null, entradas = 0;
         for (const rs of l) {
-            let perdas = 0, k = 0, fim = false;
-            for (; k < rs.length; k++) {
+            let fechou = false;
+            for (let k = 0; k < 3; k++) {
                 const r = rs[k];
-                if (r === 0) { fim = true; break; } // empate/sem dado: encerra sem ganho nem perda nova
-                const v = (perdas + META) / PAY;
+                if (r === 0) continue; // empate: devolve o valor, vai para a próxima janela
+                const v = (deficit + META) / PAY;
+                entradas++;
                 maiorEntrada = Math.max(maiorEntrada, v);
-                if (v > saldo - perdas && quebrou == null) quebrou = { ciclo: ciclos + 1, entrada: k + 1, faltou: +(v - (saldo - perdas)).toFixed(0) };
-                if (r > 0) { lucro += META; fim = true; break; }
-                perdas += v;
+                if (quebrou == null && deficit + v > SALDO) quebrou = { sinal: l.indexOf(rs) + 1, de: l.length, precisava: +(deficit + v).toFixed(0) };
+                if (r > 0) { metas++; deficit = 0; fechou = true; break; }
+                deficit += v;
+                maiorDeficit = Math.max(maiorDeficit, deficit);
             }
-            if (!fim) lucro -= perdas; // perdeu todas as 8 janelas
-            else if (rs[k] === 0) lucro -= perdas;
-            precisou[k + 1] = (precisou[k + 1] || 0) + 1;
-            ciclos++;
+            if (fechou) sinaisSeguidosSemLucro = 0; else { sinaisSeguidosSemLucro++; pior = Math.max(pior, sinaisSeguidosSemLucro); }
         }
-        console.log(`GALE_META ${nome} meta=${META} ciclos=${ciclos} entradas_por_ciclo=${JSON.stringify(precisou)} maior_entrada=${maiorEntrada.toFixed(0)} lucro_sem_limite=${lucro.toFixed(0)} saldo=${SALDO} quebraria=${JSON.stringify(quebrou)}`);
+        console.log(`GALE_RECUPERA ${nome} sinais=${l.length} entradas=${entradas} metas_batidas=${metas} lucro_das_metas=${metas * META} perda_em_aberto_no_fim=${deficit.toFixed(0)} resultado=${(metas * META - deficit).toFixed(0)} maior_entrada=${maiorEntrada.toFixed(0)} maior_perda_acumulada=${maiorDeficit.toFixed(0)} mais_sinais_seguidos_sem_fechar=${pior} saldo=${SALDO} faltaria_saldo=${JSON.stringify(quebrou)}`);
     }
     // Referência: direção aleatória nas mesmas entradas da Devolução sem filtro (o que o gale dá sem vantagem).
     const ref = (casos.devolucao_sem_filtro_dia_todo || []).map((rs) => (Math.random() < 0.5 ? rs : rs.map((x) => -x)));
