@@ -87,7 +87,13 @@ async function runHorario(pool, { fetchLongHistory }) {
             // 2) Faixas de 5 min do dia (entrada no início da faixa, resultado 5 min depois).
             if (t % 300_000 === 0 && operavel(pair, t)) {
                 const r = res(i, 5);
-                if (r) { const m = brt(t); (slots[`${pair}|${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`] ||= []).push({ t, up: r > 0 }); }
+                if (r) {
+                    // Resultados das janelas seguintes (para o gale: mesma direção nos 5 e 10 min depois).
+                    const j5 = idx.get(t + 4 * MIN), j10 = idx.get(t + 9 * MIN);
+                    const r2 = j5 != null ? res(j5, 5) : 0, r3 = j10 != null ? res(j10, 5) : 0;
+                    const m = brt(t);
+                    (slots[`${pair}|${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`] ||= []).push({ t, up: r > 0, r1: r, r2, r3 });
+                }
             }
         }
     }
@@ -116,6 +122,40 @@ async function runHorario(pool, { fetchLongHistory }) {
     const aprov = [...linhas.filter((x) => x.aprovada), ...faixas.filter((x) => x.aprovada)];
     console.log(`HOR_RESUMO fixings=${linhas.length} faixas=${faixas.length} aprovadas=${aprov.length} por_acaso=${JSON.stringify(acaso)}`);
     console.log(`HOR_APROVADAS ${JSON.stringify(aprov)}`);
+    // Gale (13/10): se a entrada perde, entra de novo na mesma direção nas janelas de 5 min seguintes.
+    // Valores: entrada 1; gale 1 = 2,2; gale 2 = 4,84 (recupera a perda com payout 84%). Empate na janela = devolve, conta como perda do ciclo? Não: repete o mesmo valor na janela seguinte (como na corretora, o empate devolve o dinheiro).
+    const PAY = 0.84, V = [1, 2.2, 4.84];
+    const ciclo = (s, dir, gales) => {
+        // Retorna [acertou?, lucro em unidades da 1ª entrada].
+        let gasto = 0;
+        const rs = [s.r1, s.r2, s.r3];
+        for (let k = 0; k <= gales; k++) {
+            const r = rs[k];
+            if (!r) return [false, -gasto]; // sem dado/empate: para o ciclo
+            if (r === dir) return [true, V[k] * PAY - gasto];
+            gasto += V[k];
+        }
+        return [false, -gasto];
+    };
+    const resumoGale = (l, dir) => Object.fromEntries([0, 1, 2].map((g) => {
+        const rs = l.map((s) => ciclo(s, dir, g)), w = rs.filter((x) => x[0]).length;
+        return [g === 0 ? 'sem_gale' : `gale${g}`, { acerto: pct(w, rs.length), lucro_unidades: +rs.reduce((a, x) => a + x[1], 0).toFixed(1), ciclos: rs.length, perdas_totais: rs.length - w }];
+    }));
+    const lista = (process.env.HOR_GALE || 'XAUUSD|06:25|VENDA,XAUUSD|15:50|COMPRA,XAUUSD|22:05|COMPRA,EURJPY|11:45|COMPRA,XAUUSD|01:15|VENDA,XAUUSD|07:20|COMPRA,EURUSD|11:10|COMPRA')
+        .split(',').map((x) => x.split('|'));
+    let todos = [];
+    for (const [p, h, lado] of lista) {
+        const l = slots[`${p}|${h}`] || [], dir = lado === 'COMPRA' ? 1 : -1;
+        todos = todos.concat(l.map((s) => ({ ...s, dir })));
+        console.log(`HOR_GALE ${p} ${h} ${lado} ${JSON.stringify(resumoGale(l, dir))}`);
+    }
+    const tot = Object.fromEntries([0, 1, 2].map((g) => { const rs = todos.map((s) => ciclo(s, s.dir, g)), w = rs.filter((x) => x[0]).length; return [g === 0 ? 'sem_gale' : `gale${g}`, { acerto: pct(w, rs.length), lucro_unidades: +rs.reduce((a, x) => a + x[1], 0).toFixed(1), ciclos: rs.length }]; }));
+    console.log(`HOR_GALE_TOTAL ${JSON.stringify(tot)}`);
+    // Referência: as mesmas contas em TODAS as faixas do dia com direção aleatória (o que o gale dá sem nenhuma vantagem).
+    const ref = [];
+    for (const l of Object.values(slots)) for (const s of l) ref.push({ ...s, dir: Math.random() < 0.5 ? 1 : -1 });
+    const refR = Object.fromEntries([0, 1, 2].map((g) => { const rs = ref.map((s) => ciclo(s, s.dir, g)), w = rs.filter((x) => x[0]).length; return [g === 0 ? 'sem_gale' : `gale${g}`, { acerto: pct(w, rs.length), lucro_por_100_ciclos: +(100 * rs.reduce((a, x) => a + x[1], 0) / rs.length).toFixed(1) }]; }));
+    console.log(`HOR_GALE_ALEATORIO ${JSON.stringify(refR)}`);
 }
 
 module.exports = { runHorario };
