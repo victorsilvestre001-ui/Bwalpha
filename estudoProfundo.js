@@ -108,6 +108,26 @@ async function runProfundo(pool) {
             // Esticada na hora: movimento de 60 min ≥ 4 ATR → volta ou segue.
             const m60 = (x.close - m1[i - 15].close) / a; // 15 min (a janela que temos garantida acima)
             if (Math.abs(m60) >= 4) { add('esticada15_volta', i, -Math.sign(m60)); add('esticada15_segue', i, Math.sign(m60)); }
+            // 13/10: estratégias populares de opções binárias, nos quadrantes de 5 min (minuto do quadrante = q, 0 a 4).
+            const q = Math.floor((x.time % 300_000) / MIN);
+            const cores = (ini, n) => Array.from({ length: n }, (_, k) => cor(m1[i - (q - ini) + k] || x));
+            const soma = (l) => l.reduce((a2, b2) => a2 + b2, 0);
+            if (q === 4 && x.time - m1[i - 4].time === 4 * MIN) {
+                const tres = soma(cores(2, 3)), cinco = soma(cores(0, 5));
+                if (tres) { add('mhi1_minoria', i, -Math.sign(tres)); add('mhi1_maioria', i, Math.sign(tres)); }
+                if (cinco) { add('milhao_maioria', i, Math.sign(cinco)); add('milhao_minoria', i, -Math.sign(cinco)); }
+            }
+            // MHI 2 e 3: mesmas 3 velas do quadrante anterior, entrando na 2ª ou 3ª vela do novo quadrante.
+            for (const [nome, qq] of [['mhi2', 0], ['mhi3', 1]]) {
+                if (q === qq && x.time - m1[i - qq - 3].time === (qq + 3) * MIN) {
+                    const tres = soma([1, 2, 3].map((k) => cor(m1[i - qq - k])));
+                    if (tres) { add(`${nome}_minoria`, i, -Math.sign(tres)); add(`${nome}_maioria`, i, Math.sign(tres)); }
+                }
+            }
+            // Torres Gêmeas: a 5ª vela repete a cor da 1ª (entra no fechamento da 4ª).
+            if (q === 3 && x.time - m1[i - 3].time === 3 * MIN) add('torres_gemeas', i, cor(m1[i - 3]));
+            // Padrão 23: a 2ª vela repete a cor da 1ª (entra no fechamento da 1ª).
+            if (q === 0) add('padrao23', i, cx);
             // Abertura de Londres (04h de Brasília) e de Nova York (09h30 de Brasília): direção dos 15 primeiros minutos.
             for (const [nome, hm] of [['abertura_londres', 4 * 60], ['abertura_ny', 9 * 60 + 30]]) {
                 const d = new Date(x.time + MIN - 3 * 3600_000), mm = d.getUTCHours() * 60 + d.getUTCMinutes();
