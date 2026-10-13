@@ -373,7 +373,7 @@ function avaliaNovas(pair, m, mb) {
     const out = [];
     // Pico do ouro: o minuto que acabou de fechar (uma de cada vez; espera a anterior expirar).
     if (pair === 'XAUUSD' && !NOVAS_DESLIGADAS.has('pico_ouro') && !(st.picoOuroAte > mb)) {
-        const x = get(mb - 60_000), ant = get(mb - 120_000);
+        const x = m.get(mb - 60_000), ant = m.get(mb - 120_000);
         if (x && ant && x.close !== x.open && (x.high - x.low) >= 3 * (ant.atr || Infinity)) {
             st.picoOuroAte = mb + 60_000;
             out.push({ estrategia: 'pico_ouro', lado: x.close > x.open ? 'VENDA' : 'COMPRA', entrada: x.close, expira: mb + 60_000, forca: 1, gale_ok: true, duracao: 60_000 });
