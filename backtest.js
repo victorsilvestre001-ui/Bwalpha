@@ -779,6 +779,11 @@ async function run() {
         console.log('BACKTEST_END');
         return;
     }
+    if (process.env.BACKTEST_SOURCE === 'ia5') {
+        try { await require('./iaCinco').runIa5(pool); } catch (err) { console.error('BACKTEST_ERR IA5:', err.message); }
+        console.log('BACKTEST_END');
+        return;
+    }
     if (process.env.BACKTEST_SOURCE === 'profundo') {
         try { await require('./estudoProfundo').runProfundo(pool); } catch (err) { console.error('BACKTEST_ERR PROFUNDO:', err.message); }
         console.log('BACKTEST_END');
