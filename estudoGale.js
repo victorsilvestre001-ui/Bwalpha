@@ -53,7 +53,7 @@ async function runGale(pool, { fetchLongHistory }) {
         const close = (t) => { const j = idx.get(t - MIN); return j == null ? null : m1[j].close; }; // preço no instante t (fechamento do minuto anterior)
         // Resultado de uma janela [ini, fim] na direção s.
         const janela = (ini, fim, s) => { const a = close(ini), b = close(fim); return a == null || b == null || a === b ? 0 : Math.sign((b - a) * s); };
-        const tres = (ini, dur, s) => [0, 1, 2].map((k) => janela(ini + k * dur, ini + (k + 1) * dur, s));
+        const tres = (ini, dur, s) => Array.from({ length: 8 }, (_, k) => janela(ini + k * dur, ini + (k + 1) * dur, s));
         console.log(`GALE_DADOS ${pair} candles=${m1.length} de=${new Date(m1[0].time).toISOString().slice(0, 10)} ate=${new Date(m1.at(-1).time).toISOString().slice(0, 10)}`);
         for (let i = 1500; i < m1.length - 20; i++) {
             const x = m1[i], t = x.time + MIN; // agora = fechamento do candle i
@@ -116,19 +116,43 @@ async function runGale(pool, { fetchLongHistory }) {
             regra1: { se: { cores3: 'RVV', hora: '11', vs_anterior: 'acima_max' }, ok: (f) => f.tendencia === 'alta' },
             regra2: { se: { sequencia: '1', hora: '14', vs_anterior: 'acima_max' }, ok: (f) => ['0', '-1', '-2'].includes(f.z_media) },
         };
-        for (let i = 60; i < m5.length - 4; i++) {
+        for (let i = 60; i < m5.length - 9; i++) {
             const prox = m5[i].time + M5;
             if (pair !== 'XAUUSD' && !operavelEur(prox)) continue;
             const f = minerador.descreve(m5, i, P5, pair, M5);
             for (const [nome, r] of Object.entries(REGRAS)) {
                 if (!Object.entries(r.se).every(([k, v]) => f[k] === v) || !r.ok(f)) continue;
                 // Resultado = cor de cada candle M5 seguinte (como o robô confere).
-                const rs = [1, 2, 3].map((k) => { const c = m5[i + k]; return c && c.time === m5[i].time + k * M5 && c.close !== c.open ? (c.close > c.open ? 1 : -1) : 0; });
+                const rs = [1, 2, 3, 4, 5, 6, 7, 8].map((k) => { const c = m5[i + k]; return c && c.time === m5[i].time + k * M5 && c.close !== c.open ? (c.close > c.open ? 1 : -1) : 0; });
                 add(nome, rs);
             }
         }
     }
     for (const [nome, l] of Object.entries(casos)) console.log(`GALE_RESULT ${nome} casos=${l.length} ${JSON.stringify(resumo(l))}`);
+    // "Até sair no lucro" (13/10): cada entrada cobre as perdas do ciclo + META (lucro alvo); para no 1º WIN.
+    // Mostra quantas entradas cada ciclo precisou, o maior valor exigido e o resultado com um saldo limitado.
+    const META = Number(process.env.GALE_META) || 400, SALDO = Number(process.env.GALE_SALDO) || 7960;
+    for (const nome of ['regra1', 'horarios_todos', ...Object.keys(casos).filter((k) => k.startsWith('horario_'))]) {
+        const l = casos[nome]; if (!l) continue;
+        const precisou = {}; let saldo = SALDO, quebrou = null, maiorEntrada = 0, lucro = 0, ciclos = 0;
+        for (const rs of l) {
+            let perdas = 0, k = 0, fim = false;
+            for (; k < rs.length; k++) {
+                const r = rs[k];
+                if (r === 0) { fim = true; break; } // empate/sem dado: encerra sem ganho nem perda nova
+                const v = (perdas + META) / PAY;
+                maiorEntrada = Math.max(maiorEntrada, v);
+                if (v > saldo - perdas && quebrou == null) quebrou = { ciclo: ciclos + 1, entrada: k + 1, faltou: +(v - (saldo - perdas)).toFixed(0) };
+                if (r > 0) { lucro += META; fim = true; break; }
+                perdas += v;
+            }
+            if (!fim) lucro -= perdas; // perdeu todas as 8 janelas
+            else if (rs[k] === 0) lucro -= perdas;
+            precisou[k + 1] = (precisou[k + 1] || 0) + 1;
+            ciclos++;
+        }
+        console.log(`GALE_META ${nome} meta=${META} ciclos=${ciclos} entradas_por_ciclo=${JSON.stringify(precisou)} maior_entrada=${maiorEntrada.toFixed(0)} lucro_sem_limite=${lucro.toFixed(0)} saldo=${SALDO} quebraria=${JSON.stringify(quebrou)}`);
+    }
     // Referência: direção aleatória nas mesmas entradas da Devolução sem filtro (o que o gale dá sem vantagem).
     const ref = (casos.devolucao_sem_filtro_dia_todo || []).map((rs) => (Math.random() < 0.5 ? rs : rs.map((x) => -x)));
     console.log(`GALE_ALEATORIO casos=${ref.length} ${JSON.stringify(resumo(ref))}`);
