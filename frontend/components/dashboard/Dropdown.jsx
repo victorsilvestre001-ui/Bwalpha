@@ -24,7 +24,7 @@ export default function Dropdown({ label, options, value, onChange }) {
 
   return (
     <div ref={ref} className="relative">
-      <label className="mb-2 block font-mono text-[10px] uppercase tracking-widest text-mist-faint">{label}</label>
+      {label && <label className="mb-2 block font-mono text-[10px] uppercase tracking-widest text-mist-faint">{label}</label>}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

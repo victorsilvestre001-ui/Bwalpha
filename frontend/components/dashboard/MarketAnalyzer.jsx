@@ -13,7 +13,10 @@ import { computeEntry } from "./CandleTimer";
 import Dropdown from "./Dropdown";
 import { now, syncClock, startClockSync } from "@/lib/clock";
 
-const ASSET_OPTIONS = ASSET_LIST.map((k) => ({ value: k, label: k, hint: ASSETS[k].name }));
+// Ativos do mercado aberto e do OTC ficam separados: o OTC só aparece com a chave "OTC" ligada.
+const toOption = (k) => ({ value: k, label: k, hint: ASSETS[k].name });
+const ASSET_OPTIONS = ASSET_LIST.filter((k) => !isOtc(k)).map(toOption);
+const OTC_OPTIONS = ASSET_LIST.filter(isOtc).map(toOption);
 const TIMEFRAME_OPTIONS = [
   { value: "M1", label: "M1", hint: "1 minuto" },
   { value: "M5", label: "M5", hint: "5 minutos" }
@@ -171,7 +174,25 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
 
 
           <div className="mt-6 space-y-4">
-            <Dropdown label="Ativo" options={ASSET_OPTIONS} value={pair} onChange={(v) => { cancelWatch(); setPair(v); setResult(null); }} />
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <span className="font-mono text-[10px] uppercase tracking-widest text-mist-faint">Ativo</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={otc}
+                  onClick={() => { cancelWatch(); setPair(otc ? ASSET_OPTIONS[0].value : OTC_OPTIONS[0].value); setResult(null); }}
+                  className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-mist-dim"
+                >
+                  OTC
+                  <span className={`relative h-5 w-9 rounded-full transition-colors ${otc ? "bg-neon" : "bg-void-line"}`}>
+                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${otc ? "left-[18px]" : "left-0.5"}`} />
+                  </span>
+                  <span className={otc ? "text-neon" : ""}>{otc ? "ON" : "OFF"}</span>
+                </button>
+              </div>
+              <Dropdown label="" options={otc ? OTC_OPTIONS : ASSET_OPTIONS} value={pair} onChange={(v) => { cancelWatch(); setPair(v); setResult(null); }} />
+            </div>
             <Dropdown label="Timeframe" options={TIMEFRAME_OPTIONS} value={timeframe} onChange={(v) => { cancelWatch(); setTimeframe(v); setResult(null); }} />
           </div>
 
