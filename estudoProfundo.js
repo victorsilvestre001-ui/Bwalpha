@@ -56,7 +56,9 @@ async function runProfundo(pool) {
                 const r = fut(i, h);
                 if (!r) continue;
                 ultimo[k] = m1[i].time;
-                (todas[k] ||= []).push({ t: m1[i].time, win: r === previsto });
+                // Janelas do gale (mesma duração, logo em seguida), em relação à aposta: +1 ganhou, -1 perdeu, 0 empate.
+                const jan = (a, b) => { const x0 = m1[i + a], x1 = m1[i + b]; return x0 && x1 && x1.time === m1[i].time + b * MIN && x0.time === m1[i].time + a * MIN ? Math.sign(x1.close - x0.close) * previsto : 0; };
+                (todas[k] ||= []).push({ t: m1[i].time, win: r === previsto, g: [r * previsto, jan(h, 2 * h), jan(2 * h, 3 * h)] });
             }
         };
         // Máx/mín do dia anterior (dia UTC).
@@ -184,6 +186,35 @@ async function runProfundo(pool) {
     }
     console.log(`PROF_RESUMO hipoteses=${linhas.length} aprovadas=${aprovadas.length} por_acaso=${JSON.stringify(acaso)}`);
     console.log(`PROF_APROVADAS ${JSON.stringify(aprovadas)}`);
+    // Gale (13/10, "uma estratégia que atenda o gale"): lucro do ciclo com gale 2 (valores 1 / 2,2 / 4,84; payout 84%).
+    // Aprovada se lucrar nas 3 fases, com n ≥ 60 e lucro médio por ciclo com t ≥ 2,5. Controle: mesma conta com a
+    // direção sorteada em cada caso (inverte as 3 janelas juntas), 5 vezes.
+    const PAY = 0.84, V = [1, 2.2, 4.84];
+    const cicloG = (g) => { let gasto = 0; for (let k = 0; k < 3; k++) { if (!g[k]) return -gasto; if (g[k] > 0) return V[k] * PAY - gasto; gasto += V[k]; } return -gasto; };
+    const avaliaG = (l) => {
+        const ts = l.map((x) => x.t).sort((p2, q2) => p2 - q2), q1 = ts[Math.floor(ts.length * 0.4)], q2 = ts[Math.floor(ts.length * 0.7)];
+        const v = l.map((x) => cicloG(x.g)), fase = [[], [], []];
+        l.forEach((x, j) => fase[x.t < q1 ? 0 : x.t < q2 ? 1 : 2].push(v[j]));
+        const media = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
+        const m = media(v), sd = Math.sqrt(media(v.map((x) => (x - m) ** 2))) || 1e-9, t = m / (sd / Math.sqrt(v.length));
+        const g1 = l.filter((x) => x.g[0] < 0), g2win = g1.filter((x) => x.g[1] > 0).length;
+        return {
+            n: l.length, lucro_medio: +m.toFixed(3), t: +t.toFixed(2), fases: fase.map((a) => [a.length, +media(a).toFixed(3)]),
+            acerto_1a: pct(l.filter((x) => x.g[0] > 0).length, l.length), acerto_gale1_depois_red: pct(g2win, g1.length),
+            aprovada: l.length >= 60 && fase.every((a) => a.length >= 15 && media(a) > 0) && t >= 2.5,
+        };
+    };
+    const linhasG = Object.entries(todas).map(([k, l]) => ({ sinal: k, ...avaliaG(l) })).sort((p2, q2) => q2.t - p2.t);
+    for (const r of linhasG.filter((x) => x.n >= 60).slice(0, 20)) console.log(`PROF_GALE ${JSON.stringify(r)}`);
+    const acasoG = [];
+    for (let r = 0; r < 5; r++) {
+        let c = 0;
+        for (const l of Object.values(todas)) if (avaliaG(l.map((x) => { const s2 = Math.random() < 0.5 ? 1 : -1; return { t: x.t, g: x.g.map((y) => y * s2) }; })).aprovada) c++;
+        acasoG.push(c);
+    }
+    const aprovG = linhasG.filter((r) => r.aprovada);
+    console.log(`PROF_GALE_RESUMO hipoteses=${linhasG.length} aprovadas=${aprovG.length} por_acaso=${JSON.stringify(acasoG)}`);
+    console.log(`PROF_GALE_APROVADAS ${JSON.stringify(aprovG)}`);
 }
 
 module.exports = { runProfundo };
