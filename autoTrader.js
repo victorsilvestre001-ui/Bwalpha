@@ -381,23 +381,26 @@ function avaliaNovas(pair, m, mb) {
             out.push({ estrategia: 'pico_ouro', lado: x.close > x.open ? 'VENDA' : 'COMPRA', entrada: x.close, expira: mb + 60_000, forca: 1, gale_ok: true, duracao: 60_000 });
         }
     }
-    // Indicador bwalpha do dono, "COMPRA/VENDA AGORA" (padrão dos 5 candles, mínimo 5 a favor; 13/10, só na demo,
-    // com gale, NO M5 a pedido do dono): no início de cada vela de 5 min, se as 5 velas M5 fechadas antes dela são todas
-    // verdes e subindo → COMPRA (expira em 5 min); todas vermelhas e caindo → VENDA. Gale nas velas M5 seguintes.
-    // Um ciclo por vez por ativo. Ativos: AUTO_BW_ATIVOS (padrão XAUUSD,EURJPY).
+    // Indicador bwalpha do dono, setas "COMPRA AGORA"/"VENDA AGORA" (13/10, só na demo, com gale, no M5). Pelos gráficos
+    // enviados pelo dono, as setas saem do cruzamento: buffer1 = sma(open,10) - sma(open,40) cruzando buffer2 = wma(buffer1,34)
+    // (configuração da tela dele). No início de cada vela M5: cruzou para cima → COMPRA (expira em 5 min); para baixo →
+    // VENDA. Gale nas velas M5 seguintes. Um ciclo por vez por ativo. Ativos: AUTO_BW_ATIVOS (padrão XAUUSD,EURJPY).
     if (mb % 300_000 === 0 && BW_ATIVOS.includes(pair) && !NOVAS_DESLIGADAS.has('bw_padrao5') && !((st.bwAte ||= {})[pair] > mb)) {
         const vela5 = (ini) => {
             const p = [0, 1, 2, 3, 4].map((k) => m.get(ini + k * 60_000));
             if (!p.every(Boolean)) return null;
-            return { open: p[0].open, close: p[4].close };
+            return { time: ini, open: p[0].open, high: Math.max(...p.map((c) => c.high)), low: Math.min(...p.map((c) => c.low)), close: p[4].close };
         };
-        const v = [1, 2, 3, 4, 5].map((k) => vela5(mb - k * 300_000));
-        if (v.every(Boolean)) {
-            const verdes = v.every((c) => c.close > c.open), vermelhas = v.every((c) => c.close < c.open);
-            const lado = verdes && v[0].close > v[4].close ? 'COMPRA' : vermelhas && v[0].close < v[4].close ? 'VENDA' : null;
+        const velas = [];
+        for (let k = 100; k >= 1; k--) { const c = vela5(mb - k * 300_000); if (c) velas.push(c); }
+        const ultimo = m.get(mb - 60_000);
+        if (velas.length >= 90 && ultimo) {
+            const { getBwalphaIndicator } = require('./marketRoutes');
+            const bw = getBwalphaIndicator(velas, { time: mb, open: ultimo.close }, null, { maFast: 10, maSlow: 40, signalPeriod: 34, periodoSR: 15 });
+            const lado = bw.cruzamento === 'CALL' ? 'COMPRA' : bw.cruzamento === 'PUT' ? 'VENDA' : null;
             if (lado) {
                 st.bwAte[pair] = mb + 15 * 60_000;
-                out.push({ estrategia: 'bw_padrao5', lado, entrada: v[0].close, expira: mb + 300_000, forca: 1, gale_ok: true, duracao: 300_000 });
+                out.push({ estrategia: 'bw_seta', lado, entrada: ultimo.close, expira: mb + 300_000, forca: 1, gale_ok: true, duracao: 300_000 });
             }
         }
     }
@@ -549,7 +552,7 @@ async function tickNovas(now) {
     }
     if (!cands.length) return;
     // Horários fixos e pico do ouro entram sempre; das outras, só a mais forte do minuto.
-    const sempre = (c) => c.estrategia === 'horario_fixo' || c.estrategia === 'pico_ouro' || c.estrategia === 'bw_padrao5';
+    const sempre = (c) => c.estrategia === 'horario_fixo' || c.estrategia === 'pico_ouro' || c.estrategia === 'bw_seta';
     const fixos = cands.filter(sempre), outras = cands.filter((c) => !sempre(c));
     const lista = [...fixos, ...(outras.length ? [outras.sort((a, b) => b.forca - a.forca)[0]] : [])];
     for (const e of lista) {
