@@ -8,7 +8,7 @@ import BankrollSimulator from "./BankrollSimulator";
 const LAST_N = 10;
 
 const RESULT = {
-  win: { label: "WIN", cls: "border-neon/40 bg-neon/10 text-neon" },
+  win: { label: "WIN", cls: "border-buy/40 bg-buy/10 text-buy" },
   loss: { label: "RED", cls: "border-ember/40 bg-ember/10 text-ember-soft" },
   // Candle praticamente parado: o resultado depende do preço de cada corretora.
   draw: { label: "EMPATE", cls: "border-void-line bg-white/5 text-mist-dim" },
@@ -66,7 +66,7 @@ export default function AnalysesHistory() {
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat icon={ListChecks} label="Análises" value={s?.total ?? "—"} accent="text-mist" />
-        <Stat icon={Trophy} label="Win" value={s?.wins ?? "—"} accent="text-neon" />
+        <Stat icon={Trophy} label="Win" value={s?.wins ?? "—"} accent="text-buy" />
         <Stat icon={XCircle} label="Red" value={s?.losses ?? "—"} accent="text-ember-soft" />
         <Stat icon={Percent} label="Acerto" value={rate} accent="grad-text" />
       </div>
@@ -101,14 +101,14 @@ export default function AnalysesHistory() {
               const res = RESULT[a.result];
               return (
                 <li key={a.id} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 bg-void-deep/40 px-4 py-3">
-                  <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${buy ? "bg-neon/10 text-neon" : "bg-ember/10 text-ember"}`}>
+                  <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${buy ? "bg-buy/10 text-buy" : "bg-ember/10 text-ember"}`}>
                     {buy ? <ArrowUpRight size={18} /> : <ArrowDownRight size={18} />}
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-baseline gap-2">
                       <span className="font-mono text-sm font-semibold text-mist">{a.pair}</span>
                       <span className="font-mono text-xs text-mist-faint">{a.timeframe}</span>
-                      <span className={`text-xs font-semibold ${buy ? "text-neon" : "text-ember-soft"}`}>{a.direction}</span>
+                      <span className={`text-xs font-semibold ${buy ? "text-buy" : "text-ember-soft"}`}>{a.direction}</span>
                     </div>
                     <div className="mt-0.5 font-mono text-xs text-mist-dim">
                       {day(a.entry_time)} · entrada {hhmm(a.entry_time)} → {hhmm(a.expiry_time)}

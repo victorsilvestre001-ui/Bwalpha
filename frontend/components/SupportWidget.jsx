@@ -26,7 +26,7 @@ export default function SupportWidget() {
         target="_blank"
         rel="noopener noreferrer"
         aria-label="Dúvidas no WhatsApp"
-        className={`items-center gap-2 rounded-full bg-gradient-to-r from-neon to-volt px-4 py-3 font-display text-sm font-semibold text-void shadow-neon ${inDashboard ? "hidden lg:flex" : "flex"}`}
+        className={`items-center gap-2 rounded-full bg-gradient-to-r from-neon to-volt px-4 py-3 font-display text-sm font-semibold text-white shadow-neon ${inDashboard ? "hidden lg:flex" : "flex"}`}
       >
         <MessageCircle size={18} /> Dúvidas?
       </a>

@@ -165,8 +165,8 @@ export default function MarketAnalyzer({ isVip, onUpgrade, upgrading }) {
           <div className="flex items-center justify-between">
             <h2 className="font-display text-lg font-semibold text-mist">Nova análise</h2>
             {open != null && (
-              <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider ${open ? "bg-neon/10 text-neon" : "bg-ember/10 text-ember-soft"}`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${open ? "bg-neon" : "bg-ember"}`} />
+              <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider ${open ? "bg-buy/10 text-buy" : "bg-ember/10 text-ember-soft"}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${open ? "bg-buy" : "bg-ember"}`} />
                 {otc ? "OTC · 24h" : open ? "Mercado aberto" : "Mercado fechado"}
               </span>
             )}

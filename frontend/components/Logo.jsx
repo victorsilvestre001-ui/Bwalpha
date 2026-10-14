@@ -2,7 +2,7 @@
 import { useId } from "react";
 import Link from "next/link";
 
-export function LogoMark({ size = 32, tone = "neon" }) {
+export function LogoMark({ size = 32, tone = "lilac" }) {
   const [c1, c2, bg] = tone === "lilac" ? ["#B9A6FF", "#8B6CF6", "#121020"] : ["#00F0A8", "#3D8BFF", "#0A0F1E"];
   // id único por logo: com vários logos na página (um escondido), um id repetido faz o gradiente sumir.
   const gid = `tradeon-g-${useId().replace(/:/g, "")}`;
@@ -22,7 +22,7 @@ export function LogoMark({ size = 32, tone = "neon" }) {
   );
 }
 
-export default function Logo({ href = "/", size = 32, tone = "neon" }) {
+export default function Logo({ href = "/", size = 32, tone = "lilac" }) {
   if (tone === "lilac") return (
     <Link href={href} className="flex items-center gap-2.5" aria-label="TradeOn AI">
       <LogoMark size={size} tone="lilac" />

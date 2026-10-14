@@ -122,7 +122,7 @@ function CampaignCard({ title, load: loadInfo, send: sendAll, describe, confirmT
             <button
               onClick={send}
               disabled={sending || !info.eligible}
-              className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-neon to-volt px-4 py-2 text-sm font-semibold text-void disabled:opacity-40"
+              className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-neon to-volt px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
             >
               {sending ? <Loader2 size={15} className="animate-spin" /> : <Mail size={15} />}
               {sending ? "Enviando…" : info.eligible ? `Enviar para ${fmt(info.eligible)} conta(s)` : "Todos já receberam"}
@@ -178,7 +178,7 @@ function PixReminderCard() {
         <button
           type="submit"
           disabled={sending || !email.trim()}
-          className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-neon to-volt px-4 py-2 text-sm font-semibold text-void disabled:opacity-40"
+          className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-neon to-volt px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
         >
           {sending ? <Loader2 size={15} className="animate-spin" /> : <Mail size={15} />}
           {sending ? "Enviando…" : "Enviar lembrete"}

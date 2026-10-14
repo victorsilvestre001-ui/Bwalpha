@@ -9,7 +9,7 @@ export const metadata = {
   icons: { icon: "/icon.svg", apple: "/icon.svg" }
 };
 
-export const viewport = { themeColor: "#05070F" };
+export const viewport = { themeColor: "#07060D" };
 
 export default function RootLayout({ children }) {
   return (

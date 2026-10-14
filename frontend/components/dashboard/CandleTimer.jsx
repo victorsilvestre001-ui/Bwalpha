@@ -44,8 +44,8 @@ export default function CandleTimer({ direction, timeframe, requestedAt, entry, 
     return { label: "Candle encerrado", value: "00:00", progress: 1 };
   }, [phase, now, entry, expiry, requestedAt]);
 
-  const accent = buy ? "text-neon" : "text-ember";
-  const bar = buy ? "from-neon to-volt" : "from-ember to-pulse";
+  const accent = buy ? "text-buy" : "text-ember";
+  const bar = buy ? "from-buy to-buy-soft" : "from-ember to-pulse";
 
   return (
     <div className="rounded-2xl border border-void-line bg-void-deep/70 p-5">

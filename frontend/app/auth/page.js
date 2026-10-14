@@ -130,7 +130,7 @@ function AuthForm() {
             key={m}
             type="button"
             onClick={() => { setMode(m); setError(""); }}
-            className={`relative rounded-lg py-2.5 font-display text-sm font-semibold transition-colors ${mode === m ? "text-void" : "text-mist-dim hover:text-mist"}`}
+            className={`relative rounded-lg py-2.5 font-display text-sm font-semibold transition-colors ${mode === m ? "text-white" : "text-mist-dim hover:text-mist"}`}
           >
             {mode === m && <motion.span layoutId="auth-tab" className="absolute inset-0 rounded-lg bg-gradient-to-r from-neon to-volt" transition={{ type: "spring", stiffness: 400, damping: 32 }} />}
             <span className="relative">{m === "login" ? "Entrar" : "Criar conta"}</span>

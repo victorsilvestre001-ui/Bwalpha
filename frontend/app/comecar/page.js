@@ -75,7 +75,7 @@ export default function Comecar() {
             </div>
             <div className="mt-5 flex items-center justify-between rounded-xl border border-void-line bg-void-deep/60 p-3">
               <span className="text-sm text-mist-dim">Confiança da leitura</span>
-              <span className="rounded-full border border-neon/40 bg-neon/10 px-3 py-1 font-mono text-xs text-neon">Alta</span>
+              <span className="rounded-full border border-buy/40 bg-buy/10 px-3 py-1 font-mono text-xs text-buy">Alta</span>
             </div>
             <p className="mt-3 font-mono text-[10px] text-mist-faint">* Exemplo ilustrativo da interface.</p>
           </div>

@@ -58,7 +58,7 @@ export default function ChatAssistant({ onUpgrade }) {
     <div className="panel panel-glow flex h-[calc(100vh-11rem)] flex-col overflow-hidden lg:h-[calc(100vh-8rem)]">
       <div className="flex items-center justify-between border-b border-void-line px-5 py-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-neon to-volt"><Bot size={18} className="text-void" /></div>
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-neon to-volt"><Bot size={18} className="text-white" /></div>
           <div>
             <div className="font-display text-sm font-semibold text-mist">Assistente TradeOn AI</div>
             <div className="text-xs text-mist-faint">Especialista em trading · envia prints do gráfico</div>
@@ -87,14 +87,14 @@ export default function ChatAssistant({ onUpgrade }) {
         {messages.map((m, i) => (
           <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
             {m.role === "user" ? (
-              <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-gradient-to-br from-neon/90 to-volt/90 px-4 py-3 text-sm leading-relaxed text-void">
+              <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-gradient-to-br from-neon/90 to-volt/90 px-4 py-3 text-sm leading-relaxed text-white">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 {m.image && <img src={m.image} alt="" className="mb-2 max-h-48 rounded-lg" />}
                 {m.text}
               </div>
             ) : (
               <div className="flex max-w-[92%] gap-2.5">
-                <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-neon to-volt"><Bot size={14} className="text-void" /></div>
+                <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-neon to-volt"><Bot size={14} className="text-white" /></div>
                 <div className="min-w-0 rounded-2xl rounded-tl-md border border-void-line bg-void-deep/70 px-4 py-3.5">
                   <ChatMarkdown text={m.text} />
                 </div>

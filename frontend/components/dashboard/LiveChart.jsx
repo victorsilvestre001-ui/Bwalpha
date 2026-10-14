@@ -20,7 +20,7 @@ export default function LiveChart({ pair = "EURUSD", timeframe = "M1", live = tr
     let chart;
     try { chart = createChart(el, {
       autoSize: true,
-      layout: { background: { type: ColorType.Solid, color: "#0E1426" }, textColor: "#9AA6C3", fontFamily: "JetBrains Mono, monospace", attributionLogo: false },
+      layout: { background: { type: ColorType.Solid, color: "#121020" }, textColor: "#A19DB5", fontFamily: "JetBrains Mono, monospace", attributionLogo: false },
       grid: { vertLines: { color: "rgba(27,36,64,0.6)" }, horzLines: { color: "rgba(27,36,64,0.6)" } },
       localization: { locale: "pt-BR" },
       rightPriceScale: { borderColor: "rgba(154,166,195,0.15)" },
@@ -64,7 +64,7 @@ export default function LiveChart({ pair = "EURUSD", timeframe = "M1", live = tr
         <span className="font-semibold text-mist">{ASSETS[pair]?.label || pair}</span>
         <span>· {timeframe}</span>
         {live
-          ? <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-neon" /> ao vivo</span>
+          ? <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-buy" /> ao vivo</span>
           : <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-mist-faint" /> parado · últimos candles</span>}
       </div>
       {status !== "ok" && <div className="absolute inset-0 z-10 flex items-center justify-center text-sm text-mist-faint">{status === "erro" ? "Gráfico indisponível no momento." : "Carregando gráfico…"}</div>}

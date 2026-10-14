@@ -3,12 +3,14 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        void: { DEFAULT: "#05070F", deep: "#03040A", raised: "#0A0F1E", card: "#0E1426", line: "#1B2440" },
-        neon: { DEFAULT: "#00F0A8", soft: "#7CFFD4", deep: "#00B37D" },
-        volt: { DEFAULT: "#3D8BFF", soft: "#8DB9FF", deep: "#1F5FD6" },
+        void: { DEFAULT: "#07060D", deep: "#050409", raised: "#0D0B17", card: "#121020", line: "#221E38" },
+        // Visual lilás (14/10): "neon" e "volt" viraram tons de lilás; o verde de compra/WIN ficou em "buy".
+        neon: { DEFAULT: "#8B6CF6", soft: "#B9A6FF", deep: "#6A4DE3" },
+        buy: { DEFAULT: "#22E3A0", soft: "#7CFFD4", deep: "#00B37D" },
+        volt: { DEFAULT: "#A78BFA", soft: "#C9B8FF", deep: "#7C5CF0" },
         pulse: { DEFAULT: "#9B5CFF", soft: "#C4A3FF" },
         ember: { DEFAULT: "#FF4D6D", soft: "#FF8FA3" },
-        mist: { DEFAULT: "#E7ECF7", dim: "#9AA6C3", faint: "#5B6788" },
+        mist: { DEFAULT: "#ECEAF5", dim: "#A19DB5", faint: "#655F7E" },
         // Visual novo da página inicial (14/10): preto arroxeado + lilás, seções claras em "paper".
         ink: { DEFAULT: "#07060D", raised: "#0D0B17", card: "#121020", line: "#1F1B33" },
         lilac: { DEFAULT: "#8B6CF6", soft: "#B9A6FF", deep: "#6A4DE3" },
@@ -21,8 +23,8 @@ module.exports = {
         tight: ["var(--font-tight)", "sans-serif"]
       },
       boxShadow: {
-        neon: "0 0 40px -8px rgba(0,240,168,0.45)",
-        volt: "0 0 40px -8px rgba(61,139,255,0.45)",
+        neon: "0 0 40px -8px rgba(139,108,246,0.55)",
+        volt: "0 0 40px -8px rgba(167,139,250,0.45)",
         card: "0 20px 60px -20px rgba(0,0,0,0.7)"
       },
       keyframes: {

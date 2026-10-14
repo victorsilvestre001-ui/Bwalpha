@@ -10,11 +10,11 @@ function PressureBar({ pressao }) {
   return (
     <div className="rounded-xl border border-void-line bg-void-deep/60 p-4">
       <div className="flex justify-between font-mono text-[11px] uppercase tracking-wider">
-        <span className="text-neon">Compradora {pressao.compradora}%</span>
+        <span className="text-buy">Compradora {pressao.compradora}%</span>
         <span className="text-ember-soft">Vendedora {pressao.vendedora}%</span>
       </div>
       <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-void-line">
-        <div className="bg-neon" style={{ width: `${pressao.compradora}%` }} />
+        <div className="bg-buy" style={{ width: `${pressao.compradora}%` }} />
         <div className="bg-ember" style={{ width: `${pressao.vendedora}%` }} />
       </div>
     </div>
@@ -75,11 +75,11 @@ export default function SignalResult({ result, timing, onRetry }) {
 
   return (
     <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }} className="space-y-4">
-      <div className={`relative overflow-hidden rounded-2xl border p-6 ${buy ? "border-neon/40 bg-gradient-to-br from-neon/15 to-transparent" : "border-ember/40 bg-gradient-to-br from-ember/15 to-transparent"}`}>
+      <div className={`relative overflow-hidden rounded-2xl border p-6 ${buy ? "border-buy/40 bg-gradient-to-br from-buy/15 to-transparent" : "border-ember/40 bg-gradient-to-br from-ember/15 to-transparent"}`}>
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="font-mono text-xs uppercase tracking-widest text-mist-dim">{result.pair} · {result.timeframe}</div>
-            <div className={`mt-2 flex items-center gap-2 font-display text-4xl font-bold ${buy ? "text-neon" : "text-ember"}`}>
+            <div className={`mt-2 flex items-center gap-2 font-display text-4xl font-bold ${buy ? "text-buy" : "text-ember"}`}>
               {buy ? <ArrowUpRight size={36} /> : <ArrowDownRight size={36} />}
               {result.direction}
             </div>

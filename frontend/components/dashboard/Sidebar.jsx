@@ -22,7 +22,7 @@ function Avatar({ user, size = 36 }) {
     return <img src={user.avatar_url} alt="" width={size} height={size} className="rounded-full object-cover" style={{ width: size, height: size }} />;
   }
   return (
-    <div className="flex items-center justify-center rounded-full bg-gradient-to-br from-neon to-volt font-display text-xs font-bold text-void" style={{ width: size, height: size }}>
+    <div className="flex items-center justify-center rounded-full bg-gradient-to-br from-neon to-volt font-display text-xs font-bold text-white" style={{ width: size, height: size }}>
       {initials}
     </div>
   );

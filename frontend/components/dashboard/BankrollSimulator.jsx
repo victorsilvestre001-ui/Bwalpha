@@ -11,7 +11,7 @@ const brl = (v) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL
 const pct = (v) => `${v >= 0 ? "+" : ""}${v.toFixed(1).replace(".", ",")}%`;
 
 const STATUS = {
-  target: { label: "Meta batida", cls: "border-neon/40 bg-neon/10 text-neon", icon: Target },
+  target: { label: "Meta batida", cls: "border-buy/40 bg-buy/10 text-buy", icon: Target },
   stop: { label: "Stop atingido", cls: "border-ember/40 bg-ember/10 text-ember-soft", icon: ShieldAlert },
   broke: { label: "Banca zerada", cls: "border-ember/40 bg-ember/10 text-ember-soft", icon: ShieldAlert },
   running: { label: "Em andamento", cls: "border-volt/40 bg-volt/10 text-volt-soft", icon: Calculator }
@@ -192,7 +192,7 @@ export default function BankrollSimulator() {
 
       <div className="mt-3 flex rounded-xl border border-void-line bg-void-deep/70 p-1 text-xs sm:inline-flex">
         {[[false, "Entrada fixa (% do capital inicial)"], [true, "Juros compostos (% da banca atual)"]].map(([v, l]) => (
-          <button key={String(v)} onClick={() => set("compound", v)} className={`flex-1 rounded-lg px-3 py-2 font-medium transition-colors ${cfg.compound === v ? "bg-gradient-to-r from-neon to-volt text-void" : "text-mist-dim hover:text-mist"}`}>
+          <button key={String(v)} onClick={() => set("compound", v)} className={`flex-1 rounded-lg px-3 py-2 font-medium transition-colors ${cfg.compound === v ? "bg-gradient-to-r from-neon to-volt text-white" : "text-mist-dim hover:text-mist"}`}>
             {l}
           </button>
         ))}
@@ -212,7 +212,7 @@ export default function BankrollSimulator() {
             <div className="rounded-xl border border-void-line bg-void-deep/60 p-4">
               <div className="font-mono text-[10px] uppercase tracking-widest text-mist-faint">Banca final</div>
               <div className="mt-1 font-display text-2xl font-bold text-mist">{brl(sim.balance)}</div>
-              <div className={`mt-0.5 font-mono text-xs ${sim.pnl >= 0 ? "text-neon" : "text-ember-soft"}`}>{pct(sim.pnlPct)} ({sim.pnl >= 0 ? "+" : ""}{brl(sim.pnl)})</div>
+              <div className={`mt-0.5 font-mono text-xs ${sim.pnl >= 0 ? "text-buy" : "text-ember-soft"}`}>{pct(sim.pnlPct)} ({sim.pnl >= 0 ? "+" : ""}{brl(sim.pnl)})</div>
             </div>
             <div className="rounded-xl border border-void-line bg-void-deep/60 p-4">
               <div className="font-mono text-[10px] uppercase tracking-widest text-mist-faint">Resultado</div>
