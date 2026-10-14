@@ -458,3 +458,5 @@ select { font: inherit; padding: 8px 12px; border: 1px solid var(--line); border
   .fx-stage { display: flex; gap: 16px; overflow-x: auto; perspective: none; padding: 20px 0; min-height: 360px; }
   .fx-spin-card { position: static; transform: none; flex-shrink: 0; height: 320px; }
 }
+.slide-art img { width: 30%; max-width: 170px; aspect-ratio: 3 / 4; object-fit: contain; background: #fff; border-radius: 16px; padding: 8px; box-shadow: 0 18px 30px rgba(0, 0, 0, .15); }
+.slide-art img:nth-child(2) { transform: translateY(-20px) scale(1.15); }

@@ -169,7 +169,11 @@
   const slides = [
     { bg: 'linear-gradient(120deg,#ffe3ec,#ffc9dc)', eyebrow: '💄 Maquiagem', title: 'Maquiagem a partir de R$ 9,90', text: 'Blush, contorno, paletas e cílios com 5% OFF no Pix e frete grátis acima de R$ 199.', cta: 'Ver ofertas', href: '#/ofertas', img: 'img/banner-maquiagem.jpg', fade: '#fdb2bd', alt: 'Mulher negra aplicando sombra com pincel', ids: ['iconic-paleta', 'tapioca', 'blush-multifuncional'] },
     { bg: 'linear-gradient(120deg,#f3f0ff,#d0bfff)', eyebrow: '🔥 Leve 3 pague 2', title: 'Monte seu kit e pague só 2', text: 'Corretivos, contornos, pó de tapioca, sobrancelha e skincare. O desconto entra sozinho no carrinho.', cta: 'Montar meu kit', href: '#/promo/leve3pague2', img: 'img/banner-batom.jpg', fade: '#a794c5', alt: 'Mulher branca passando batom líquido', ids: ['color-contour', 'gloss-peeloff', 'tint-brow'] },
-    { bg: 'linear-gradient(120deg,#fff4e0,#ffd8a8)', eyebrow: '✨ Skincare', title: 'Pele de vidro com Vitamina C', text: 'Kit Pele de Vidro com 3 séruns por R$ 49,90. Frete grátis acima de R$ 199.', cta: 'Ver skincare', href: '#/c/skincare', img: 'img/banner-skincare.jpg', fade: '#c98159', alt: 'Mulher negra aplicando sérum de vitamina C', ids: ['serum-vitc', 'serum-ah', 'tonico-glicolico'] }
+    { bg: 'linear-gradient(120deg,#fff4e0,#ffd8a8)', eyebrow: '✨ Skincare', title: 'Pele de vidro com Vitamina C', text: 'Kit Pele de Vidro com 3 séruns por R$ 49,90. Frete grátis acima de R$ 199.', cta: 'Ver skincare', href: '#/c/skincare', img: 'img/banner-skincare.jpg', fade: '#c98159', alt: 'Mulher negra aplicando sérum de vitamina C', ids: ['serum-vitc', 'serum-ah', 'tonico-glicolico'] },
+    { bg: 'linear-gradient(120deg,#ffe0d2,#f5b49a)', eyebrow: '✨ Lançamento', title: 'Trio Stick: blush, iluminador e corretivo', text: 'Os três em bastão, cremosos e fáceis de levar na bolsa. No kit, sai por R$ 54,90.', cta: 'Ver o Trio Stick', href: '#/p/kit-trio-stick-bellafemme', img: 'img/banner-blush.jpg', fade: '#e89f84', alt: 'Mulher passando blush em bastão no rosto', ids: ['bf-blush-stick', 'bf-iluminador-stick', 'bf-corretivo-stick'] },
+    { bg: 'linear-gradient(120deg,#ece8f7,#c9c0e6)', eyebrow: '👁️ Olhar poderoso', title: 'Cílios e máscara para um olhar marcante', text: 'Cílios postiços 8D a partir de R$ 9,90 e máscara de cílios com curvatura de até 36 horas.', cta: 'Ver produtos para os olhos', href: '#/c/maquiagem?sub=Olhos', img: 'img/banner-mascara.jpg', fade: '#b0a9ca', alt: 'Mulher aplicando máscara de cílios', ids: ['cilios-8d', 'sp-mascara-36h', 'kit-olhar-poderoso'] },
+    { bg: 'linear-gradient(120deg,#fff6dc,#f9df9f)', eyebrow: '🌸 Perfumaria', title: 'Body splash em 10 fragrâncias', text: 'Perfume o dia todo por R$ 24,90. Junte o body cream e monte o kit Perfumada.', cta: 'Escolher fragrância', href: '#/c/perfumes', img: 'img/banner-splash.jpg', fade: '#f7d99a', alt: 'Mulher passando body splash no pescoço', ids: ['splash-fem', 'splash-men', 'body-cream-natuza'] },
+    { bg: 'linear-gradient(120deg,#f5e9e0,#ddbfa9)', eyebrow: '✏️ Sobrancelha', title: 'Sobrancelha alinhada o dia todo', text: 'Gel fixador, Tint Brow, Tatoo Brow e kit de pinças. Tudo junto no kit Sobrancelha Perfeita.', cta: 'Ver sobrancelha', href: '#/c/maquiagem?sub=Sobrancelhas', img: 'img/banner-sobrancelha.jpg', fade: '#d6b49e', alt: 'Mulher penteando a sobrancelha com gel', ids: ['tint-brow', 'gel-sobrancelha', 'kit-pincas'] }
   ];
   let slideTimer;
 
@@ -342,18 +346,24 @@
     }
   }
 
+  // Banner principal: troca sozinho a cada S.bannerDays dias (pela data do aparelho do cliente).
+  // As bolinhas continuam funcionando para quem quiser ver os outros.
+  function bannerDoDia() {
+    const hoje = new Date();
+    const dias = Math.floor(Date.UTC(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()) / 864e5);
+    return Math.floor(dias / (S.bannerDays || 2)) % slides.length;
+  }
+
   function startSlider() {
-    let i = 0;
     const go = n => {
-      i = (n + slides.length) % slides.length;
+      const i = (n + slides.length) % slides.length;
       const el = $('#slides');
-      if (!el) return clearInterval(slideTimer);
+      if (!el) return;
       el.style.transform = `translateX(-${i * 100}%)`;
       $$('#dots button').forEach((b, j) => b.classList.toggle('on', j === i));
     };
-    $$('#dots button').forEach(b => b.onclick = () => { go(+b.dataset.slide); restart(); });
-    const restart = () => { clearInterval(slideTimer); slideTimer = setInterval(() => go(i + 1), 5500); };
-    go(0); restart();
+    $$('#dots button').forEach(b => b.onclick = () => go(+b.dataset.slide));
+    go(bannerDoDia());
   }
 
   function pageListing({ title, subtitle = '', list, crumb, sub }) {

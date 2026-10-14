@@ -7,6 +7,8 @@ window.STORE = {
   freeShippingFrom: 199,
   pixDiscount: 0.05,
   maxInstallments: 6,
+  // Banner principal da home: de quantos em quantos dias ele troca.
+  bannerDays: 2,
   // Fim da oferta relâmpago: meia-noite de hoje (renova todo dia).
   flashSaleEnds: (() => { const d = new Date(); d.setHours(23, 59, 59, 0); return d; })(),
   coupons: {
