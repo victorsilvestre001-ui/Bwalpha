@@ -394,10 +394,12 @@ function avaliaNovas(pair, m, mb) {
             if (!p.every(Boolean)) return null;
             return { time: ini, open: p[0].open, high: Math.max(...p.map((c) => c.high)), low: Math.min(...p.map((c) => c.low)), close: p[4].close };
         };
+        // Pula as velas que não existem (pausa diária do Ouro, fim de semana), como o gráfico da corretora.
         const velas = [];
-        for (let k = 100; k >= 1; k--) { const c = vela5(mb - k * 300_000); if (c) velas.push(c); }
+        for (let k = 250; k >= 1; k--) { const c = vela5(mb - k * 300_000); if (c) velas.push(c); }
+        velas.splice(0, Math.max(0, velas.length - 100));
         const ultimo = m.get(mb - 60_000);
-        if (velas.length >= 90 && ultimo) {
+        if (velas.length >= 80 && ultimo && velas.at(-1).time === mb - 300_000) {
             const { getBwalphaIndicator } = require('./marketRoutes');
             const bw = getBwalphaIndicator(velas, { time: mb, open: ultimo.close }, null, { maFast: 10, maSlow: 40, signalPeriod: 34, periodoSR: 15 });
             const lado = bw.cruzamento === 'CALL' ? 'COMPRA' : bw.cruzamento === 'PUT' ? 'VENDA' : null;
