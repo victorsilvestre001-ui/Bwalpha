@@ -350,11 +350,6 @@ async function fazGale(r) {
     const d = r.detalhes || {};
     const g = (d.gale || 0) + 1;
     if (!d.gale_ok || g > GALE_MAX || !d.duracao) return;
-    // Seta do bwalpha virou de lado: não faz gale da direção antiga.
-    if (d.estrategia === 'bw_seta' && st.bwLado?.[r.pair] && st.bwLado[r.pair] !== r.direction) {
-        console.log(`ROBO_DEMO: gale cancelado (#${r.id} ${r.pair} ${r.direction}): a seta virou para ${st.bwLado[r.pair]}`);
-        return;
-    }
     const now = Date.now();
     let expira = Math.floor(now / 60_000) * 60_000 + d.duracao;
     if (expira - now < 40_000) expira += 60_000; // pouco tempo até o fim do minuto: vai para o seguinte
@@ -409,6 +404,7 @@ function avaliaNovas(pair, m, mb) {
             if (lado && (!(st.bwAte[pair] > mb) || st.bwLado[pair] !== lado)) {
                 st.bwAte[pair] = mb + 15 * 60_000;
                 st.bwLado[pair] = lado;
+                (st.bwQuando ||= {})[pair] = mb;
                 out.push({ estrategia: 'bw_seta', lado, entrada: ultimo.close, expira: mb + 300_000, forca: 1, gale_ok: true, duracao: 300_000 });
             }
         }
@@ -507,8 +503,19 @@ async function payoutAtual(pair, tipo) {
     return rows.length ? Number(rows[0].valor) : null;
 }
 
+// O indicador manda (pedido do dono em 14/10): se a última seta do bwalpha no ativo (até AUTO_BW_VALIDADE_MIN min
+// atrás, padrão 60) aponta para o outro lado, a entrada (de qualquer estratégia, gale incluído) vira para o lado dela.
+const BW_VALIDADE = (Number(process.env.AUTO_BW_VALIDADE_MIN) || 60) * 60_000;
+
 async function abrir(pair, lado, candleTime, expiraMs, prob, detalhes, opcoes = {}) {
     const now = Date.now();
+    const ind = st.bwLado?.[pair];
+    if (ind && ind !== lado && now - (st.bwQuando?.[pair] || 0) < BW_VALIDADE) {
+        console.log(`ROBO_DEMO: ${pair} ${lado} (${detalhes.estrategia || detalhes.regra || 'score'}) virou ${ind}: a última seta do indicador é ${ind}`);
+        detalhes = { ...detalhes, lado_original: lado, virado_pelo_indicador: true };
+        lado = ind;
+        prob = ind === 'COMPRA' ? 1 : 0;
+    }
     const valor = opcoes.valor || VALOR;
     // Pedido do dono em 08/10: com payout de 89% ou mais, não opera (treino nem real). AUTO_PAYOUT_MAX muda o corte.
     const corte = Number(process.env.AUTO_PAYOUT_MAX) || 89;
