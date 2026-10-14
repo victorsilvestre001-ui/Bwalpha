@@ -1,31 +1,35 @@
-import { Check } from "lucide-react";
 import Reveal from "@/components/Reveal";
 
 const SIM = [
-  "Lê o gráfico com 4 indicadores em segundos",
-  "Anota cada leitura e confere quando o candle fecha",
-  "Mostra a sua taxa de acerto real, sem filtro",
-  "Responde suas dúvidas de gráfico em português"
+  ["Lê o gráfico", "com 4 indicadores em segundos"],
+  ["Anota cada leitura", "e confere quando o candle fecha"],
+  ["Mostra seu acerto real", "sem filtro, erros inclusos"],
+  ["Tira suas dúvidas", "de gráfico, em português"]
 ];
 
+// "Com a direção certa, a gente produz." do visual de referência, adaptado.
 export default function Combinado() {
   return (
-    <section id="combinado" className="relative py-20 md:py-28">
-      <div className="mx-auto max-w-7xl px-5 md:px-8">
-        <Reveal className="max-w-2xl">
-          <span className="eyebrow">Na sua tela</span>
-          <h2 className="mt-5 font-display text-3xl font-bold tracking-tight text-mist md:text-5xl">
-            O que a TradeOn <span className="grad-text">faz por você</span>
+    <section id="combinado" className="relative py-24 md:py-36">
+      <div className="mx-auto max-w-[1400px] px-4 md:px-8">
+        <Reveal className="grid gap-8 md:grid-cols-[1.5fr_1fr] md:items-end">
+          <h2 className="mega text-5xl text-white md:text-[6rem]">
+            Com a leitura certa,<br /><span className="soft-italic">a decisão é sua.</span>
           </h2>
+          <p className="max-w-sm text-white/55 md:justify-self-end">
+            A TradeOn não opera por você e não recebe depósito. Ela lê, anota e te mostra o histórico, pra você decidir com mais critério.
+          </p>
         </Reveal>
-        <div className="mt-12 max-w-2xl">
-          <Reveal>
-            <div className="panel h-full p-7">
-              <ul className="space-y-3">
-                {SIM.map((t) => <li key={t} className="flex gap-3 text-mist-dim"><Check size={18} className="mt-0.5 shrink-0 text-neon" />{t}</li>)}
-              </ul>
-            </div>
-          </Reveal>
+        <div className="mt-16 grid gap-px overflow-hidden rounded-3xl border border-white/10 bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
+          {SIM.map(([t, s], i) => (
+            <Reveal key={t} delay={i * 0.08} className="h-full">
+              <div className="h-full bg-ink p-7 transition-colors duration-300 hover:bg-ink-raised">
+                <span className="font-mono text-xs text-lilac">0{i + 1}</span>
+                <p className="mt-10 font-tight text-2xl font-semibold tracking-[-0.03em] text-white">{t}</p>
+                <p className="soft-italic mt-1 text-white/50">{s}</p>
+              </div>
+            </Reveal>
+          ))}
         </div>
       </div>
     </section>

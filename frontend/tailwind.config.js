@@ -8,12 +8,17 @@ module.exports = {
         volt: { DEFAULT: "#3D8BFF", soft: "#8DB9FF", deep: "#1F5FD6" },
         pulse: { DEFAULT: "#9B5CFF", soft: "#C4A3FF" },
         ember: { DEFAULT: "#FF4D6D", soft: "#FF8FA3" },
-        mist: { DEFAULT: "#E7ECF7", dim: "#9AA6C3", faint: "#5B6788" }
+        mist: { DEFAULT: "#E7ECF7", dim: "#9AA6C3", faint: "#5B6788" },
+        // Visual novo da página inicial (14/10): preto arroxeado + lilás, seções claras em "paper".
+        ink: { DEFAULT: "#07060D", raised: "#0D0B17", card: "#121020", line: "#1F1B33" },
+        lilac: { DEFAULT: "#8B6CF6", soft: "#B9A6FF", deep: "#6A4DE3" },
+        paper: { DEFAULT: "#ECEBF2", card: "#FFFFFF", line: "#DAD8E4", ink: "#0B0A12", dim: "#5E5B6E" }
       },
       fontFamily: {
         display: ["var(--font-display)", "sans-serif"],
         body: ["var(--font-body)", "sans-serif"],
-        mono: ["var(--font-mono)", "monospace"]
+        mono: ["var(--font-mono)", "monospace"],
+        tight: ["var(--font-tight)", "sans-serif"]
       },
       boxShadow: {
         neon: "0 0 40px -8px rgba(0,240,168,0.45)",
@@ -23,12 +28,14 @@ module.exports = {
       keyframes: {
         marquee: { "0%": { transform: "translateX(0)" }, "100%": { transform: "translateX(-50%)" } },
         floaty: { "0%,100%": { transform: "translateY(0)" }, "50%": { transform: "translateY(-10px)" } },
-        scan: { "0%": { transform: "translateY(-100%)" }, "100%": { transform: "translateY(100%)" } }
+        scan: { "0%": { transform: "translateY(-100%)" }, "100%": { transform: "translateY(100%)" } },
+        scrollDot: { "0%": { transform: "translateY(0)", opacity: "0" }, "30%": { opacity: "1" }, "100%": { transform: "translateY(10px)", opacity: "0" } }
       },
       animation: {
         marquee: "marquee 30s linear infinite",
         floaty: "floaty 6s ease-in-out infinite",
-        scan: "scan 2.4s linear infinite"
+        scan: "scan 2.4s linear infinite",
+        "scroll-dot": "scrollDot 1.8s ease-in-out infinite"
       }
     }
   },

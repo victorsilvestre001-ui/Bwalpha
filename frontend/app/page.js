@@ -1,6 +1,7 @@
 import Nav from "@/components/landing/Nav";
 import Hero from "@/components/landing/Hero";
-import Ticker from "@/components/landing/Ticker";
+import AoVivo from "@/components/landing/AoVivo";
+import Manifesto from "@/components/landing/Manifesto";
 import Features from "@/components/landing/Features";
 import HowItWorks from "@/components/landing/HowItWorks";
 import Combinado from "@/components/landing/Combinado";
@@ -11,10 +12,11 @@ import Footer from "@/components/landing/Footer";
 
 export default function HomePage() {
   return (
-    <main className="relative min-h-screen overflow-hidden bg-void font-body text-mist">
+    <main className="relative min-h-screen overflow-hidden bg-ink font-tight text-white">
       <Nav />
       <Hero />
-      <Ticker />
+      <AoVivo />
+      <Manifesto />
       <Features />
       <HowItWorks />
       <Combinado />

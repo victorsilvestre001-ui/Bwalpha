@@ -35,10 +35,10 @@ export default function HeroChart() {
       chart = createChart(box.current, {
         autoSize: true,
         localization: { locale: "pt-BR" },
-        layout: { background: { type: ColorType.Solid, color: "#03040A" }, textColor: "#5B6788", fontFamily: "JetBrains Mono, monospace", fontSize: 11, attributionLogo: false },
-        grid: { vertLines: { color: "rgba(27,36,64,0.5)" }, horzLines: { color: "rgba(27,36,64,0.5)" } },
-        rightPriceScale: { borderColor: "#1B2440" },
-        timeScale: { borderColor: "#1B2440", timeVisible: true, secondsVisible: false, rightOffset: 3 },
+        layout: { background: { type: ColorType.Solid, color: "#0A0913" }, textColor: "#6E6A85", fontFamily: "JetBrains Mono, monospace", fontSize: 11, attributionLogo: false },
+        grid: { vertLines: { color: "rgba(31,27,51,0.6)" }, horzLines: { color: "rgba(31,27,51,0.6)" } },
+        rightPriceScale: { borderColor: "#1F1B33" },
+        timeScale: { borderColor: "#1F1B33", timeVisible: true, secondsVisible: false, rightOffset: 3 },
         crosshair: { mode: 0 },
         handleScroll: false,
         handleScale: false
@@ -52,8 +52,8 @@ export default function HeroChart() {
       priceFormat: { type: "price", precision: 2, minMove: 0.01 }
     });
     const line = (color) => chart.addSeries(LineSeries, { color, lineWidth: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
-    const e9 = line("#3D8BFF");
-    const e21 = line("#9B5CFF");
+    const e9 = line("#B9A6FF");
+    const e21 = line("#6A4DE3");
 
     let alive = true, fitted = false;
     async function load() {
@@ -80,16 +80,16 @@ export default function HeroChart() {
   }, []);
 
   return (
-    <div className="panel panel-glow p-5 md:p-6">
+    <div className="rounded-[28px] border border-white/10 bg-ink-card/90 p-4 shadow-[0_40px_120px_-30px_rgba(139,108,246,0.45)] backdrop-blur-xl md:p-6">
       <div className="flex items-center justify-between font-mono text-xs text-mist-dim">
         <span className="flex items-center gap-2">
-          <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-neon opacity-60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-neon" /></span>
+          <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-lilac opacity-60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-lilac" /></span>
           OURO AO VIVO
         </span>
-        <span className="rounded-md bg-void-deep px-2 py-1 text-[11px]">XAUUSD · M5{info ? ` · ${info.price.toFixed(2)}` : ""}</span>
+        <span className="rounded-full bg-white/5 px-3 py-1 text-[11px]">XAUUSD · M5{info ? ` · ${info.price.toFixed(2)}` : ""}</span>
       </div>
 
-      <div className="relative mt-4 h-60 overflow-hidden rounded-xl border border-void-line bg-void-deep md:h-64">
+      <div className="relative mt-4 h-60 overflow-hidden rounded-2xl border border-white/5 bg-ink md:h-72">
         <div ref={box} className="absolute inset-0" />
         {status !== "ok" && (
           <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-mist-faint">
@@ -104,9 +104,9 @@ export default function HeroChart() {
           { k: "RSI 14", v: info?.rsi != null ? Math.round(info.rsi) : "—", c: "text-mist" },
           { k: "MACD", v: info ? (info.macd >= 0 ? "Positivo" : "Negativo") : "—", c: "text-mist" }
         ].map((s) => (
-          <div key={s.k} className="rounded-xl border border-void-line bg-void-deep/60 p-3">
+          <div key={s.k} className="rounded-2xl border border-white/5 bg-white/[0.03] p-3">
             <div className="font-mono text-[10px] uppercase tracking-wider text-mist-faint">{s.k}</div>
-            <div className={`mt-1 font-display text-base font-semibold ${s.c}`}>{s.v}</div>
+            <div className={`mt-1 font-tight text-base font-semibold ${s.c}`}>{s.v}</div>
           </div>
         ))}
       </div>

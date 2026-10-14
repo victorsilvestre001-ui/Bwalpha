@@ -1,12 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Menu, X } from "lucide-react";
+import { ArrowUpRight, X } from "lucide-react";
 import Logo from "@/components/Logo";
 
 const LINKS = [
   { href: "#leitura", label: "O que a IA lê" },
-  { href: "#combinado", label: "O que faz" },
+  { href: "#como-funciona", label: "Como funciona" },
   { href: "#planos", label: "Planos" },
   { href: "#faq", label: "Perguntas" }
 ];
@@ -22,34 +22,46 @@ export default function Nav() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  useEffect(() => {
+    document.body.style.overflow = open ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [open]);
+
   return (
-    <header className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${scrolled ? "border-b border-void-line/80 bg-void/80 backdrop-blur-xl" : "bg-transparent"}`}>
-      <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 md:px-8">
-        <Logo />
-        <div className="hidden items-center gap-8 md:flex">
-          {LINKS.map((l) => (
-            <a key={l.href} href={l.href} className="text-sm text-mist-dim transition-colors hover:text-mist">{l.label}</a>
-          ))}
+    <header className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${scrolled ? "bg-ink/70 backdrop-blur-xl" : "bg-transparent"}`}>
+      <nav className="mx-auto flex h-[72px] max-w-[1400px] items-center justify-between px-4 md:px-8">
+        <Logo tone="lilac" />
+        <div className="flex items-center gap-3">
+          <Link href="/auth" className="hidden font-tight text-sm text-white/70 transition-colors hover:text-white sm:block">Entrar</Link>
+          <Link href="/auth?mode=register" className="btn-pill">
+            Testar grátis <span className="dot"><ArrowUpRight size={15} /></span>
+          </Link>
+          <button onClick={() => setOpen(true)} aria-label="Abrir menu" className="flex h-10 w-10 flex-col items-center justify-center gap-[5px] rounded-full border border-white/10 transition-colors hover:border-lilac">
+            <span className="h-[1.5px] w-4 bg-white" /><span className="h-[1.5px] w-4 bg-white" />
+          </button>
         </div>
-        <div className="hidden items-center gap-3 md:flex">
-          <Link href="/auth" className="text-sm font-medium text-mist-dim transition-colors hover:text-mist">Entrar</Link>
-          <Link href="/auth?mode=register" className="btn-primary !px-5 !py-2.5">Testar grátis</Link>
-        </div>
-        <button className="rounded-lg p-2 text-mist md:hidden" onClick={() => setOpen((v) => !v)} aria-label="Menu">
-          {open ? <X size={22} /> : <Menu size={22} />}
-        </button>
       </nav>
-      {open && (
-        <div className="border-t border-void-line bg-void/95 px-5 pb-6 pt-2 backdrop-blur-xl md:hidden">
-          {LINKS.map((l) => (
-            <a key={l.href} href={l.href} onClick={() => setOpen(false)} className="block py-3 text-mist-dim">{l.label}</a>
+
+      <div className={`fixed inset-0 z-50 bg-ink/95 backdrop-blur-xl transition-opacity duration-500 ${open ? "opacity-100" : "pointer-events-none opacity-0"}`}>
+        <div className="mx-auto flex h-[72px] max-w-[1400px] items-center justify-between px-4 md:px-8">
+          <Logo tone="lilac" />
+          <button onClick={() => setOpen(false)} aria-label="Fechar menu" className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-white hover:border-lilac">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="mx-auto mt-10 max-w-[1400px] px-4 md:px-8">
+          {LINKS.map((l, i) => (
+            <a key={l.href} href={l.href} onClick={() => setOpen(false)} className="group flex items-baseline gap-5 border-b border-white/10 py-4 md:py-5">
+              <span className="font-mono text-xs text-white/40">0{i + 1}</span>
+              <span className="mega text-4xl text-white transition-colors group-hover:text-lilac md:text-6xl">{l.label}</span>
+            </a>
           ))}
-          <div className="mt-3 flex flex-col gap-3">
-            <Link href="/auth" className="btn-ghost">Entrar</Link>
-            <Link href="/auth?mode=register" className="btn-primary">Testar grátis</Link>
+          <div className="mt-10 flex flex-wrap gap-3">
+            <Link href="/auth?mode=register" className="btn-pill">Testar grátis <span className="dot"><ArrowUpRight size={15} /></span></Link>
+            <Link href="/auth" className="btn-line">Entrar</Link>
           </div>
         </div>
-      )}
+      </div>
     </header>
   );
 }
