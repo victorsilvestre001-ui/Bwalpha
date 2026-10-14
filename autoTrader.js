@@ -356,7 +356,8 @@ async function fazGale(r) {
         const minuto = Math.floor(Date.now() / 60_000) * 60_000;
         for (let k = 0; k < 40 && !(st.tickFeito >= minuto); k++) await new Promise((res) => setTimeout(res, 500));
         const bloco = Math.floor(Date.now() / 300_000) * 300_000;
-        if (st.bwLado?.[r.pair] !== r.direction || st.bwQuando?.[r.pair] === bloco) {
+        const ultima = st.bwLado?.[r.pair]; // vazia depois de reiniciar: aí não cancela
+        if ((ultima && ultima !== r.direction) || st.bwQuando?.[r.pair] === bloco) {
             console.log(`ROBO_DEMO: gale cancelado (#${r.id} ${r.pair} ${r.direction}): saiu seta nova (${st.bwLado?.[r.pair]})`);
             return;
         }
