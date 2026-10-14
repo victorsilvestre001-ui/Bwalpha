@@ -350,6 +350,11 @@ async function fazGale(r) {
     const d = r.detalhes || {};
     const g = (d.gale || 0) + 1;
     if (!d.gale_ok || g > GALE_MAX || !d.duracao) return;
+    // Seta do bwalpha virou de lado: não faz gale da direção antiga.
+    if (d.estrategia === 'bw_seta' && st.bwLado?.[r.pair] && st.bwLado[r.pair] !== r.direction) {
+        console.log(`ROBO_DEMO: gale cancelado (#${r.id} ${r.pair} ${r.direction}): a seta virou para ${st.bwLado[r.pair]}`);
+        return;
+    }
     const now = Date.now();
     let expira = Math.floor(now / 60_000) * 60_000 + d.duracao;
     if (expira - now < 40_000) expira += 60_000; // pouco tempo até o fim do minuto: vai para o seguinte
@@ -385,7 +390,10 @@ function avaliaNovas(pair, m, mb) {
     // enviados pelo dono, as setas saem do cruzamento: buffer1 = sma(open,10) - sma(open,40) cruzando buffer2 = wma(buffer1,34)
     // (configuração da tela dele). No início de cada vela M5: cruzou para cima → COMPRA (expira em 5 min); para baixo →
     // VENDA. Gale nas velas M5 seguintes. Um ciclo por vez por ativo. Ativos: AUTO_BW_ATIVOS (padrão XAUUSD,EURJPY).
-    if (mb % 300_000 === 0 && BW_ATIVOS.includes(pair) && !NOVAS_DESLIGADAS.has('bw_padrao5') && !((st.bwAte ||= {})[pair] > mb)) {
+    // Vale sempre a última seta (pedido do dono em 14/10): seta no sentido contrário entra mesmo com um ciclo em
+    // andamento, e o gale do sentido antigo é cancelado (fazGale confere st.bwLado).
+    if (mb % 300_000 === 0 && BW_ATIVOS.includes(pair) && !NOVAS_DESLIGADAS.has('bw_padrao5')) {
+        st.bwAte ||= {}; st.bwLado ||= {};
         const vela5 = (ini) => {
             const p = [0, 1, 2, 3, 4].map((k) => m.get(ini + k * 60_000));
             if (!p.every(Boolean)) return null;
@@ -398,8 +406,9 @@ function avaliaNovas(pair, m, mb) {
             const { getBwalphaIndicator } = require('./marketRoutes');
             const bw = getBwalphaIndicator(velas, { time: mb, open: ultimo.close }, null, { maFast: 10, maSlow: 40, signalPeriod: 34, periodoSR: 15 });
             const lado = bw.cruzamento === 'CALL' ? 'COMPRA' : bw.cruzamento === 'PUT' ? 'VENDA' : null;
-            if (lado) {
+            if (lado && (!(st.bwAte[pair] > mb) || st.bwLado[pair] !== lado)) {
                 st.bwAte[pair] = mb + 15 * 60_000;
+                st.bwLado[pair] = lado;
                 out.push({ estrategia: 'bw_seta', lado, entrada: ultimo.close, expira: mb + 300_000, forca: 1, gale_ok: true, duracao: 300_000 });
             }
         }
