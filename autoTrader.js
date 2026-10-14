@@ -477,7 +477,20 @@ async function lucroDoDia(now) {
         [brDay(now), new Date(Number.isFinite(desde) ? desde : 0)]);
     return rows.reduce((a, r) => a + (r.result === 'acerto' ? Number(r.valor) * (Number(r.detalhes?.payout) || 84) / 100 : -Number(r.valor)), 0);
 }
+// AUTO_WINS_DIA (pedido do dono em 14/10: "só 3 win por dia"): com N WINs no treino no dia (um ciclo ganho no
+// gale conta como 1), não abre novos sinais até o dia seguinte. 0 ou vazio desliga.
+async function winsBatidos(now) {
+    const max = Number(process.env.AUTO_WINS_DIA || 0);
+    if (!max) return false;
+    const desde = Date.parse(process.env.AUTO_META_DESDE || '');
+    const { rows } = await pool.query(`SELECT COUNT(*)::int AS n FROM auto_trades WHERE dia = $1 AND COALESCE(conta, 'treino') = 'treino' AND result = 'acerto' AND created_at >= $2`,
+        [brDay(now), new Date(Number.isFinite(desde) ? desde : 0)]);
+    const chave = `wins|${brDay(now)}|${process.env.AUTO_META_DESDE || ''}`;
+    if (rows[0].n >= max && st.winsDia !== chave) { st.winsDia = chave; console.log(`ROBO_DEMO: ${rows[0].n} WINs no dia (limite ${max}); sem novas entradas até amanhã`); }
+    return rows[0].n >= max;
+}
 async function metaBatida(now) {
+    if (await winsBatidos(now)) return true;
     const meta = Number(process.env.AUTO_META_DIA ?? 400);
     if (!meta) return false;
     const lucro = await lucroDoDia(now);
