@@ -350,6 +350,17 @@ async function fazGale(r) {
     const d = r.detalhes || {};
     const g = (d.gale || 0) + 1;
     if (!d.gale_ok || g > GALE_MAX || !d.duracao) return;
+    // Seta do bwalpha (pedido do dono em 14/10): só uma operação por vez. Espera a leitura das setas deste minuto;
+    // se saiu seta nova (ou a última seta é do outro lado), vale só a seta nova e este gale não é feito.
+    if (d.estrategia === 'bw_seta') {
+        const minuto = Math.floor(Date.now() / 60_000) * 60_000;
+        for (let k = 0; k < 40 && !(st.tickFeito >= minuto); k++) await new Promise((res) => setTimeout(res, 500));
+        const bloco = Math.floor(Date.now() / 300_000) * 300_000;
+        if (st.bwLado?.[r.pair] !== r.direction || st.bwQuando?.[r.pair] === bloco) {
+            console.log(`ROBO_DEMO: gale cancelado (#${r.id} ${r.pair} ${r.direction}): saiu seta nova (${st.bwLado?.[r.pair]})`);
+            return;
+        }
+    }
     const now = Date.now();
     let expira = Math.floor(now / 60_000) * 60_000 + d.duracao;
     if (expira - now < 40_000) expira += 60_000; // pouco tempo até o fim do minuto: vai para o seguinte
@@ -559,6 +570,10 @@ async function tickNovas(now) {
     const mb = Math.floor(now / 60_000) * 60_000;
     if (process.env.AUTO_NOVAS === '0' || mb === st.lastMin || now - mb > 20_000) return;
     st.lastMin = mb;
+    try { await tickNovasMinuto(now, mb, isMarketOpen); } finally { st.tickFeito = mb; }
+}
+
+async function tickNovasMinuto(now, mb, isMarketOpen) {
     if (!st.ready || !isMarketOpen(new Date(mb)) || !(await podeEntrar(now))) return;
     const cands = [];
     for (const pair of PAIRS) {
