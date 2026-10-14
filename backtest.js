@@ -779,6 +779,11 @@ async function run() {
         console.log('BACKTEST_END');
         return;
     }
+    if (process.env.BACKTEST_SOURCE === 'velas') {
+        try { await require('./estudoVelas').runVelas(pool); } catch (err) { console.error('BACKTEST_ERR VELAS:', err.message); }
+        console.log('BACKTEST_END');
+        return;
+    }
     if (process.env.BACKTEST_SOURCE === 'bwalpha') {
         try { await require('./estudoBwalpha').runBwalpha(pool); } catch (err) { console.error('BACKTEST_ERR BWALPHA:', err.message); }
         console.log('BACKTEST_END');
