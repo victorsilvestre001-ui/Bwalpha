@@ -188,6 +188,8 @@
         <div class="dots" id="dots">${slides.map((_, i) => `<button aria-label="Banner ${i + 1}" data-slide="${i}"></button>`).join('')}</div>
       </section>
 
+      ${fxMarquee()}
+
       <section class="section container">
         <div class="cat-circles">${CATS.map(c => {
           const sample = PRODUCTS.find(p => p.cat === c.id);
@@ -202,29 +204,142 @@
         </div>
       </section>
 
+      ${fxWords()}
+
       <section class="section container">
-        <div class="promo-banners">
+        <div class="promo-banners reveal">
           <a class="promo-banner" href="#/promo/leve3pague2" style="background:#e5dbff"><div><p class="eyebrow">Promoção</p><h3>Leve 3,<br>pague 2</h3><p>Em produtos selecionados</p></div><span class="btn btn-dark">Aproveitar</span><img class="promo-img" src="img/promo-leve3.png" alt="" loading="lazy"></a>
           <a class="promo-banner" href="#/c/kits" style="background:#ffe3ec"><div><p class="eyebrow">Kits exclusivos</p><h3>Kits mais<br>baratos</h3><p>Pague menos que comprando separado</p></div><span class="btn btn-dark">Ver kits</span><img class="promo-img" src="img/promo-kits.png" alt="" loading="lazy"></a>
           <a class="promo-banner" href="#/c/perfumes" style="background:#fff3bf"><div><p class="eyebrow">Perfumaria</p><h3>Body splash<br>R$ 24,90</h3><p>10 fragrâncias</p></div><span class="btn btn-dark">Ver fragrâncias</span><img class="promo-img" src="img/promo-splash.png" alt="" loading="lazy"></a>
         </div>
       </section>
 
+      ${fxSpin(best)}
+
       <section class="section container">
-        <div class="section-head"><div><h2>Destaques 🏆</h2><p>Os produtos que escolhemos para você</p></div><a class="link" href="#/ofertas">Ver todos →</a></div>
+        <div class="section-head reveal"><div><h2>Destaques 🏆</h2><p>Os produtos que escolhemos para você</p></div><a class="link" href="#/ofertas">Ver todos →</a></div>
         ${rail(best)}
       </section>
 
       <section class="section section-soft"><div class="container">
-        <div class="section-head"><div><h2>Lançamentos ✨</h2><p>Acabaram de chegar na Élan Beauté</p></div></div>
+        <div class="section-head reveal"><div><h2>Lançamentos ✨</h2><p>Acabaram de chegar na Élan Beauté</p></div></div>
         ${rail(news)}
       </div></section>
 
+      ${fxScatter()}
+
       <section class="section container">
-        <div class="section-head"><div><h2>Compre por marca</h2></div></div>
-        <div class="brands">${brands.map(b => `<a href="#/marca/${encodeURIComponent(b)}">${esc(b)}</a>`).join('')}</div>
-      </section>`;
+        <div class="section-head reveal"><div><h2>Compre por marca</h2></div></div>
+        <div class="brands reveal">${brands.map(b => `<a href="#/marca/${encodeURIComponent(b)}">${esc(b)}</a>`).join('')}</div>
+      </section>
+
+      ${fxCta()}`;
     startSlider();
+    fxStart();
+  }
+
+
+  // ---------- Efeitos de rolagem da home ----------
+  const comFoto = () => PRODUCTS.filter(p => p.img && p.cat !== 'kits');
+  const fxCard = p => `<a class="fx-card" href="#/p/${p.id}"><span class="fx-img">${art(p)}</span><span class="fx-name">${esc(p.name)}</span><b>${brl(p.price)}</b></a>`;
+
+  function fxMarquee() {
+    const list = comFoto();
+    if (!list.length) return '';
+    const meio = Math.ceil(list.length / 2);
+    const linha = (itens, rev) => `<div class="fx-row${rev ? ' rev' : ''}"><div class="fx-track">${[...itens, ...itens].map(fxCard).join('')}</div></div>`;
+    return `<section class="fx-marquee" aria-label="Produtos em destaque">${linha(list.slice(0, meio))}${linha(list.slice(meio), true)}</section>`;
+  }
+
+  function fxWords() {
+    const w = ['Maquiagem', 'Skincare', 'Body splash', 'Kits', 'Sobrancelha', 'Cílios'];
+    const seq = w.map((x, i) => `<span class="${i % 2 ? 'it' : ''}">${x}</span><i>+</i>`).join('');
+    return `<section class="fx-words" aria-hidden="true"><div class="fx-words-track">${seq}${seq}</div></section>`;
+  }
+
+  function fxSpin(base) {
+    const list = [...new Set([...base, ...comFoto()])].filter(p => p.img).slice(0, 12);
+    if (list.length < 4) return '';
+    return `<section class="fx-spin" id="fxSpin" style="--n:${list.length}">
+      <div class="fx-spin-sticky">
+        <div class="fx-ghost" data-ghost>Élan Beauté · Élan Beauté</div>
+        <div class="fx-spin-head"><p class="eyebrow">Os queridinhos</p><h2>Role para<br><em>ver passando.</em></h2></div>
+        <div class="fx-stage">${list.map((p, i) => `<div class="fx-spin-card" data-i="${i}">${fxCard(p)}</div>`).join('')}</div>
+        <div class="fx-progress"><i data-bar></i></div>
+      </div>
+    </section>`;
+  }
+
+  function fxScatter() {
+    const list = comFoto();
+    if (list.length < 9) return '';
+    // posição (left %, top %), largura (px), velocidade do parallax
+    const pos = [[4, 8, 150, .25], [20, 52, 120, -.15], [34, 4, 170, .4], [52, 60, 140, .1], [66, 12, 130, -.3],
+                 [82, 46, 170, .35], [10, 74, 130, .5], [44, 30, 110, -.45], [74, 78, 120, .2], [88, 6, 110, -.2]];
+    const pick = pos.map((_, i) => list[(i * 4 + 3) % list.length]);
+    return `<section class="fx-scatter" id="fxScatter">
+      <div class="fx-ghost fx-ghost-2" data-ghost>na sua nécessaire</div>
+      ${pick.map((p, i) => `<a class="fx-float" href="#/p/${p.id}" data-speed="${pos[i][3]}" style="left:${pos[i][0]}%;top:${pos[i][1]}%;width:${pos[i][2]}px">${art(p)}</a>`).join('')}
+      <div class="fx-scatter-copy reveal"><h2>Tudo o que a sua<br><em>nécessaire precisa.</em></h2><p>Maquiagem, skincare e perfumaria com 5% OFF no Pix e frete grátis acima de R$ 199.</p><a class="btn btn-primary btn-lg" href="#/ofertas">Ver todos os produtos →</a></div>
+    </section>`;
+  }
+
+  function fxCta() {
+    return `<section class="fx-cta"><div class="container reveal">
+      <p class="eyebrow">Monte a sua make</p>
+      <h2>O próximo passo<br><em>é um kit.</em></h2>
+      <p>Kits com os nossos produtos mais vendidos, mais baratos do que comprando separado.</p>
+      <a class="btn btn-primary btn-lg" href="#/c/kits">Ver os kits →</a>
+    </div></section>`;
+  }
+
+  const semMovimento = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let fxLigado = false, revealObs = null;
+  function fxStart() {
+    if (!semMovimento && 'IntersectionObserver' in window) {
+      document.documentElement.classList.add('fx-anim');
+      revealObs = revealObs || new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); revealObs.unobserve(e.target); } }), { threshold: .15 });
+      $$('.reveal').forEach(el => revealObs.observe(el));
+    }
+    if (semMovimento || fxLigado) { fxFrame(); return; }
+    fxLigado = true;
+    let pedido = false;
+    const pedir = () => { if (!pedido) { pedido = true; requestAnimationFrame(() => { pedido = false; fxFrame(); }); } };
+    window.addEventListener('scroll', pedir, { passive: true });
+    window.addEventListener('resize', pedir);
+    fxFrame();
+  }
+
+  function fxFrame() {
+    const vh = window.innerHeight;
+    const spin = $('#fxSpin');
+    if (spin && !semMovimento) {
+      const r = spin.getBoundingClientRect();
+      const p = Math.min(1, Math.max(0, -r.top / (r.height - vh)));
+      const cards = $$('.fx-spin-card', spin);
+      const n = cards.length;
+      const passo = Math.min(300, window.innerWidth * .26);
+      cards.forEach((c, i) => {
+        const d = i - p * (n - 1);
+        const ad = Math.abs(d);
+        const rot = Math.max(-3, Math.min(3, d)) * -24;
+        c.style.transform = `translate(-50%, -50%) translateX(${d * passo}px) translateZ(${-ad * 140}px) rotateY(${rot}deg)`;
+        c.style.opacity = Math.max(0, 1 - Math.max(0, ad - 2.2) * .6);
+        c.style.zIndex = 100 - Math.round(ad * 10);
+        c.classList.toggle('on', ad < .5);
+      });
+      const g = $('[data-ghost]', spin); if (g) g.style.transform = `translateX(${-p * 45}%)`;
+      const bar = $('[data-bar]', spin); if (bar) bar.style.transform = `scaleX(${p})`;
+    }
+    const sc = $('#fxScatter');
+    if (sc && !semMovimento) {
+      const r = sc.getBoundingClientRect();
+      if (r.bottom > 0 && r.top < vh) {
+        const t = (vh / 2) - (r.top + r.height / 2);
+        $$('.fx-float', sc).forEach(el => { el.style.transform = `translateY(${t * +el.dataset.speed}px)`; });
+        const g = $('[data-ghost]', sc); if (g) g.style.transform = `translateX(${t * .15}px)`;
+      }
+    }
   }
 
   function startSlider() {
