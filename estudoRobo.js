@@ -11,7 +11,7 @@
 // Fontes: ROBO_FONTE=twelve (Twelve Data, ~3 meses), exnova (corretora, desde 29/09) ou ambos (padrão).
 // BACKTEST_SOURCE=robo; logs ROBO_*.
 const MIN = 60_000, M5 = 5 * MIN, H = 3600_000, DIA = 24 * H;
-const VALOR = 500, MULT = [1, 2.2, 4.84];
+const VALOR = Number(process.env.ROBO_VALOR) || 500, MULT = [1, 2.2, 4.84];
 const PAYOUT = { XAUUSD: 0.83, EURJPY: 0.84 };
 const OPTS = { maFast: 10, maSlow: 40, signalPeriod: 34, periodoSR: 15 };
 const brtMin = (t) => { const d = new Date(t - 3 * H); return d.getUTCHours() * 60 + d.getUTCMinutes(); };
@@ -56,7 +56,8 @@ function setasDoAtivo(pair, m1, getBwalphaIndicator) {
 // Junta os ativos em ordem de tempo e aplica as regras do robô. Cada seta nova abre um ciclo; uma seta nova do mesmo
 // ativo no bloco de um gale cancela esse gale (o ciclo termina ali). Empate devolve o valor e encerra o ciclo.
 // O limite conta os WINs já fechados antes da seta (um ciclo de outro ativo ainda aberto não bloqueia).
-function simula(ativos, limiteWins) {
+// maxCiclos: no máximo N ciclos (setas) por dia, ganhando ou perdendo (0 = sem esse limite).
+function simula(ativos, limiteWins, maxCiclos = 0) {
     const ops = [];
     for (const [pair, { eventos, res }] of Object.entries(ativos)) {
         const seta = new Set(eventos.map((e) => e.t));
@@ -67,6 +68,7 @@ function simula(ativos, limiteWins) {
     for (const o of ops) {
         const dia = diaRobo(o.t);
         if (limiteWins && (winsEm[dia] || []).filter((x) => x <= o.t).length >= limiteWins) continue;
+        if (maxCiclos && (dias[dia] || []).length >= maxCiclos) continue;
         let lucro = 0, ganhou = false, cancelado = false, g = 0;
         for (; g <= 2; g++) {
             const b = o.t + g * M5;
@@ -122,8 +124,13 @@ async function runRobo(pool, { fetchLongHistory }) {
             ativos[pair] = setasDoAtivo(pair, m1, getBwalphaIndicator);
             console.log(`ROBO_SETAS ${fonte} ${pair} ${ativos[pair].eventos.length}`);
         }
-        resumo(`${fonte}|limite3`, simula(ativos, 3));
-        resumo(`${fonte}|sem_limite`, simula(ativos, 0));
+        // ROBO_CENARIOS="wins3,wins1,ciclo1,livre" escolhe os cenários (padrão: limite de 3 WINs e sem limite).
+        const cen = (process.env.ROBO_CENARIOS || 'wins3,livre').split(',');
+        const v = `v${VALOR}`;
+        if (cen.includes('wins3')) resumo(`${fonte}|${v}|limite3`, simula(ativos, 3));
+        if (cen.includes('wins1')) resumo(`${fonte}|${v}|limite1win`, simula(ativos, 1));
+        if (cen.includes('ciclo1')) resumo(`${fonte}|${v}|1ciclo`, simula(ativos, 0, 1));
+        if (cen.includes('livre')) resumo(`${fonte}|${v}|sem_limite`, simula(ativos, 0));
     }
 }
 
