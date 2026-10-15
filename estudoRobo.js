@@ -48,7 +48,20 @@ function setasDoAtivo(pair, m1, getBwalphaIndicator) {
         if (!ultimo || (pair === 'EURJPY' && !euroOk(mb))) continue;
         const bw = getBwalphaIndicator(fechadas, { time: mb, open: ultimo.close }, null, OPTS);
         const lado = bw.cruzamento === 'CALL' ? 1 : bw.cruzamento === 'PUT' ? -1 : 0;
-        if (lado && (!(ate > mb) || ladoAtual !== lado)) { ate = mb + 15 * MIN; ladoAtual = lado; eventos.push({ t: mb, lado }); }
+        if (lado && (!(ate > mb) || ladoAtual !== lado)) {
+            ate = mb + 15 * MIN; ladoAtual = lado;
+            // Leituras para os filtros da "armadilha" (print do dono em 15/10: COMPRA logo depois de uma VENDA, abaixo da
+            // média e depois de uma vela vermelha forte): tendência pela média de 40 fechamentos M5, seta contrária nos
+            // últimos 30 min e corpo da última vela contra a seta comparado à média dos 20 corpos anteriores.
+            const ult40 = fechadas.slice(-40), media = ult40.reduce((a, c) => a + c.close, 0) / ult40.length;
+            const corpos = fechadas.slice(-21, -1).map((c) => Math.abs(c.close - c.open)), mc = corpos.reduce((a, x) => a + x, 0) / (corpos.length || 1);
+            const u = fechadas.at(-1), contraCorpo = (u.close - u.open) * -lado;
+            const ant = eventos.at(-1);
+            eventos.push({ t: mb, lado,
+                aFavorMedia: (ultimo.close - media) * lado > 0,
+                contrariaRecente: !!ant && ant.lado !== lado && mb - ant.t <= 30 * MIN,
+                velaContraForte: contraCorpo > 0 && contraCorpo >= 1.5 * mc });
+        }
     }
     return { eventos, res };
 }
@@ -57,11 +70,12 @@ function setasDoAtivo(pair, m1, getBwalphaIndicator) {
 // ativo no bloco de um gale cancela esse gale (o ciclo termina ali). Empate devolve o valor e encerra o ciclo.
 // O limite conta os WINs já fechados antes da seta (um ciclo de outro ativo ainda aberto não bloqueia).
 // maxCiclos: no máximo N ciclos (setas) por dia, ganhando ou perdendo (0 = sem esse limite).
-function simula(ativos, limiteWins, maxCiclos = 0) {
+function simula(ativos, limiteWins, maxCiclos = 0, filtro = null) {
     const ops = [];
     for (const [pair, { eventos, res }] of Object.entries(ativos)) {
         const seta = new Set(eventos.map((e) => e.t));
-        for (const e of eventos) ops.push({ pair, t: e.t, lado: e.lado, seta, res });
+        // A seta filtrada não entra, mas continua cancelando o gale de um ciclo em andamento (seta continua no conjunto).
+        for (const e of eventos) if (!filtro || filtro(e)) ops.push({ pair, t: e.t, lado: e.lado, seta, res });
     }
     ops.sort((a, b) => a.t - b.t);
     const dias = {}, ciclos = [], winsEm = {}; // winsEm[dia] = horários em que os ciclos ganharam
@@ -131,6 +145,20 @@ async function runRobo(pool, { fetchLongHistory }) {
         if (cen.includes('wins1')) resumo(`${fonte}|${v}|limite1win`, simula(ativos, 1));
         if (cen.includes('ciclo1')) resumo(`${fonte}|${v}|1ciclo`, simula(ativos, 0, 1));
         if (cen.includes('livre')) resumo(`${fonte}|${v}|sem_limite`, simula(ativos, 0));
+        // ROBO_FILTROS=1: cada filtro da armadilha com o limite de 3 WINs e com o de 1 WIN.
+        if (process.env.ROBO_FILTROS === '1') {
+            const F = {
+                media: (e) => e.aFavorMedia,
+                sem_contraria: (e) => !e.contrariaRecente,
+                sem_vela_forte: (e) => !e.velaContraForte,
+                media_e_sem_contraria: (e) => e.aFavorMedia && !e.contrariaRecente,
+                todos: (e) => e.aFavorMedia && !e.contrariaRecente && !e.velaContraForte
+            };
+            for (const [nome, f] of Object.entries(F)) {
+                resumo(`${fonte}|${v}|limite3|${nome}`, simula(ativos, 3, 0, f));
+                resumo(`${fonte}|${v}|limite1win|${nome}`, simula(ativos, 1, 0, f));
+            }
+        }
     }
 }
 
