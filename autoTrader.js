@@ -479,14 +479,19 @@ async function lucroDoDia(now) {
 }
 // AUTO_WINS_DIA (pedido do dono em 14/10: "só 3 win por dia"): com N WINs no treino no dia (um ciclo ganho no
 // gale conta como 1), não abre novos sinais até o dia seguinte. 0 ou vazio desliga.
+// O "dia" dos WINs começa às AUTO_WINS_INICIO_HORA de Brasília (padrão 22h, pedido de 14/10: religar todo dia
+// depois das 22h, quando entram as setas do EURJPY), e não à meia-noite.
 async function winsBatidos(now) {
     const max = Number(process.env.AUTO_WINS_DIA || 0);
     if (!max) return false;
+    const hora = Number(process.env.AUTO_WINS_INICIO_HORA ?? 22);
+    const brt = now - 3 * 3600_000, inicioHoje = Math.floor(brt / 86_400_000) * 86_400_000 + hora * 3600_000;
+    const inicio = (brt >= inicioHoje ? inicioHoje : inicioHoje - 86_400_000) + 3 * 3600_000;
     const desde = Date.parse(process.env.AUTO_META_DESDE || '');
-    const { rows } = await pool.query(`SELECT COUNT(*)::int AS n FROM auto_trades WHERE dia = $1 AND COALESCE(conta, 'treino') = 'treino' AND result = 'acerto' AND created_at >= $2`,
-        [brDay(now), new Date(Number.isFinite(desde) ? desde : 0)]);
-    const chave = `wins|${brDay(now)}|${process.env.AUTO_META_DESDE || ''}`;
-    if (rows[0].n >= max && st.winsDia !== chave) { st.winsDia = chave; console.log(`ROBO_DEMO: ${rows[0].n} WINs no dia (limite ${max}); sem novas entradas até amanhã`); }
+    const { rows } = await pool.query(`SELECT COUNT(*)::int AS n FROM auto_trades WHERE COALESCE(conta, 'treino') = 'treino' AND result = 'acerto' AND created_at >= $1`,
+        [new Date(Math.max(inicio, Number.isFinite(desde) ? desde : 0))]);
+    const chave = `wins|${inicio}|${process.env.AUTO_META_DESDE || ''}`;
+    if (rows[0].n >= max && st.winsDia !== chave) { st.winsDia = chave; console.log(`ROBO_DEMO: ${rows[0].n} WINs desde as ${hora}h (limite ${max}); sem novas entradas até as ${hora}h`); }
     return rows[0].n >= max;
 }
 async function metaBatida(now) {
