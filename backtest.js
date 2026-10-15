@@ -789,6 +789,11 @@ async function run() {
         console.log('BACKTEST_END');
         return;
     }
+    if (process.env.BACKTEST_SOURCE === 'robo') {
+        try { await require('./estudoRobo').runRobo(pool, { fetchLongHistory }); } catch (err) { console.error('BACKTEST_ERR ROBO:', err.message); }
+        console.log('BACKTEST_END');
+        return;
+    }
     if (process.env.BACKTEST_SOURCE === 'gale') {
         try { await require('./estudoGale').runGale(pool, { fetchLongHistory }); } catch (err) { console.error('BACKTEST_ERR GALE:', err.message); }
         console.log('BACKTEST_END');
