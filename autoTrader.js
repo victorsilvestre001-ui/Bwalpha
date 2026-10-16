@@ -606,6 +606,8 @@ async function tickNovasMinuto(now, mb, isMarketOpen) {
             for (const e of avaliaNovas(pair, m, mb)) cands.push({ pair, ...e });
         } catch (err) { console.error(`ROBO_DEMO: erro nas estratégias novas ${pair}:`, err.message); }
     }
+    // AUTO_SO_BW=1 (pedido do dono em 16/10: "só quero deixar a estratégia BwAlpha"): só a seta do bwalpha entra.
+    if (SO_BW) cands.splice(0, cands.length, ...cands.filter((c) => c.estrategia === 'bw_seta'));
     if (!cands.length) return;
     // Horários fixos e pico do ouro entram sempre; das outras, só a mais forte do minuto.
     const sempre = (c) => c.estrategia === 'horario_fixo' || c.estrategia === 'pico_ouro' || c.estrategia === 'bw_seta';
@@ -627,7 +629,9 @@ async function tick() {
     }
 }
 
+const SO_BW = process.env.AUTO_SO_BW === '1';
 async function tickRegras(now, bucket, isMarketOpen, horarioNoticiaEUA) {
+    if (SO_BW) return; // só a seta do bwalpha (as regras 1 e 2 ficam desligadas)
     // Só nos primeiros 20 s do candle, uma vez por candle.
     if (bucket === st.lastBucket || now - bucket > 20_000) return;
     st.lastBucket = bucket;
@@ -673,7 +677,7 @@ async function start() {
     if (process.env.AUTO_TRADE !== '1') return;
     if (!process.env.EXNOVA_EMAIL || !process.env.EXNOVA_PASSWORD) return console.error('ROBO_DEMO: faltam EXNOVA_EMAIL/EXNOVA_PASSWORD.');
     try { await ensureTable(); } catch (err) { return console.error('ROBO_DEMO: erro ao criar a tabela:', err.message); }
-    console.log(`ROBO_DEMO: ligado (máx. ${MAX_POR_DIA} entradas por dia, valor ${VALOR}, ${REAL ? `REAL ligado (${REAL_MAX_DIA}x ${VALOR_REAL}/dia, para com ${REAL_STOP_ERROS} erros)` : 'só saldo de treino'}, regras extras: ${REGRAS_ATIVAS.join(',') || 'nenhuma'}, novas: ${process.env.AUTO_NOVAS === '0' ? 'desligadas' : Object.keys(NOVAS_ATIVOS).join(',')})`);
+    console.log(`ROBO_DEMO: ligado${SO_BW ? ' (SÓ a seta do bwalpha)' : ''} (máx. ${MAX_POR_DIA} entradas por dia, valor ${VALOR}, ${REAL ? `REAL ligado (${REAL_MAX_DIA}x ${VALOR_REAL}/dia, para com ${REAL_STOP_ERROS} erros)` : 'só saldo de treino'}, regras extras: ${REGRAS_ATIVAS.join(',') || 'nenhuma'}, novas: ${process.env.AUTO_NOVAS === '0' ? 'desligadas' : Object.keys(NOVAS_ATIVOS).join(',')})`);
     connect(st);
     if (REAL) {
         if (process.env.EXNOVA_REAL_EMAIL && process.env.EXNOVA_REAL_PASSWORD) connect(sr);
