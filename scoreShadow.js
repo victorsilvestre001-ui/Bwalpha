@@ -410,6 +410,7 @@ async function tickPistas(now) {
         const { rows } = await pool.query(`SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 AND time > NOW() - ($2::int * INTERVAL '1 hour') ORDER BY time`,
             [p.ativo, hist ? 24 * 40 : 4]);
         const m1 = rows.slice(0, -1).map((r) => ({ time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }));
+        if (m1.length < 20) continue; // mercado fechado (fim de semana): sem candles nas últimas horas
         const atr = require('./mineradorBacktest').prep(m1).atr;
         let n = 0;
         for (let i = 15; i + p.n < m1.length; i++) {
