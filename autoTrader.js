@@ -408,7 +408,9 @@ function avaliaNovas(pair, m, mb) {
         };
         // Pula as velas que não existem (pausa diária do Ouro, fim de semana), como o gráfico da corretora.
         const velas = [];
-        for (let k = 250; k >= 1; k--) { const c = vela5(mb - k * 300_000); if (c) velas.push(c); }
+        // Volta até ~100 h: depois do fim de semana (48 h sem candles) a seta já sai com as velas de sexta, como no
+        // gráfico da corretora, em vez de esperar 80 velas novas (~7 h) na segunda.
+        for (let k = 1200; k >= 1; k--) { const c = vela5(mb - k * 300_000); if (c) velas.push(c); }
         velas.splice(0, Math.max(0, velas.length - 100));
         const ultimo = m.get(mb - 60_000);
         if (velas.length >= 80 && ultimo && velas.at(-1).time === mb - 300_000) {
