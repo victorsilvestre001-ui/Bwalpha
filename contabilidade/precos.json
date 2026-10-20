@@ -1,0 +1,26 @@
+{
+  "escritorio": {
+    "nome": "Sua Contabilidade",
+    "whatsapp": "5511999999999",
+    "email": "contato@suacontabilidade.com.br",
+    "descontoPacotePct": 15
+  },
+  "servicos": {
+    "diagnostico_completo": { "nome": "Levantamento completo de débitos (e-CAC, PGFN, FGTS, estado e prefeitura)", "valor": 197, "prazo": "2 dias úteis" },
+    "certidoes": { "nome": "Emissão e análise das certidões negativas (federal, FGTS, trabalhista, estadual, municipal)", "valor": 149, "prazo": "1 dia útil" },
+    "regularizar_inapto": { "nome": "Regularização de CNPJ inapto (entrega das declarações omitidas)", "valor": 890, "prazo": "5 a 10 dias úteis" },
+    "regularizar_suspenso": { "nome": "Regularização de CNPJ suspenso", "valor": 690, "prazo": "5 a 10 dias úteis" },
+    "declaracoes_atraso": { "nome": "Entrega de declarações em atraso (por declaração)", "valor": 180, "prazo": "3 dias úteis" },
+    "transacao_pgfn": { "nome": "Negociação de dívida ativa na PGFN (transação com desconto de juros e multa)", "valor": 590, "prazo": "5 dias úteis" },
+    "parcelamento": { "nome": "Parcelamento de débitos (Receita / Simples Nacional)", "valor": 349, "prazo": "2 dias úteis" },
+    "reopcao_simples": { "nome": "Volta ao Simples Nacional (regularização + pedido de opção em janeiro)", "valor": 490, "prazo": "até o fim de janeiro" },
+    "das_mei_atraso": { "nome": "Regularização de DAS-MEI em atraso (cálculo, guias e parcelamento)", "valor": 149, "prazo": "1 dia útil" },
+    "dasn_simei": { "nome": "Declaração anual do MEI (DASN-SIMEI)", "valor": 99, "prazo": "1 dia útil" },
+    "migracao_mei_me": { "nome": "Migração de MEI para Microempresa (ME)", "valor": 790, "prazo": "10 dias úteis" },
+    "defis": { "nome": "Declaração anual do Simples (DEFIS)", "valor": 249, "prazo": "3 dias úteis" },
+    "baixa_empresa": { "nome": "Encerramento (baixa) de empresa com pendências", "valor": 990, "prazo": "15 a 30 dias" },
+    "mensal_mei": { "nome": "Acompanhamento mensal MEI", "valor": 79, "mensal": true },
+    "mensal_simples": { "nome": "Contabilidade mensal Simples Nacional", "valor": 449, "mensal": true },
+    "mensal_presumido": { "nome": "Contabilidade mensal Lucro Presumido / Real", "valor": 1190, "mensal": true }
+  }
+}

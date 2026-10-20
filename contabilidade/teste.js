@@ -1,0 +1,32 @@
+// Testes rápidos: node teste.js
+const assert = require('assert');
+const cnpj = require('./cnpj');
+const { diagnostico, orcamento } = require('./diagnostico');
+const { DEMOS } = require('./consulta');
+const tabela = require('./precos.json');
+
+assert(cnpj.valido('11.222.333/0001-81'));
+assert(cnpj.valido('12.ABC.345/01DE-35'), 'CNPJ alfanumérico (exemplo oficial da Receita)');
+assert(!cnpj.valido('11.222.333/0001-82'));
+assert(!cnpj.valido('00.000.000/0000-00'));
+
+const hoje = new Date('2026-10-20');
+const inapta = diagnostico(DEMOS['11222333000181'], hoje);
+assert.strictEqual(inapta.regime, 'Lucro Presumido / Real');
+const titulos = inapta.itens.map((i) => i.titulo);
+assert(titulos.includes('CNPJ INAPTO na Receita Federal'));
+assert(titulos.includes('Excluída do Simples Nacional'));
+assert(!titulos.some((t) => t.includes('Lucro Presumido')), 'empresa inapta não recebe rotina de empresa ativa');
+
+const mei = diagnostico(DEMOS['12345678000195'], hoje);
+assert.strictEqual(mei.regime, 'MEI');
+assert(mei.itens.some((i) => i.servico === 'dasn_simei'));
+
+for (const i of [...inapta.itens, ...mei.itens]) assert(tabela.servicos[i.servico], `serviço sem preço: ${i.servico}`);
+
+const o = orcamento(inapta.itens, tabela);
+const ids = o.servicos.map((s) => s.id);
+assert.strictEqual(new Set(ids).size, ids.length, 'serviço repetido no orçamento');
+assert.strictEqual(o.totalPacote, o.totalAvulso * 0.85);
+
+console.log('ok');

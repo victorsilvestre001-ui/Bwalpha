@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Consulta de Empresa</title>
+<meta name="description" content="Digite o CNPJ e veja o que a sua empresa deve, o que precisa fazer para ficar em dia e quanto custa resolver.">
+<style>
+  :root {
+    --bg: #f5f7fa; --card: #ffffff; --texto: #1d2733; --suave: #5b6878; --borda: #e2e7ee;
+    --marca: #0f6e5c; --marca-escura: #0a5446; --marca-clara: #e3f3ef;
+    --urgente: #c0392b; --urgente-bg: #fdecea; --atencao: #b7791f; --atencao-bg: #fdf5e6;
+    --rotina: #2b6cb0; --rotina-bg: #eaf2fb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #11161c; --card: #1a2129; --texto: #e6ebf0; --suave: #9aa7b5; --borda: #2a333d;
+      --marca: #2bb596; --marca-escura: #239c81; --marca-clara: #16302a;
+      --urgente: #f0766a; --urgente-bg: #3a1e1c; --atencao: #e5b25a; --atencao-bg: #352a17;
+      --rotina: #6fa8e8; --rotina-bg: #182a3e;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--texto); line-height: 1.5; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
+  header { background: var(--marca); color: #fff; padding: 48px 0 72px; }
+  header h1 { margin: 0 0 8px; font-size: clamp(1.6rem, 4vw, 2.3rem); }
+  header p { margin: 0; opacity: .9; max-width: 620px; }
+  .busca { background: var(--card); border-radius: 14px; padding: 20px; margin-top: -44px; box-shadow: 0 8px 30px rgba(0,0,0,.08); display: flex; gap: 10px; flex-wrap: wrap; }
+  .busca input { flex: 1 1 240px; font-size: 1.15rem; padding: 14px 16px; border: 2px solid var(--borda); border-radius: 10px; background: var(--bg); color: var(--texto); letter-spacing: .5px; }
+  .busca input:focus { outline: none; border-color: var(--marca); }
+  button { font: inherit; cursor: pointer; border: 0; border-radius: 10px; }
+  .btn { background: var(--marca); color: #fff; font-weight: 600; padding: 14px 24px; }
+  .btn:hover { background: var(--marca-escura); }
+  .btn:disabled { opacity: .6; cursor: wait; }
+  .dica { width: 100%; font-size: .85rem; color: var(--suave); }
+  .dica a { color: var(--marca); cursor: pointer; }
+  .erro { margin-top: 16px; padding: 14px 16px; border-radius: 10px; background: var(--urgente-bg); color: var(--urgente); }
+  .card { background: var(--card); border: 1px solid var(--borda); border-radius: 14px; padding: 20px; margin-top: 20px; }
+  .card h2 { margin: 0 0 12px; font-size: 1.15rem; }
+  .empresa-topo { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+  .empresa-topo h2 { margin: 0; }
+  .selo { display: inline-block; padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: .85rem; }
+  .selo.ok { background: var(--marca-clara); color: var(--marca); }
+  .selo.ruim { background: var(--urgente-bg); color: var(--urgente); }
+  .dados { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px 20px; margin-top: 14px; font-size: .92rem; }
+  .dados div span { display: block; color: var(--suave); font-size: .78rem; text-transform: uppercase; letter-spacing: .4px; }
+  .resumo { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 20px; }
+  .resumo div { border-radius: 12px; padding: 14px; text-align: center; }
+  .resumo b { display: block; font-size: 1.8rem; }
+  .r-urgente { background: var(--urgente-bg); color: var(--urgente); }
+  .r-atencao { background: var(--atencao-bg); color: var(--atencao); }
+  .r-rotina { background: var(--rotina-bg); color: var(--rotina); }
+  .item { display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: start; padding: 16px 0; border-top: 1px solid var(--borda); }
+  .item:first-of-type { border-top: 0; }
+  .item input { width: 20px; height: 20px; margin-top: 3px; accent-color: var(--marca); }
+  .item h3 { margin: 0 0 4px; font-size: 1rem; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .item p { margin: 0; color: var(--suave); font-size: .92rem; }
+  .item a { color: var(--marca); font-size: .85rem; }
+  .tag { font-size: .7rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; }
+  .tag.urgente { background: var(--urgente-bg); color: var(--urgente); }
+  .tag.atencao { background: var(--atencao-bg); color: var(--atencao); }
+  .tag.rotina { background: var(--rotina-bg); color: var(--rotina); }
+  .preco { text-align: right; max-width: 240px; }
+  .preco b { white-space: nowrap; }
+  .preco b { display: block; color: var(--marca); font-size: 1.1rem; }
+  .preco small { color: var(--suave); }
+  .total { position: sticky; bottom: 0; background: var(--card); border-top: 3px solid var(--marca); border-radius: 14px 14px 0 0; padding: 16px 20px; margin-top: 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; box-shadow: 0 -6px 24px rgba(0,0,0,.08); }
+  .total .de { text-decoration: line-through; color: var(--suave); font-size: .9rem; }
+  .total .por { font-size: 1.6rem; font-weight: 800; color: var(--marca); }
+  .total small { display: block; color: var(--suave); }
+  dialog { border: 0; border-radius: 14px; padding: 24px; width: min(420px, calc(100% - 32px)); background: var(--card); color: var(--texto); }
+  dialog::backdrop { background: rgba(0,0,0,.5); }
+  dialog label { display: block; margin: 12px 0 4px; font-size: .9rem; }
+  dialog input { width: 100%; padding: 12px; border: 1px solid var(--borda); border-radius: 8px; font: inherit; background: var(--bg); color: var(--texto); }
+  .linha-btns { display: flex; gap: 10px; margin-top: 18px; justify-content: flex-end; }
+  .sec { background: transparent; color: var(--suave); padding: 14px 16px; }
+  footer { color: var(--suave); font-size: .8rem; padding: 32px 0 120px; }
+  .carregando { text-align: center; color: var(--suave); padding: 30px; }
+  @media (max-width: 560px) {
+    .resumo b { font-size: 1.4rem; }
+    .item { grid-template-columns: auto 1fr; }
+    .preco { grid-column: 2; text-align: left; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1 id="titulo">Sua empresa está em dia?</h1>
+    <p>Digite o CNPJ e veja na hora a situação na Receita, o que a empresa precisa fazer para ficar regular e quanto custa resolver cada coisa com a gente.</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <form class="busca" id="form">
+    <input id="cnpj" inputmode="text" autocomplete="off" placeholder="00.000.000/0000-00" maxlength="18" aria-label="CNPJ">
+    <button class="btn" id="btnBuscar">Consultar grátis</button>
+    <div class="dica">Quer ver um exemplo? <a data-demo="11222333000181">Empresa com CNPJ inapto</a> · <a data-demo="12345678000195">MEI ativo</a></div>
+  </form>
+  <div id="saida"></div>
+  <footer>
+    Os dados cadastrais vêm da base pública da Receita Federal. Os valores exatos de débitos (Receita, PGFN, FGTS, estado e prefeitura) só podem ser levantados com acesso ao e-CAC por procuração — fazemos isso no levantamento completo.
+  </footer>
+</main>
+
+<dialog id="dlg">
+  <form id="formContato" method="dialog">
+    <h2 style="margin-top:0">Quero resolver</h2>
+    <p style="color:var(--suave);margin:0">Deixe seu contato. Vamos abrir o WhatsApp com o resumo pronto.</p>
+    <label for="nome">Seu nome</label>
+    <input id="nome" required maxlength="120">
+    <label for="tel">WhatsApp</label>
+    <input id="tel" required inputmode="tel" placeholder="(11) 99999-9999" maxlength="20">
+    <div class="linha-btns">
+      <button type="button" class="sec" id="cancelar">Cancelar</button>
+      <button class="btn" id="enviar">Enviar</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const brl = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const data = (d) => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—';
+const ROTULO = { urgente: 'Urgente', atencao: 'Verificar', rotina: 'Rotina' };
+let atual = null;
+
+function mascara(v) {
+  const c = v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 14);
+  return c.replace(/^(\w{2})(\w)/, '$1.$2').replace(/^(\w{2})\.(\w{3})(\w)/, '$1.$2.$3')
+    .replace(/\.(\w{3})(\w)/, '.$1/$2').replace(/(\w{4})(\w)/, '$1-$2');
+}
+$('#cnpj').addEventListener('input', (e) => { e.target.value = mascara(e.target.value); });
+document.querySelectorAll('[data-demo]').forEach((a) => a.addEventListener('click', () => {
+  $('#cnpj').value = mascara(a.dataset.demo); consultar();
+}));
+$('#form').addEventListener('submit', (e) => { e.preventDefault(); consultar(); });
+
+async function consultar() {
+  const c = $('#cnpj').value.replace(/[^A-Za-z0-9]/g, '');
+  if (c.length !== 14) { $('#saida').innerHTML = '<div class="erro">Digite os 14 caracteres do CNPJ.</div>'; return; }
+  $('#btnBuscar').disabled = true;
+  $('#saida').innerHTML = '<div class="carregando">Consultando a Receita Federal…</div>';
+  try {
+    const r = await fetch('/api/empresa/' + c);
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.erro || 'Erro na consulta');
+    atual = j;
+    render(j);
+  } catch (err) {
+    $('#saida').innerHTML = `<div class="erro">${esc(err.message)}</div>`;
+  } finally {
+    $('#btnBuscar').disabled = false;
+  }
+}
+
+function render({ empresa: e, orcamento: o, escritorio }) {
+  if (escritorio.nome) document.title = escritorio.nome + ' · Consulta de Empresa';
+  const conta = (g) => o.itens.filter((i) => i.gravidade === g).length;
+  const ativa = e.situacao === 'ATIVA';
+  const itens = o.itens.map((i, n) => `
+    <label class="item">
+      <input type="checkbox" data-servico="${esc(i.preco?.id || '')}" ${i.preco && i.gravidade !== 'rotina' ? 'checked' : ''} ${i.preco ? '' : 'disabled'}>
+      <div>
+        <h3>${esc(i.titulo)} <span class="tag ${i.gravidade}">${ROTULO[i.gravidade]}</span></h3>
+        <p>${esc(i.explicacao)}</p>
+        ${i.link ? `<a href="${esc(i.link)}" target="_blank" rel="noopener">Conferir no site oficial ↗</a>` : ''}
+      </div>
+      <div class="preco">${i.preco ? `<b>${brl(i.preco.valor)}${i.preco.mensal ? '<small>/mês</small>' : ''}</b><small>${esc(i.preco.nome)}</small>${i.preco.prazo ? `<br><small>Prazo: ${esc(i.preco.prazo)}</small>` : ''}` : ''}</div>
+    </label>`).join('');
+
+  $('#saida').innerHTML = `
+    <section class="card">
+      <div class="empresa-topo">
+        <div>
+          <h2>${esc(e.razaoSocial)}</h2>
+          <div style="color:var(--suave)">${esc(e.nomeFantasia)} ${e.nomeFantasia ? '·' : ''} CNPJ ${esc(e.cnpjFormatado)}</div>
+        </div>
+        <span class="selo ${ativa ? 'ok' : 'ruim'}">${esc(e.situacao || 'SEM SITUAÇÃO')}</span>
+      </div>
+      <div class="dados">
+        <div><span>Regime</span>${esc(e.regime)}</div>
+        <div><span>Porte</span>${esc(e.porte || '—')}</div>
+        <div><span>Abertura</span>${data(e.abertura)}</div>
+        <div><span>Cidade</span>${esc(e.municipio)}${e.uf ? ' / ' + esc(e.uf) : ''}</div>
+        <div><span>Atividade principal</span>${esc(e.atividade || '—')}</div>
+        <div><span>Natureza jurídica</span>${esc(e.naturezaJuridica || '—')}</div>
+      </div>
+      <div class="resumo">
+        <div class="r-urgente"><b>${conta('urgente')}</b>urgentes</div>
+        <div class="r-atencao"><b>${conta('atencao')}</b>para verificar</div>
+        <div class="r-rotina"><b>${conta('rotina')}</b>de rotina</div>
+      </div>
+    </section>
+    <section class="card">
+      <h2>O que fazer para deixar a empresa em dia</h2>
+      <p style="color:var(--suave);margin-top:-6px;font-size:.9rem">Marque o que quer resolver. O valor do pacote atualiza na hora.</p>
+      ${itens}
+    </section>
+    <div class="total">
+      <div id="totais"></div>
+      <button class="btn" id="quero">Quero resolver</button>
+    </div>`;
+
+  $('#saida').querySelectorAll('input[type=checkbox]').forEach((cb) => cb.addEventListener('change', (ev) => {
+    // O mesmo serviço pode aparecer em mais de um item: marca/desmarca todos juntos.
+    $('#saida').querySelectorAll(`input[data-servico="${ev.target.dataset.servico}"]`).forEach((x) => { x.checked = ev.target.checked; });
+    totais();
+  }));
+  $('#quero').addEventListener('click', () => $('#dlg').showModal());
+  totais();
+}
+
+function selecionados() {
+  const ids = new Set([...$('#saida').querySelectorAll('input[type=checkbox]:checked')].map((c) => c.dataset.servico));
+  return atual.orcamento.itens.map((i) => i.preco).filter((p, n, arr) => p && ids.has(p.id) && arr.findIndex((q) => q && q.id === p.id) === n);
+}
+
+function totais() {
+  const sel = selecionados();
+  const avulsos = sel.filter((s) => !s.mensal);
+  const mensal = sel.find((s) => s.mensal);
+  const soma = avulsos.reduce((t, s) => t + s.valor, 0);
+  const pct = avulsos.length > 1 ? atual.orcamento.descontoPct : 0;
+  const final = soma - Math.round(soma * pct) / 100;
+  $('#totais').innerHTML = avulsos.length || mensal
+    ? `${pct ? `<span class="de">${brl(soma)}</span> <small style="display:inline">-${pct}% no pacote</small><br>` : ''}
+       <span class="por">${brl(final)}</span>
+       <small>${avulsos.length} serviço(s) de regularização${mensal ? ` + ${brl(mensal.valor)}/mês de ${esc(mensal.nome.toLowerCase())}` : ''}</small>`
+    : '<small>Marque os itens que deseja resolver</small>';
+  $('#quero').disabled = !(avulsos.length || mensal);
+  return { sel, final, mensal };
+}
+
+$('#cancelar').addEventListener('click', () => $('#dlg').close());
+$('#formContato').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const { sel, final, mensal } = totais();
+  const e = atual.empresa;
+  const nome = $('#nome').value.trim();
+  const tel = $('#tel').value.trim();
+  fetch('/api/contato', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nome, telefone: tel, cnpj: e.cnpj, servicos: sel.map((s) => s.id) }),
+  }).catch(() => {});
+  const linhas = sel.filter((s) => !s.mensal).map((s) => `• ${s.nome} (${brl(s.valor)})`);
+  const msg = `Olá! Sou ${nome}. Consultei a empresa ${e.razaoSocial} (CNPJ ${e.cnpjFormatado}) no site e quero resolver:\n${linhas.join('\n')}`
+    + `\nTotal: ${brl(final)}` + (mensal ? `\nE tenho interesse em ${mensal.nome} (${brl(mensal.valor)}/mês).` : '');
+  $('#dlg').close();
+  window.open(`https://wa.me/${atual.escritorio.whatsapp}?text=${encodeURIComponent(msg)}`, '_blank');
+});
+</script>
+</body>
+</html>
