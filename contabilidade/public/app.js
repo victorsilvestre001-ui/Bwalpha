@@ -24,6 +24,9 @@ const PLANOS = [
   { id: 'mensal_presumido', titulo: 'Lucro Presumido', desc: 'Para empresas que faturam mais' },
 ];
 
+// Monograma V&J: V em branco e J em dourado, com a cauda do J sublinhando o V.
+const LOGO_SVG = `<svg class="monograma" viewBox="0 0 48 48" aria-hidden="true"><circle class="fundo" cx="24" cy="24" r="23"/><circle cx="24" cy="24" r="19.5" fill="none" stroke="#c9a227" stroke-width="1" opacity=".6"/><path d="M12.2 13.2 19.4 30.6 26.6 13.2" stroke="#fff" stroke-width="3.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M34.2 13.2v13.6c0 5.1-3.5 8.4-8.5 8.4H14.6" stroke="#c9a227" stroke-width="3.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
 function linkZap(texto) {
   const n = config.escritorio.whatsapp || '';
   return `https://wa.me/${n}${texto ? `?text=${encodeURIComponent(texto)}` : ''}`;
@@ -39,12 +42,11 @@ function aplicaConfig() {
   const raiz = document.documentElement.style;
   if (e.corPrincipal) raiz.setProperty('--marca', e.corPrincipal);
   if (e.corDestaque) raiz.setProperty('--destaque', e.corDestaque);
-  const sigla = (e.nome || '').split(/\s+/)[0].replace(/[^A-Za-z&]/g, '').slice(0, 3) || 'C';
-  const resto = (e.nome || '').split(/\s+/).slice(1).join(' ');
+  const [marca, ...resto] = (e.nome || '').split(/\s+/);
   $$('[data-logo]').forEach((el) => {
     el.innerHTML = e.logoUrl
       ? `<img src="${esc(e.logoUrl)}" alt="${esc(e.nome)}">`
-      : `<span class="sigla">${esc(sigla)}</span><span><b>${esc((e.nome || '').split(/\s+/)[0])}</b><small>${esc(resto)}</small></span>`;
+      : `${LOGO_SVG}<span class="wm"><b>${esc(marca)}</b><small>${esc(resto.join(' '))}</small></span>`;
   });
   const valores = { nome: e.nome, email: e.email, cidade: e.cidade, cnpj: e.cnpj, fone: fone(e.whatsapp), desde: e.fundacao };
   $$('[data-e]').forEach((el) => { el.textContent = valores[el.dataset.e] || ''; });

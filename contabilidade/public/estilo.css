@@ -38,9 +38,10 @@ svg.i { width: 1.25em; height: 1.25em; flex: none; stroke: currentColor; fill: n
 .menu .wrap { display: flex; align-items: center; justify-content: space-between; gap: 20px; height: 72px; }
 .logo { display: flex; align-items: center; gap: 12px; text-decoration: none; }
 .logo img { height: 44px; }
-.logo .sigla { width: 44px; height: 44px; border-radius: 12px; background: var(--marca); color: var(--destaque); display: grid; place-items: center; font-weight: 800; font-size: 1.05rem; letter-spacing: -.5px; }
-.logo b { display: block; color: var(--marca); font-size: 1.05rem; }
-.logo small { display: block; color: var(--suave); font-size: .75rem; margin-top: -2px; }
+.logo .monograma { width: 48px; height: 48px; flex: none; }
+.logo .monograma .fundo { fill: var(--marca); }
+.logo .wm b { display: block; color: var(--marca); font-size: 1.45rem; font-weight: 800; letter-spacing: -.5px; line-height: 1; }
+.logo .wm small { display: block; color: #8a6d12; font-size: .62rem; font-weight: 700; letter-spacing: 2.4px; text-transform: uppercase; margin-top: 5px; }
 .links { display: flex; gap: 26px; align-items: center; }
 .links a { text-decoration: none; font-weight: 600; font-size: .93rem; color: var(--texto); opacity: .85; }
 .links a:hover { color: var(--marca); opacity: 1; }
@@ -178,8 +179,9 @@ footer.rodape h4 { color: #fff; margin: 0 0 14px; font-size: 1rem; }
 footer.rodape ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
 footer.rodape a { text-decoration: none; }
 footer.rodape a:hover { color: var(--destaque); }
-footer.rodape .logo b { color: #fff; }
-footer.rodape .logo small { color: rgba(255,255,255,.6); }
+footer.rodape .logo .wm b { color: #fff; }
+footer.rodape .logo .wm small { color: var(--destaque); }
+footer.rodape .logo .monograma .fundo { fill: rgba(255,255,255,.06); stroke: rgba(201,162,39,.6); stroke-width: 1; }
 footer.rodape .base { border-top: 1px solid rgba(255,255,255,.1); margin-top: 44px; padding-top: 22px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: .82rem; }
 
 .zap { position: fixed; right: 20px; bottom: 20px; z-index: 60; width: 60px; height: 60px; border-radius: 50%; background: #25d366; color: #fff; display: grid; place-items: center; box-shadow: 0 10px 25px rgba(37,211,102,.45); transition: transform .2s; }
