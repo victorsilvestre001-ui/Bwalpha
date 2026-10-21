@@ -5,11 +5,23 @@
     "email": "legalizacao@vmcontabil.com.br",
     "cidade": "Sorocaba/SP",
     "cnpj": "43.403.653/0001-24",
-    "corPrincipal": "#0f6e5c",
+    "corPrincipal": "#0b2545",
     "logoUrl": "",
-    "descontoPacotePct": 15
+    "descontoPacotePct": 15,
+    "corDestaque": "#c9a227",
+    "fundacao": "2021"
   },
   "servicos": {
+    "abertura_empresa": {
+      "nome": "Abertura de empresa (ME, LTDA, SLU ou MEI → ME)",
+      "valor": 690,
+      "prazo": "5 a 15 dias úteis"
+    },
+    "alteracao_contratual": {
+      "nome": "Alteração contratual (endereço, sócios, atividade, nome, capital)",
+      "valor": 590,
+      "prazo": "5 a 15 dias úteis"
+    },
     "diagnostico_completo": {
       "nome": "Levantamento completo de débitos (e-CAC, PGFN, FGTS, estado e prefeitura)",
       "valor": 197,
@@ -71,24 +83,45 @@
       "prazo": "3 dias úteis"
     },
     "baixa_empresa": {
-      "nome": "Encerramento (baixa) de empresa com pendências",
+      "nome": "Baixa (encerramento) de CNPJ, com ou sem pendências",
       "valor": 990,
       "prazo": "15 a 30 dias"
     },
     "mensal_mei": {
       "nome": "Acompanhamento mensal MEI",
       "valor": 79,
-      "mensal": true
+      "mensal": true,
+      "itens": [
+        "Guia DAS todo mês no seu WhatsApp",
+        "Declaração anual (DASN-SIMEI) inclusa",
+        "Alerta do limite de faturamento",
+        "Emissão de certidões quando precisar"
+      ]
     },
     "mensal_simples": {
       "nome": "Contabilidade mensal Simples Nacional",
       "valor": 449,
-      "mensal": true
+      "mensal": true,
+      "itens": [
+        "Apuração do Simples (PGDAS-D) e guias",
+        "Folha de pagamento e pró-labore",
+        "DEFIS, DCTFWeb, eSocial e FGTS Digital",
+        "Balanço e relatórios para o banco",
+        "Atendimento direto com o contador"
+      ],
+      "destaque": true
     },
     "mensal_presumido": {
       "nome": "Contabilidade mensal Lucro Presumido / Real",
       "valor": 1190,
-      "mensal": true
+      "mensal": true,
+      "itens": [
+        "Escrituração contábil e fiscal completa",
+        "ECD, ECF, EFD-Contribuições e Reinf",
+        "Folha de pagamento e obrigações trabalhistas",
+        "Planejamento tributário anual",
+        "Reuniões de resultado com o contador"
+      ]
     }
   }
 }

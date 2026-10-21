@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 440" font-family="Plus Jakarta Sans, Segoe UI, Arial, sans-serif">
+  <!-- documento -->
+  <g transform="rotate(3 280 220)">
+    <rect x="150" y="60" width="250" height="310" rx="16" fill="#fff" stroke="#e3e8ef" stroke-width="2"/>
+    <text x="176" y="102" fill="#0b2545" font-size="15" font-weight="800" letter-spacing="1">ALTERAÇÃO CONTRATUAL</text>
+    <rect x="176" y="114" width="80" height="4" rx="2" fill="#c9a227"/>
+    <g fill="#dfe6f0">
+      <rect x="176" y="140" width="196" height="9" rx="4.5"/><rect x="176" y="160" width="160" height="9" rx="4.5"/>
+    </g>
+    <!-- linha riscada e nova -->
+    <rect x="176" y="186" width="150" height="9" rx="4.5" fill="#f3c7c2"/>
+    <line x1="170" y1="190.5" x2="332" y2="190.5" stroke="#c0392b" stroke-width="3" stroke-linecap="round"/>
+    <rect x="172" y="204" width="200" height="22" rx="6" fill="#fbf1d3"/>
+    <rect x="180" y="211" width="170" height="9" rx="4.5" fill="#c9a227"/>
+    <g fill="#dfe6f0">
+      <rect x="176" y="244" width="196" height="9" rx="4.5"/><rect x="176" y="264" width="130" height="9" rx="4.5"/>
+      <rect x="176" y="284" width="180" height="9" rx="4.5"/>
+    </g>
+    <path d="M182 336c12-16 20 6 30-6s14-12 22 0 12 4 20-4" stroke="#1d4e89" stroke-width="3" fill="none" stroke-linecap="round"/>
+  </g>
+  <!-- lápis -->
+  <g transform="rotate(38 420 240)">
+    <rect x="404" y="150" width="30" height="150" rx="6" fill="#c9a227"/>
+    <rect x="404" y="150" width="30" height="24" rx="6" fill="#0b2545"/>
+    <path d="M404 300h30l-15 32z" fill="#f6e2a8"/>
+    <path d="M414 321h10l-5 11z" fill="#0b2545"/>
+  </g>
+  <!-- sócios -->
+  <g>
+    <rect x="30" y="70" width="170" height="92" rx="18" fill="#0b2545"/>
+    <circle cx="72" cy="104" r="16" fill="#9cc0ec"/><path d="M50 146a22 22 0 0 1 44 0" fill="#9cc0ec"/>
+    <circle cx="158" cy="104" r="16" fill="#c9a227"/><path d="M136 146a22 22 0 0 1 44 0" fill="#c9a227"/>
+    <path d="M100 112h30M122 104l8 8-8 8" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="115" y="182" text-anchor="middle" fill="#0b2545" font-size="13" font-weight="700">Entrada de sócio</text>
+  </g>
+  <!-- novo endereço -->
+  <g>
+    <rect x="40" y="290" width="190" height="80" rx="18" fill="#fff" stroke="#e3e8ef" stroke-width="2"/>
+    <path d="M80 352s20-17 20-33a20 20 0 0 0-40 0c0 16 20 33 20 33z" fill="#1d4e89"/>
+    <circle cx="80" cy="319" r="7" fill="#fff"/>
+    <text x="112" y="324" fill="#0b2545" font-size="14" font-weight="800">Novo endereço</text>
+    <text x="112" y="344" fill="#5d6b7c" font-size="12">atualizado em todos</text>
+    <text x="112" y="360" fill="#5d6b7c" font-size="12">os cadastros</text>
+  </g>
+  <!-- CNAE -->
+  <g>
+    <rect x="410" y="60" width="124" height="58" rx="16" fill="#fff" stroke="#e3e8ef" stroke-width="2"/>
+    <text x="432" y="86" fill="#5d6b7c" font-size="11" font-weight="700" letter-spacing="1">NOVA ATIVIDADE</text>
+    <text x="432" y="106" fill="#0b2545" font-size="16" font-weight="800">+ CNAE</text>
+  </g>
+  <!-- concluído -->
+  <g>
+    <rect x="380" y="350" width="150" height="50" rx="25" fill="#1e7a4f"/>
+    <path d="M402 375l6 6 11-12" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="428" y="380" fill="#fff" font-size="14" font-weight="800">Registrado</text>
+  </g>
+</svg>

@@ -3,360 +3,324 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Consulta de Empresa</title>
-<meta name="description" content="Digite o CNPJ e veja o que a sua empresa deve, o que precisa fazer para ficar em dia e quanto custa resolver.">
-<style>
-  :root {
-    --bg: #f5f7fa; --card: #ffffff; --texto: #1d2733; --suave: #5b6878; --borda: #e2e7ee;
-    --marca: #0f6e5c; --marca-clara: color-mix(in srgb, var(--marca) 12%, #ffffff);
-    --urgente: #c0392b; --urgente-bg: #fdecea; --atencao: #b7791f; --atencao-bg: #fdf5e6;
-    --rotina: #2b6cb0; --rotina-bg: #eaf2fb;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #11161c; --card: #1a2129; --texto: #e6ebf0; --suave: #9aa7b5; --borda: #2a333d;
-      --marca: #2bb596; --marca-clara: color-mix(in srgb, var(--marca) 20%, #1a2129);
-      --urgente: #f0766a; --urgente-bg: #3a1e1c; --atencao: #e5b25a; --atencao-bg: #352a17;
-      --rotina: #6fa8e8; --rotina-bg: #182a3e;
-    }
-  }
-  * { box-sizing: border-box; }
-  [hidden] { display: none !important; }
-  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--texto); line-height: 1.5; }
-  .wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
-  header { background: var(--marca); color: #fff; padding: 48px 0 72px; }
-  header h1 { margin: 0 0 8px; font-size: clamp(1.6rem, 4vw, 2.3rem); }
-  header p { margin: 0; opacity: .9; max-width: 620px; }
-  .busca { background: var(--card); border-radius: 14px; padding: 20px; margin-top: -44px; box-shadow: 0 8px 30px rgba(0,0,0,.08); display: flex; gap: 10px; flex-wrap: wrap; }
-  .busca input { flex: 1 1 240px; font-size: 1.15rem; padding: 14px 16px; border: 2px solid var(--borda); border-radius: 10px; background: var(--bg); color: var(--texto); letter-spacing: .5px; }
-  .busca input:focus { outline: none; border-color: var(--marca); }
-  button { font: inherit; cursor: pointer; border: 0; border-radius: 10px; }
-  .btn { background: var(--marca); color: #fff; font-weight: 600; padding: 14px 24px; }
-  .btn:hover { background: color-mix(in srgb, var(--marca) 82%, black); }
-  .btn:disabled { opacity: .6; cursor: wait; }
-  .dica { width: 100%; font-size: .85rem; color: var(--suave); }
-  .dica a { color: var(--marca); cursor: pointer; }
-  .erro { margin-top: 16px; padding: 14px 16px; border-radius: 10px; background: var(--urgente-bg); color: var(--urgente); }
-  .card { background: var(--card); border: 1px solid var(--borda); border-radius: 14px; padding: 20px; margin-top: 20px; }
-  .card h2 { margin: 0 0 12px; font-size: 1.15rem; }
-  .empresa-topo { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
-  .empresa-topo h2 { margin: 0; }
-  .selo { display: inline-block; padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: .85rem; }
-  .selo.ok { background: var(--marca-clara); color: var(--marca); }
-  .selo.ruim { background: var(--urgente-bg); color: var(--urgente); }
-  .dados { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px 20px; margin-top: 14px; font-size: .92rem; }
-  .dados div span { display: block; color: var(--suave); font-size: .78rem; text-transform: uppercase; letter-spacing: .4px; }
-  .resumo { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 20px; }
-  .resumo div { border-radius: 12px; padding: 14px; text-align: center; }
-  .resumo b { display: block; font-size: 1.8rem; }
-  .r-urgente { background: var(--urgente-bg); color: var(--urgente); }
-  .r-atencao { background: var(--atencao-bg); color: var(--atencao); }
-  .r-rotina { background: var(--rotina-bg); color: var(--rotina); }
-  .item { display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: start; padding: 16px 0; border-top: 1px solid var(--borda); }
-  .item:first-of-type { border-top: 0; }
-  .item input { width: 20px; height: 20px; margin-top: 3px; accent-color: var(--marca); }
-  .item h3 { margin: 0 0 4px; font-size: 1rem; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .item p { margin: 0; color: var(--suave); font-size: .92rem; }
-  .item a { color: var(--marca); font-size: .85rem; }
-  .tag { font-size: .7rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; }
-  .tag.urgente { background: var(--urgente-bg); color: var(--urgente); }
-  .tag.atencao { background: var(--atencao-bg); color: var(--atencao); }
-  .tag.rotina { background: var(--rotina-bg); color: var(--rotina); }
-  .preco { text-align: right; max-width: 240px; }
-  .preco b { display: block; white-space: nowrap; color: var(--marca); font-size: 1.1rem; }
-  .preco small { color: var(--suave); }
-  .total { position: sticky; bottom: 0; background: var(--card); border-top: 3px solid var(--marca); border-radius: 14px 14px 0 0; padding: 16px 20px; margin-top: 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; box-shadow: 0 -6px 24px rgba(0,0,0,.08); }
-  .total .de { text-decoration: line-through; color: var(--suave); font-size: .9rem; }
-  .total .por { font-size: 1.6rem; font-weight: 800; color: var(--marca); }
-  .total small { display: block; color: var(--suave); }
-  dialog { border: 0; border-radius: 14px; padding: 24px; width: min(420px, calc(100% - 32px)); background: var(--card); color: var(--texto); }
-  dialog::backdrop { background: rgba(0,0,0,.5); }
-  dialog label { display: block; margin: 12px 0 4px; font-size: .9rem; }
-  dialog input { width: 100%; padding: 12px; border: 1px solid var(--borda); border-radius: 8px; font: inherit; background: var(--bg); color: var(--texto); }
-  .linha-btns { display: flex; gap: 10px; margin-top: 18px; justify-content: flex-end; }
-  .sec { background: transparent; color: var(--suave); padding: 14px 16px; }
-  footer { color: var(--suave); font-size: .8rem; padding: 32px 0 120px; }
-  .carregando { text-align: center; color: var(--suave); padding: 30px; }
-  .marca { display: flex; align-items: center; gap: 10px; font-weight: 700; margin-bottom: 28px; opacity: .95; }
-  .marca img { height: 36px; border-radius: 6px; background: #fff; padding: 2px; }
-  .marca small { font-weight: 400; opacity: .8; }
-  .ia-selo { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,.15); border-radius: 999px; padding: 4px 12px; font-size: .8rem; margin-top: 14px; }
-  .chat .msgs { display: flex; flex-direction: column; gap: 10px; max-height: 460px; overflow-y: auto; padding: 4px 2px; }
-  .msg { padding: 10px 14px; border-radius: 14px; max-width: 85%; font-size: .95rem; white-space: normal; }
-  .msg.user { align-self: flex-end; background: var(--marca); color: #fff; border-bottom-right-radius: 4px; }
-  .msg.assistant { align-self: flex-start; background: var(--bg); border: 1px solid var(--borda); border-bottom-left-radius: 4px; }
-  .msg.assistant.digitando::after { content: '▍'; animation: pisca 1s steps(2) infinite; color: var(--marca); }
-  @keyframes pisca { 50% { opacity: 0; } }
-  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
-  .chips button { background: var(--marca-clara); color: var(--marca); padding: 8px 12px; font-size: .85rem; border-radius: 999px; }
-  .chat form { display: flex; gap: 8px; margin-top: 10px; }
-  .chat input { flex: 1; padding: 12px 14px; border: 1px solid var(--borda); border-radius: 10px; font: inherit; background: var(--bg); color: var(--texto); }
-  .chat .aviso { font-size: .75rem; color: var(--suave); margin-top: 8px; }
-  footer .escritorio { color: var(--texto); font-weight: 600; margin-bottom: 6px; }
-  @media (max-width: 560px) {
-    .resumo b { font-size: 1.4rem; }
-    .dados { grid-template-columns: 1fr 1fr; }
-    .busca .btn, .total .btn { width: 100%; }
-    .total { padding: 12px 16px; }
-    .item { grid-template-columns: auto 1fr; }
-    .preco { grid-column: 2; text-align: left; }
-  }
-</style>
+<title>V&amp;J Assessoria Contábil · Contabilidade em Sorocaba</title>
+<meta name="description" content="Abertura, alteração e baixa de CNPJ, contabilidade mensal, MEI e regularização de empresas. Consulte grátis a situação da sua empresa pelo CNPJ.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="estilo.css">
+<script>document.documentElement.classList.add('js');</script>
 </head>
 <body>
-<header>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-predio" viewBox="0 0 24 24"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h1M14 9h1M9 13h1M14 13h1M10 21v-4h4v4"/></symbol>
+  <symbol id="i-editar" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></symbol>
+  <symbol id="i-baixa" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9.5 12.5l5 5M14.5 12.5l-5 5"/></symbol>
+  <symbol id="i-grafico" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></symbol>
+  <symbol id="i-usuario" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+  <symbol id="i-escudo" viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></symbol>
+  <symbol id="i-pessoas" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2 20a7 7 0 0 1 14 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M22 20a7 7 0 0 0-4-6.3"/></symbol>
+  <symbol id="i-certidao" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15l2 2 4-4"/></symbol>
+  <symbol id="i-moeda" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .9-3 2s1.3 1.7 3 2 3 .9 3 2-1.3 2-3 2c-1.4 0-2.5-.5-3-1.5M12 6v2M12 16v2"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-relogio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-ia" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></symbol>
+  <symbol id="i-fone" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></symbol>
+  <symbol id="i-email" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 6-10 7L2 6"/></symbol>
+  <symbol id="i-local" viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></symbol>
+  <symbol id="i-busca" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-cadeado" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-etiqueta" viewBox="0 0 24 24"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24"><path d="M3 21l1.7-5A9 9 0 1 1 8 19.3z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 1c-1-.5-1.5-1-2-2l1-1-1-2z"/></symbol>
+  <symbol id="i-seta" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+</svg>
+
+<div class="topo-info">
   <div class="wrap">
-    <div class="marca" id="marca"></div>
-    <h1 id="titulo">Sua empresa está em dia?</h1>
-    <p>Digite o CNPJ e veja na hora a situação na Receita, o que a empresa precisa fazer para ficar regular e quanto custa resolver cada coisa com a gente.</p>
-    <div class="ia-selo" id="iaSelo" hidden>✦ Com contador virtual de inteligência artificial</div>
+    <div>
+      <a data-link="fone"><span><svg class="i"><use href="#i-fone"/></svg><span data-e="fone"></span></span></a>
+      <a data-link="email"><span><svg class="i"><use href="#i-email"/></svg><span data-e="email"></span></span></a>
+    </div>
+    <div><span><svg class="i"><use href="#i-local"/></svg><span data-e="cidade"></span></span><span>CNPJ <span data-e="cnpj"></span></span></div>
+  </div>
+</div>
+
+<nav class="menu">
+  <div class="wrap">
+    <a href="#inicio" class="logo" data-logo></a>
+    <div class="links" id="links">
+      <a href="#legalizacao">Abertura e baixa</a>
+      <a href="#servicos">Serviços</a>
+      <a href="#planos">Planos</a>
+      <a href="#sobre">Sobre</a>
+      <a href="#duvidas">Dúvidas</a>
+      <a href="#contato">Contato</a>
+      <a class="btn azul pequeno" data-link="whatsapp" target="_blank" rel="noopener"><svg class="i"><use href="#i-zap"/></svg>Fale conosco</a>
+    </div>
+    <button class="abre-menu" id="abreMenu" aria-label="Abrir menu"><svg class="i" style="width:28px;height:28px"><use href="#i-menu"/></svg></button>
+  </div>
+</nav>
+
+<header class="hero" id="inicio">
+  <div class="wrap">
+    <div>
+      <div class="selo-topo entra"><svg class="i"><use href="#i-escudo"/></svg>Contabilidade em <b data-e="cidade"></b></div>
+      <h1 class="entra" style="--atraso:.08s">Sua empresa <em>em dia</em>, sem dor de cabeça.</h1>
+      <p class="sub entra" style="--atraso:.16s">Abertura, alteração e baixa de CNPJ, contabilidade mensal e regularização de empresas. Consulte agora a situação da sua empresa e veja quanto custa resolver cada pendência.</p>
+      <div class="acoes entra" style="--atraso:.24s">
+        <a class="btn" href="#legalizacao">Abrir minha empresa</a>
+        <a class="btn contorno" data-link="whatsapp" target="_blank" rel="noopener"><svg class="i"><use href="#i-zap"/></svg>Falar no WhatsApp</a>
+      </div>
+      <div class="garantias entra" style="--atraso:.32s">
+        <span><svg class="i"><use href="#i-check"/></svg>Orçamento na hora</span>
+        <span><svg class="i"><use href="#i-check"/></svg>Atendimento pelo WhatsApp</span>
+        <span data-se-ia hidden><svg class="i"><use href="#i-check"/></svg>Contador virtual 24h</span>
+      </div>
+    </div>
+
+    <form class="consulta entra" style="--atraso:.2s" id="form">
+      <h2><svg class="i"><use href="#i-busca"/></svg>Consulte sua empresa grátis</h2>
+      <p>Digite o CNPJ e veja na hora a situação na Receita, o que precisa ser feito e o valor de cada solução.</p>
+      <label for="cnpj">CNPJ da empresa</label>
+      <input id="cnpj" inputmode="text" autocomplete="off" placeholder="00.000.000/0000-00" maxlength="18">
+      <button class="btn azul" id="btnBuscar">Consultar agora</button>
+      <ul class="lista">
+        <li><svg class="i"><use href="#i-check"/></svg>Situação cadastral e regime de impostos</li>
+        <li><svg class="i"><use href="#i-check"/></svg>Pendências e obrigações da empresa</li>
+        <li><svg class="i"><use href="#i-cadeado"/></svg>Usa só dados públicos, sem pedir senha</li>
+      </ul>
+      <div class="dica">Ver exemplo: <a data-demo="11222333000181">empresa com CNPJ inapto</a> · <a data-demo="12345678000195">MEI</a></div>
+    </form>
   </div>
 </header>
 
-<main class="wrap">
-  <form class="busca" id="form">
-    <input id="cnpj" inputmode="text" autocomplete="off" placeholder="00.000.000/0000-00" maxlength="18" aria-label="CNPJ">
-    <button class="btn" id="btnBuscar">Consultar grátis</button>
-    <div class="dica">Quer ver um exemplo? <a data-demo="11222333000181">Empresa com CNPJ inapto</a> · <a data-demo="12345678000195">MEI ativo</a></div>
-  </form>
-  <div id="saida"></div>
-  <footer>
-    <div class="escritorio" id="rodape"></div>
-    Os dados cadastrais vêm da base pública da Receita Federal. Os valores exatos de débitos (Receita, PGFN, FGTS, estado e prefeitura) só podem ser levantados com acesso ao e-CAC por procuração — fazemos isso no levantamento completo.
-  </footer>
-</main>
+<div class="faixa">
+  <div class="wrap">
+    <div class="revela"><span class="ic"><svg class="i"><use href="#i-busca"/></svg></span><span><b>Consulta grátis</b><small>Situação do CNPJ em segundos</small></span></div>
+    <div class="revela" style="--atraso:.08s"><span class="ic"><svg class="i"><use href="#i-etiqueta"/></svg></span><span><b>Preço transparente</b><small>Valor de cada serviço no site</small></span></div>
+    <div class="revela" style="--atraso:.16s"><span class="ic"><svg class="i"><use href="#i-ia"/></svg></span><span><b>Contador virtual</b><small>Tira dúvidas a qualquer hora</small></span></div>
+    <div class="revela" style="--atraso:.24s"><span class="ic"><svg class="i"><use href="#i-zap"/></svg></span><span><b>Tudo pelo WhatsApp</b><small>Sem precisar ir ao escritório</small></span></div>
+  </div>
+</div>
+
+<!-- Resultado da consulta de CNPJ (aparece depois de consultar) -->
+<section id="diagnostico" hidden><div class="wrap" id="saida"></div></section>
+
+<section class="bloco branco" id="legalizacao">
+  <div class="wrap">
+    <div class="titulo-sec revela">
+      <span class="rotulo">Legalização de empresas</span>
+      <h2>Abertura, alteração e baixa de CNPJ</h2>
+      <p>Cuidamos de toda a burocracia na Receita Federal, Junta Comercial, estado e prefeitura. Você acompanha tudo pelo WhatsApp.</p>
+    </div>
+
+    <article class="zigue">
+      <div class="zigue-img revela da-esquerda"><img src="img/abertura.svg" alt="Ilustração de abertura de empresa: contrato social, cartão CNPJ e alvará" loading="lazy"></div>
+      <div class="zigue-txt revela da-direita">
+        <span class="etapa"><svg class="i"><use href="#i-predio"/></svg>Abertura de empresa</span>
+        <h3>Do zero ao CNPJ, sem você enfrentar a burocracia</h3>
+        <p>Ajudamos a escolher o tipo de empresa e o regime de impostos que fazem você pagar menos, e cuidamos de todo o registro.</p>
+        <ul>
+          <li><svg class="i"><use href="#i-check"/></svg>Escolha do tipo de empresa (ME, LTDA, SLU) e do regime de impostos</li>
+          <li><svg class="i"><use href="#i-check"/></svg>Contrato social e registro na Junta Comercial</li>
+          <li><svg class="i"><use href="#i-check"/></svg>CNPJ, inscrição estadual e municipal e alvará</li>
+          <li><svg class="i"><use href="#i-check"/></svg>Certificado digital e emissão de nota fiscal</li>
+        </ul>
+        <div class="zigue-rodape"><span>a partir de <b data-preco="abertura_empresa"></b></span><a class="btn azul" data-zap="Olá! Quero abrir uma empresa." target="_blank" rel="noopener">Quero abrir minha empresa<svg class="i"><use href="#i-seta"/></svg></a></div>
+      </div>
+    </article>
+
+    <article class="zigue invertido">
+      <div class="zigue-img revela da-direita"><img src="img/alteracao.svg" alt="Ilustração de alteração contratual: contrato com sócios, endereço e atividades alterados" loading="lazy"></div>
+      <div class="zigue-txt revela da-esquerda">
+        <span class="etapa"><svg class="i"><use href="#i-editar"/></svg>Alteração contratual</span>
+        <h3>Sua empresa mudou? O contrato muda junto</h3>
+        <p>Atualizamos o contrato social e todos os cadastros (Receita, Junta, estado e prefeitura) para a empresa continuar regular.</p>
+        <ul>
+          <li><svg class="i"><use href="#i-check"/></svg>Mudança de endereço, inclusive para outra cidade</li>
+          <li><svg class="i"><use href="#i-check"/></svg>Entrada e saída de sócios</li>
+          <li><svg class="i"><use href="#i-check"/></svg>Nova atividade (CNAE) ou troca do nome empresarial</li>
+          <li><svg class="i"><use href="#i-check"/></svg>Aumento de capital e transformação de MEI em ME</li>
+        </ul>
+        <div class="zigue-rodape"><span>a partir de <b data-preco="alteracao_contratual"></b></span><a class="btn azul" data-zap="Olá! Preciso fazer uma alteração contratual na minha empresa." target="_blank" rel="noopener">Quero alterar minha empresa<svg class="i"><use href="#i-seta"/></svg></a></div>
+      </div>
+    </article>
+
+    <article class="zigue">
+      <div class="zigue-img revela da-esquerda"><img src="img/baixa.svg" alt="Ilustração de baixa de CNPJ: documento com carimbo de baixa e pendências resolvidas" loading="lazy"></div>
+      <div class="zigue-txt revela da-direita">
+        <span class="etapa"><svg class="i"><use href="#i-baixa"/></svg>Baixa de CNPJ</span>
+        <h3>Encerre sua empresa do jeito certo</h3>
+        <p>Fechar a empresa sem cuidado pode deixar dívidas no CPF dos sócios. Levantamos tudo antes e encerramos em todos os órgãos.</p>
+        <ul>
+          <li><svg class="i"><use href="#i-check"/></svg>Levantamento de pendências antes de encerrar</li>
+          <li><svg class="i"><use href="#i-check"/></svg>Distrato social e baixa na Junta Comercial e na Receita</li>
+          <li><svg class="i"><use href="#i-check"/></svg>Baixa da inscrição estadual e municipal</li>
+          <li><svg class="i"><use href="#i-check"/></svg>Negociação de débitos para não sobrar nada para trás</li>
+        </ul>
+        <div class="zigue-rodape"><span>a partir de <b data-preco="baixa_empresa"></b></span><a class="btn azul" data-zap="Olá! Quero dar baixa no CNPJ da minha empresa." target="_blank" rel="noopener">Quero encerrar minha empresa<svg class="i"><use href="#i-seta"/></svg></a></div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<section class="bloco" id="servicos">
+  <div class="wrap">
+    <div class="titulo-sec revela">
+      <span class="rotulo">Nossos serviços</span>
+      <h2>Tudo que sua empresa precisa em um só lugar</h2>
+      <p>Do MEI à empresa no Lucro Presumido, deixamos impostos, folha e declarações em dia.</p>
+    </div>
+    <div class="grade g3" id="gradeServicos"></div>
+  </div>
+</section>
+
+<section class="bloco branco" id="como-funciona">
+  <div class="wrap">
+    <div class="titulo-sec revela">
+      <span class="rotulo">Como funciona</span>
+      <h2>Regularize sua empresa em 4 passos</h2>
+    </div>
+    <div class="grade g4 passos">
+      <div class="passo revela"><div class="num">1</div><h3>Consulte o CNPJ</h3><p>Digite o CNPJ no topo da página. É grátis e leva segundos.</p></div>
+      <div class="passo revela" style="--atraso:.1s"><div class="num">2</div><h3>Veja o diagnóstico</h3><p>Mostramos a situação na Receita e o que precisa ser feito.</p></div>
+      <div class="passo revela" style="--atraso:.2s"><div class="num">3</div><h3>Escolha o que resolver</h3><p>Cada item tem preço e prazo. O pacote sai com desconto.</p></div>
+      <div class="passo revela" style="--atraso:.3s"><div class="num">4</div><h3>Nós resolvemos</h3><p>Nossa equipe cuida de tudo e avisa você a cada etapa.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="bloco" id="planos">
+  <div class="wrap">
+    <div class="titulo-sec revela">
+      <span class="rotulo">Planos mensais</span>
+      <h2>Contabilidade completa com preço fixo</h2>
+      <p>Escolha o plano do tamanho da sua empresa. Sem taxa escondida.</p>
+    </div>
+    <div class="grade g3" id="gradePlanos" style="align-items:stretch"></div>
+  </div>
+</section>
+
+<section class="bloco branco" id="contador-virtual" data-se-ia hidden>
+  <div class="wrap ia">
+    <div class="revela da-esquerda">
+      <span class="rotulo-solto">Tecnologia a seu favor</span>
+      <h2>Um contador virtual com inteligência artificial, 24 horas por dia</h2>
+      <p>Depois de consultar o CNPJ, converse com nosso assistente. Ele já conhece a situação da sua empresa e explica tudo em linguagem simples.</p>
+      <ul>
+        <li><svg class="i"><use href="#i-ia"/></svg>Explica cada pendência e o que acontece se não resolver</li>
+        <li><svg class="i"><use href="#i-ia"/></svg>Mostra o caminho mais rápido e o custo de cada etapa</li>
+        <li><svg class="i"><use href="#i-ia"/></svg>Quando precisar, passa você para um contador da equipe</li>
+      </ul>
+      <a class="btn azul" href="#inicio">Consultar minha empresa</a>
+    </div>
+    <div class="mock-chat revela da-direita" aria-hidden="true">
+      <div class="cab"><span class="av">IA</span><span><b>Contador virtual</b><small>online agora</small></span></div>
+      <div class="bolha eu sobe" style="--atraso:.3s">Minha empresa está inapta. O que eu faço?</div>
+      <div class="bolha ele sobe" style="--atraso:.7s">O CNPJ fica inapto quando faltam declarações. Primeiro entregamos as declarações em atraso e, em seguida, pedimos a regularização. Assim a empresa volta a emitir nota fiscal.</div>
+      <div class="bolha eu sobe" style="--atraso:1.1s">E quanto custa?</div>
+      <div class="bolha ele sobe" style="--atraso:1.5s">A regularização sai por <b data-preco="regularizar_inapto"></b>. Marque os itens na tela e clique em “Quero resolver” para falar com a equipe.</div>
+    </div>
+  </div>
+</section>
+
+<section class="bloco" id="sobre">
+  <div class="wrap sobre">
+    <div class="quadro revela da-esquerda">
+      <b>Desde <span data-e="desde"></span></b>
+      <span>cuidando de empresas em <span data-e="cidade"></span> e região</span>
+    </div>
+    <div class="revela da-direita">
+      <span class="rotulo-solto">Sobre nós</span>
+      <h2>Contabilidade próxima, clara e sem complicação</h2>
+      <p>A <b data-e="nome"></b> ajuda empreendedores a abrir, manter e regularizar suas empresas. Explicamos tudo sem juridiquês, mostramos os preços antes e acompanhamos cada etapa pelo WhatsApp.</p>
+      <div class="valores">
+        <div><span class="ic"><svg class="i"><use href="#i-etiqueta"/></svg></span><span><b>Preço claro</b><small>Você sabe quanto vai pagar antes de começar.</small></span></div>
+        <div><span class="ic"><svg class="i"><use href="#i-relogio"/></svg></span><span><b>Prazos cumpridos</b><small>Guias e declarações entregues em dia.</small></span></div>
+        <div><span class="ic"><svg class="i"><use href="#i-pessoas"/></svg></span><span><b>Atendimento humano</b><small>Um contador de verdade quando você precisar.</small></span></div>
+        <div><span class="ic"><svg class="i"><use href="#i-cadeado"/></svg></span><span><b>Sigilo</b><small>Seus dados tratados com segurança.</small></span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="bloco branco" id="duvidas">
+  <div class="wrap">
+    <div class="titulo-sec revela">
+      <span class="rotulo">Dúvidas frequentes</span>
+      <h2>Perguntas que sempre recebemos</h2>
+    </div>
+    <div class="faq revela">
+      <details><summary>Quanto tempo leva para abrir uma empresa?</summary><p>Em geral, de 5 a 15 dias úteis. O prazo depende principalmente da Junta Comercial e da prefeitura da sua cidade. Acompanhamos cada etapa e avisamos você pelo WhatsApp.</p></details>
+      <details><summary>Quais alterações contratuais vocês fazem?</summary><p>Mudança de endereço, entrada e saída de sócios, inclusão ou troca de atividades (CNAE), alteração do nome empresarial, aumento ou redução de capital social e transformação do tipo de empresa (por exemplo, de MEI para ME).</p></details>
+      <details><summary>Dá para dar baixa no CNPJ com dívidas?</summary><p>Sim, a baixa pode ser feita mesmo com débitos, mas eles não somem: passam a poder ser cobrados dos sócios. Por isso fazemos antes um levantamento e, quando vale a pena, negociamos ou parcelamos para encerrar a empresa sem surpresas.</p></details>
+      <details><summary>Meu CNPJ está inapto. O que acontece?</summary><p>A empresa não consegue emitir nota fiscal e pode ter problemas com bancos e clientes. Normalmente o motivo são declarações em atraso. Entregamos o que falta e pedimos a regularização.</p></details>
+      <details><summary>MEI ou Microempresa: qual escolher?</summary><p>O MEI é mais simples e barato, mas tem limite de faturamento e não permite todas as atividades nem ter sócio. Se a sua empresa vai crescer, ter sócio ou fazer uma atividade não permitida ao MEI, a ME no Simples Nacional costuma ser o caminho.</p></details>
+      <details><summary>Posso trocar de contador?</summary><p>Pode, a qualquer momento. Nós pedimos os documentos ao contador anterior e fazemos a transição sem você precisar se preocupar.</p></details>
+      <details><summary>A consulta de CNPJ do site é segura?</summary><p>Sim. Ela usa apenas os dados públicos da Receita Federal e não pede senha nem certificado digital. Os valores exatos das dívidas só levantamos com a sua autorização.</p></details>
+    </div>
+  </div>
+</section>
+
+<section class="bloco" id="contato">
+  <div class="wrap">
+    <div class="contato revela">
+      <div class="lado">
+        <h2>Vamos conversar?</h2>
+        <p>Conte o que você precisa. Respondemos rápido, com orçamento e sem compromisso.</p>
+        <a class="item-c" data-link="whatsapp" target="_blank" rel="noopener"><span class="ic"><svg class="i"><use href="#i-zap"/></svg></span><span><small>WhatsApp</small><b data-e="fone"></b></span></a>
+        <a class="item-c" data-link="email"><span class="ic"><svg class="i"><use href="#i-email"/></svg></span><span><small>E-mail</small><b data-e="email"></b></span></a>
+        <div class="item-c"><span class="ic"><svg class="i"><use href="#i-local"/></svg></span><span><small>Atendimento</small><b data-e="cidade"></b></span></div>
+      </div>
+      <form id="formSite">
+        <div class="campo"><label for="cNome">Nome</label><input id="cNome" required maxlength="120"></div>
+        <div class="campo"><label for="cTel">WhatsApp</label><input id="cTel" required inputmode="tel" maxlength="20" placeholder="(15) 99999-9999"></div>
+        <div class="campo"><label for="cEmail">E-mail</label><input id="cEmail" type="email" maxlength="120"></div>
+        <div class="campo"><label for="cAssunto">Assunto</label>
+          <select id="cAssunto">
+            <option>Abertura de empresa</option><option>Alteração contratual</option><option>Baixa de CNPJ</option>
+            <option>Contabilidade mensal</option><option>MEI</option><option>Regularização de CNPJ</option><option>Outro assunto</option>
+          </select>
+        </div>
+        <div class="campo cheio"><label for="cMsg">Mensagem</label><textarea id="cMsg" maxlength="2000" placeholder="Conte um pouco sobre sua empresa ou o que precisa"></textarea></div>
+        <div class="cheio" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><button class="btn azul">Enviar mensagem</button><span class="ok-msg" id="okSite" hidden>Recebemos! Vamos abrir o WhatsApp para agilizar.</span></div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<footer class="rodape">
+  <div class="wrap">
+    <div class="colunas">
+      <div>
+        <a href="#inicio" class="logo" data-logo></a>
+        <p style="margin-top:16px;max-width:320px">Abertura, alteração e baixa de CNPJ, contabilidade mensal e regularização de empresas.</p>
+      </div>
+      <div><h4>Legalização</h4><ul><li><a href="#legalizacao">Abertura de empresa</a></li><li><a href="#legalizacao">Alteração contratual</a></li><li><a href="#legalizacao">Baixa de CNPJ</a></li><li><a href="#servicos">Regularização</a></li></ul></div>
+      <div><h4>Empresa</h4><ul><li><a href="#planos">Planos</a></li><li><a href="#sobre">Sobre nós</a></li><li><a href="#duvidas">Dúvidas</a></li><li><a href="#inicio">Consultar CNPJ</a></li></ul></div>
+      <div><h4>Contato</h4><ul><li><a data-link="whatsapp" target="_blank" rel="noopener" data-e="fone"></a></li><li><a data-link="email" data-e="email"></a></li><li data-e="cidade"></li></ul></div>
+    </div>
+    <div class="base"><span>© <span id="ano"></span> <span data-e="nome"></span> · CNPJ <span data-e="cnpj"></span></span><span>Consulta de CNPJ baseada em dados públicos da Receita Federal.</span></div>
+  </div>
+</footer>
+
+<a class="zap" data-link="whatsapp" target="_blank" rel="noopener" aria-label="WhatsApp"><svg class="i"><use href="#i-zap"/></svg></a>
 
 <dialog id="dlg">
   <form id="formContato" method="dialog">
-    <h2 style="margin-top:0">Quero resolver</h2>
-    <p style="color:var(--suave);margin:0">Deixe seu contato. Vamos abrir o WhatsApp com o resumo pronto.</p>
-    <label for="nome">Seu nome</label>
-    <input id="nome" required maxlength="120">
-    <label for="tel">WhatsApp</label>
-    <input id="tel" required inputmode="tel" placeholder="(11) 99999-9999" maxlength="20">
+    <h2>Quero resolver</h2>
+    <p style="color:var(--suave);margin:6px 0 0">Deixe seu contato. Vamos abrir o WhatsApp com o resumo pronto.</p>
+    <div class="campo"><label for="nome">Seu nome</label><input id="nome" required maxlength="120"></div>
+    <div class="campo"><label for="tel">WhatsApp</label><input id="tel" required inputmode="tel" placeholder="(15) 99999-9999" maxlength="20"></div>
     <div class="linha-btns">
       <button type="button" class="sec" id="cancelar">Cancelar</button>
-      <button class="btn" id="enviar">Enviar</button>
+      <button class="btn azul" id="enviar">Enviar</button>
     </div>
   </form>
 </dialog>
 
-<script>
-const $ = (s) => document.querySelector(s);
-const brl = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const data = (d) => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—';
-const ROTULO = { urgente: 'Urgente', atencao: 'Verificar', rotina: 'Rotina' };
-let atual = null;
-let config = { escritorio: {}, ia: false };
-let conversa = [];
-
-fetch('/api/config').then((r) => r.json()).then((c) => {
-  config = c;
-  const e = c.escritorio || {};
-  if (e.corPrincipal) document.documentElement.style.setProperty('--marca', e.corPrincipal);
-  if (e.nome) document.title = e.nome + ' · Consulta de Empresa';
-  $('#marca').innerHTML = `${e.logoUrl ? `<img src="${esc(e.logoUrl)}" alt="">` : ''}<span>${esc(e.nome || '')}${e.cidade ? ` <small>· ${esc(e.cidade)}</small>` : ''}</span>`;
-  $('#rodape').textContent = [e.nome, e.cnpj && 'CNPJ ' + e.cnpj, e.email, e.cidade].filter(Boolean).join(' · ');
-  $('#iaSelo').hidden = !c.ia;
-}).catch(() => {});
-
-function mascara(v) {
-  const c = v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 14);
-  return c.replace(/^(\w{2})(\w)/, '$1.$2').replace(/^(\w{2})\.(\w{3})(\w)/, '$1.$2.$3')
-    .replace(/\.(\w{3})(\w)/, '.$1/$2').replace(/(\w{4})(\w)/, '$1-$2');
-}
-$('#cnpj').addEventListener('input', (e) => { e.target.value = mascara(e.target.value); });
-document.querySelectorAll('[data-demo]').forEach((a) => a.addEventListener('click', () => {
-  $('#cnpj').value = mascara(a.dataset.demo); consultar();
-}));
-$('#form').addEventListener('submit', (e) => { e.preventDefault(); consultar(); });
-
-async function consultar() {
-  const c = $('#cnpj').value.replace(/[^A-Za-z0-9]/g, '');
-  if (c.length !== 14) { $('#saida').innerHTML = '<div class="erro">Digite os 14 caracteres do CNPJ.</div>'; return; }
-  $('#btnBuscar').disabled = true;
-  $('#saida').innerHTML = '<div class="carregando">Consultando a Receita Federal…</div>';
-  try {
-    const r = await fetch('/api/empresa/' + c);
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.erro || 'Erro na consulta');
-    atual = j;
-    render(j);
-  } catch (err) {
-    $('#saida').innerHTML = `<div class="erro">${esc(err.message)}</div>`;
-  } finally {
-    $('#btnBuscar').disabled = false;
-  }
-}
-
-function render({ empresa: e, orcamento: o, escritorio }) {
-  const conta = (g) => o.itens.filter((i) => i.gravidade === g).length;
-  const ativa = e.situacao === 'ATIVA';
-  const itens = o.itens.map((i, n) => `
-    <label class="item">
-      <input type="checkbox" data-servico="${esc(i.preco?.id || '')}" ${i.preco && i.gravidade !== 'rotina' ? 'checked' : ''} ${i.preco ? '' : 'disabled'}>
-      <div>
-        <h3>${esc(i.titulo)} <span class="tag ${i.gravidade}">${ROTULO[i.gravidade]}</span></h3>
-        <p>${esc(i.explicacao)}</p>
-        ${i.link ? `<a href="${esc(i.link)}" target="_blank" rel="noopener">Conferir no site oficial ↗</a>` : ''}
-      </div>
-      <div class="preco">${i.preco ? `<b>${brl(i.preco.valor)}${i.preco.mensal ? '<small>/mês</small>' : ''}</b><small>${esc(i.preco.nome)}</small>${i.preco.prazo ? `<br><small>Prazo: ${esc(i.preco.prazo)}</small>` : ''}` : ''}</div>
-    </label>`).join('');
-
-  $('#saida').innerHTML = `
-    <section class="card">
-      <div class="empresa-topo">
-        <div>
-          <h2>${esc(e.razaoSocial)}</h2>
-          <div style="color:var(--suave)">${esc(e.nomeFantasia)} ${e.nomeFantasia ? '·' : ''} CNPJ ${esc(e.cnpjFormatado)}</div>
-        </div>
-        <span class="selo ${ativa ? 'ok' : 'ruim'}">${esc(e.situacao || 'SEM SITUAÇÃO')}</span>
-      </div>
-      <div class="dados">
-        <div><span>Regime</span>${esc(e.regime)}</div>
-        <div><span>Porte</span>${esc(e.porte || '—')}</div>
-        <div><span>Abertura</span>${data(e.abertura)}</div>
-        <div><span>Cidade</span>${esc(e.municipio)}${e.uf ? ' / ' + esc(e.uf) : ''}</div>
-        <div><span>Atividade principal</span>${esc(e.atividade || '—')}</div>
-        <div><span>Natureza jurídica</span>${esc(e.naturezaJuridica || '—')}</div>
-      </div>
-      <div class="resumo">
-        <div class="r-urgente"><b>${conta('urgente')}</b>urgentes</div>
-        <div class="r-atencao"><b>${conta('atencao')}</b>para verificar</div>
-        <div class="r-rotina"><b>${conta('rotina')}</b>de rotina</div>
-      </div>
-    </section>
-    <section class="card">
-      <h2>O que fazer para deixar a empresa em dia</h2>
-      <p style="color:var(--suave);margin-top:-6px;font-size:.9rem">Marque o que quer resolver. O valor do pacote atualiza na hora.</p>
-      ${itens}
-    </section>
-    ${config.ia ? `
-    <section class="card chat">
-      <h2>✦ Pergunte ao contador virtual</h2>
-      <p style="color:var(--suave);margin-top:-6px;font-size:.9rem">Ele já conhece a situação desta empresa. Tire suas dúvidas na hora, 24 horas por dia.</p>
-      <div class="msgs" id="msgs"></div>
-      <div class="chips" id="chips">
-        ${['Explique a situação da minha empresa', 'O que é mais urgente resolver?', 'O que acontece se eu não resolver?', 'Como funciona o parcelamento?'].map((q) => `<button type="button">${q}</button>`).join('')}
-      </div>
-      <form id="formChat">
-        <input id="pergunta" maxlength="2000" placeholder="Escreva sua dúvida…" autocomplete="off">
-        <button class="btn">Enviar</button>
-      </form>
-      <div class="aviso">Respostas geradas por inteligência artificial, com base nos dados públicos da Receita. Para valores exatos, peça o levantamento completo.</div>
-    </section>` : ''}
-    <div class="total">
-      <div id="totais"></div>
-      <button class="btn" id="quero">Quero resolver</button>
-    </div>`;
-
-  $('#saida').querySelectorAll('input[type=checkbox]').forEach((cb) => cb.addEventListener('change', (ev) => {
-    // O mesmo serviço pode aparecer em mais de um item: marca/desmarca todos juntos.
-    $('#saida').querySelectorAll(`input[data-servico="${ev.target.dataset.servico}"]`).forEach((x) => { x.checked = ev.target.checked; });
-    totais();
-  }));
-  $('#quero').addEventListener('click', () => $('#dlg').showModal());
-  totais();
-  conversa = [];
-  if (config.ia) {
-    $('#chips').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => pergunta(b.textContent)));
-    $('#formChat').addEventListener('submit', (ev) => {
-      ev.preventDefault();
-      const q = $('#pergunta').value.trim();
-      if (q) { $('#pergunta').value = ''; pergunta(q); }
-    });
-  }
-}
-
-// Formatação mínima da resposta da IA: escapa tudo, depois negrito, listas e quebras de linha.
-function formataIa(t) {
-  return esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/^[-•] /gm, '• ').replace(/\n/g, '<br>');
-}
-
-let respondendo = false;
-async function pergunta(q) {
-  if (respondendo) return;
-  respondendo = true;
-  $('#chips').hidden = true;
-  const msgs = $('#msgs');
-  conversa.push({ role: 'user', content: q });
-  msgs.insertAdjacentHTML('beforeend', `<div class="msg user">${esc(q)}</div>`);
-  const bolha = document.createElement('div');
-  bolha.className = 'msg assistant digitando';
-  msgs.appendChild(bolha);
-  msgs.scrollTop = msgs.scrollHeight;
-  let texto = '';
-  try {
-    const r = await fetch('/api/assistente', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cnpj: atual.empresa.cnpj, mensagens: conversa }),
-    });
-    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).erro || 'Não consegui responder agora.');
-    const leitor = r.body.getReader();
-    const dec = new TextDecoder();
-    let buf = '';
-    for (;;) {
-      const { done, value } = await leitor.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      const partes = buf.split('\n\n');
-      buf = partes.pop();
-      for (const p of partes) {
-        if (!p.startsWith('data: ')) continue;
-        const ev = JSON.parse(p.slice(6));
-        if (ev.erro) throw new Error(ev.erro);
-        if (ev.texto) { texto += ev.texto; bolha.innerHTML = formataIa(texto); msgs.scrollTop = msgs.scrollHeight; }
-      }
-    }
-    conversa.push({ role: 'assistant', content: texto });
-  } catch (err) {
-    conversa.pop();
-    bolha.innerHTML = `<span style="color:var(--urgente)">${esc(err.message)}</span>`;
-  } finally {
-    bolha.classList.remove('digitando');
-    respondendo = false;
-  }
-}
-
-function selecionados() {
-  const ids = new Set([...$('#saida').querySelectorAll('input[type=checkbox]:checked')].map((c) => c.dataset.servico));
-  return atual.orcamento.itens.map((i) => i.preco).filter((p, n, arr) => p && ids.has(p.id) && arr.findIndex((q) => q && q.id === p.id) === n);
-}
-
-function totais() {
-  const sel = selecionados();
-  const avulsos = sel.filter((s) => !s.mensal);
-  const mensal = sel.find((s) => s.mensal);
-  const soma = avulsos.reduce((t, s) => t + s.valor, 0);
-  const pct = avulsos.length > 1 ? atual.orcamento.descontoPct : 0;
-  const final = soma - Math.round(soma * pct) / 100;
-  $('#totais').innerHTML = avulsos.length || mensal
-    ? `${pct ? `<span class="de">${brl(soma)}</span> <small style="display:inline">-${pct}% no pacote</small><br>` : ''}
-       <span class="por">${brl(final)}</span>
-       <small>${avulsos.length} serviço(s) de regularização${mensal ? ` + ${brl(mensal.valor)}/mês de ${esc(mensal.nome.toLowerCase())}` : ''}</small>`
-    : '<small>Marque os itens que deseja resolver</small>';
-  $('#quero').disabled = !(avulsos.length || mensal);
-  return { sel, final, mensal };
-}
-
-$('#cancelar').addEventListener('click', () => $('#dlg').close());
-$('#formContato').addEventListener('submit', async (ev) => {
-  ev.preventDefault();
-  const { sel, final, mensal } = totais();
-  const e = atual.empresa;
-  const nome = $('#nome').value.trim();
-  const tel = $('#tel').value.trim();
-  fetch('/api/contato', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nome, telefone: tel, cnpj: e.cnpj, servicos: sel.map((s) => s.id), total: final }),
-  }).catch(() => {});
-  const linhas = sel.filter((s) => !s.mensal).map((s) => `• ${s.nome} (${brl(s.valor)})`);
-  const msg = `Olá! Sou ${nome}. Consultei a empresa ${e.razaoSocial} (CNPJ ${e.cnpjFormatado}) no site e quero resolver:\n${linhas.join('\n')}`
-    + `\nTotal: ${brl(final)}` + (mensal ? `\nE tenho interesse em ${mensal.nome} (${brl(mensal.valor)}/mês).` : '');
-  $('#dlg').close();
-  window.open(`https://wa.me/${atual.escritorio.whatsapp}?text=${encodeURIComponent(msg)}`, '_blank');
-});
-</script>
+<script src="app.js"></script>
 </body>
 </html>

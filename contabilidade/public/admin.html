@@ -46,7 +46,7 @@
       <div style="display:flex;gap:8px"><button id="csv">Baixar planilha (CSV)</button><button id="atualizar">Atualizar</button></div>
     </div>
     <div class="kpis" id="kpis"></div>
-    <div class="card tabela"><table><thead><tr><th>Quando</th><th>Nome</th><th>CNPJ</th><th>Serviços</th><th>Total</th><th></th></tr></thead><tbody id="linhas"></tbody></table></div>
+    <div class="card tabela"><table><thead><tr><th>Quando</th><th>Nome</th><th>CNPJ</th><th>Pedido</th><th>Total</th><th></th></tr></thead><tbody id="linhas"></tbody></table></div>
   </div>
 </div>
 <script>
@@ -83,7 +83,7 @@ function render() {
       <td>${new Date(c.em).toLocaleString('pt-BR')}</td>
       <td>${esc(c.nome)}<br><small>${esc(c.telefone)}</small></td>
       <td>${esc(fmtCnpj(c.cnpj))}</td>
-      <td>${c.servicos.map((s) => esc(nomes[s] || s)).join('<br>')}</td>
+      <td>${c.assunto ? `<b>${esc(c.assunto)}</b><br>` : ''}${c.mensagem ? `${esc(c.mensagem)}<br>` : ''}${c.email ? `<small>${esc(c.email)}</small><br>` : ''}${c.servicos.map((s) => esc(nomes[s] || s)).join('<br>')}</td>
       <td>${brl(c.total)}</td>
       <td><a class="btn wa" target="_blank" rel="noopener" href="https://wa.me/${c.telefone.length <= 11 ? '55' : ''}${esc(c.telefone)}?text=${encodeURIComponent(`Olá ${c.nome}! Aqui é do escritório, recebemos seu pedido pelo site.`)}">WhatsApp</a></td>
     </tr>`).join('') : '<tr><td colspan="6" style="color:var(--suave)">Nenhum contato ainda.</td></tr>';
@@ -99,8 +99,8 @@ $('#formLogin').addEventListener('submit', async (e) => {
 });
 $('#atualizar').addEventListener('click', () => carrega().catch((e) => alert(e.message)));
 $('#csv').addEventListener('click', () => {
-  const linhas = [['data', 'nome', 'telefone', 'cnpj', 'servicos', 'total']].concat(dados.contatos.map((c) =>
-    [c.em, c.nome, c.telefone, fmtCnpj(c.cnpj), c.servicos.map((s) => dados.nomes[s] || s).join(' | '), String(c.total || 0).replace('.', ',')]));
+  const linhas = [['data', 'nome', 'telefone', 'email', 'cnpj', 'assunto', 'mensagem', 'servicos', 'total']].concat(dados.contatos.map((c) =>
+    [c.em, c.nome, c.telefone, c.email || '', fmtCnpj(c.cnpj), c.assunto || '', c.mensagem || '', c.servicos.map((s) => dados.nomes[s] || s).join(' | '), String(c.total || 0).replace('.', ',')]));
   const csv = linhas.map((l) => l.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));

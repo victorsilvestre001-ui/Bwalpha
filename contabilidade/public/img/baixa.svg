@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 440" font-family="Plus Jakarta Sans, Segoe UI, Arial, sans-serif">
+  <!-- documento com carimbo -->
+  <g transform="rotate(-3 230 220)">
+    <rect x="80" y="50" width="250" height="320" rx="16" fill="#fff" stroke="#e3e8ef" stroke-width="2"/>
+    <text x="106" y="92" fill="#0b2545" font-size="15" font-weight="800" letter-spacing="1">DISTRATO SOCIAL</text>
+    <rect x="106" y="104" width="70" height="4" rx="2" fill="#c9a227"/>
+    <g fill="#dfe6f0">
+      <rect x="106" y="130" width="196" height="9" rx="4.5"/><rect x="106" y="150" width="170" height="9" rx="4.5"/>
+      <rect x="106" y="170" width="186" height="9" rx="4.5"/><rect x="106" y="190" width="120" height="9" rx="4.5"/>
+      <rect x="106" y="300" width="196" height="9" rx="4.5"/><rect x="106" y="320" width="150" height="9" rx="4.5"/>
+    </g>
+    <g transform="rotate(-14 205 250)">
+      <rect x="120" y="222" width="170" height="58" rx="10" fill="none" stroke="#0b2545" stroke-width="5"/>
+      <rect x="128" y="230" width="154" height="42" rx="6" fill="none" stroke="#0b2545" stroke-width="1.5"/>
+      <text x="205" y="261" text-anchor="middle" fill="#0b2545" font-size="26" font-weight="800" letter-spacing="4">BAIXADA</text>
+    </g>
+  </g>
+  <!-- checklist dos órgãos -->
+  <g>
+    <rect x="300" y="110" width="220" height="230" rx="20" fill="#0b2545"/>
+    <text x="324" y="148" fill="#c9a227" font-size="13" font-weight="800" letter-spacing="1.5">ENCERRAMENTO</text>
+    <g font-size="15" fill="#fff" font-weight="600">
+      <circle cx="336" cy="182" r="12" fill="#1e7a4f"/><path d="M330 182l4 4 8-9" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><text x="358" y="187">Receita Federal</text>
+      <circle cx="336" cy="222" r="12" fill="#1e7a4f"/><path d="M330 222l4 4 8-9" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><text x="358" y="227">Junta Comercial</text>
+      <circle cx="336" cy="262" r="12" fill="#1e7a4f"/><path d="M330 262l4 4 8-9" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><text x="358" y="267">Estado</text>
+      <circle cx="336" cy="302" r="12" fill="#1e7a4f"/><path d="M330 302l4 4 8-9" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><text x="358" y="307">Prefeitura</text>
+    </g>
+  </g>
+  <!-- escudo CPF protegido -->
+  <g>
+    <rect x="330" y="360" width="200" height="56" rx="18" fill="#fff" stroke="#e3e8ef" stroke-width="2"/>
+    <path d="M362 372l14 5v10c0 9-6 15-14 18-8-3-14-9-14-18v-10z" fill="#c9a227"/>
+    <path d="M356 388l4 4 8-8" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="388" y="384" fill="#0b2545" font-size="14" font-weight="800">CPF protegido</text>
+    <text x="388" y="402" fill="#5d6b7c" font-size="12">sem dívidas para trás</text>
+  </g>
+</svg>

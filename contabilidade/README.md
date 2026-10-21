@@ -1,6 +1,10 @@
-# Consulta de Empresa (site da contabilidade)
+# Site da contabilidade (V&J Assessoria Contábil)
 
-A pessoa digita o CNPJ e o site mostra:
+Site completo do escritório: menu, apresentação, **abertura, alteração e baixa de CNPJ** (blocos com ilustrações), serviços, como funciona, planos mensais, contador virtual, sobre, dúvidas frequentes, contato e rodapé. As seções e ilustrações aparecem com animação conforme a pessoa rola a página (desligada para quem pede menos movimento no sistema).
+
+Arquivos da página: `public/index.html` (conteúdo), `public/estilo.css` (visual), `public/app.js` (consulta, chat, formulários e animações), `public/img/*.svg` (ilustrações).
+
+No topo do site fica a consulta grátis por CNPJ. A pessoa digita o CNPJ e o site mostra:
 
 1. **Dados da empresa na Receita** — situação (ativa, inapta, suspensa, baixada), regime (MEI, Simples, Presumido/Real), atividade, abertura.
 2. **O que ela precisa fazer para ficar em dia** — pendências urgentes (CNPJ inapto, exclusão do Simples, desenquadramento do MEI), itens para verificar (dívida ativa, certidões) e obrigações de rotina do regime.
@@ -31,7 +35,8 @@ Os CNPJs `11.222.333/0001-81` e `12.345.678/0001-95` são sempre de demonstraç�
 Tudo em **`precos.json`** (vale na hora, sem reiniciar):
 
 - `escritorio.nome`, `whatsapp` (só números, com 55 + DDD), `email`, `cidade`, `cnpj`
-- `escritorio.corPrincipal` (cor da marca) e `logoUrl` (endereço da imagem do logo)
+- `escritorio.corPrincipal` (azul-marinho), `corDestaque` (dourado), `logoUrl` (endereço da imagem do logo) e `fundacao` (ano mostrado em "Sobre")
+- `servicos.mensal_*.itens` — o que aparece em cada plano mensal; `destaque: true` marca o plano "Mais escolhido"
 - `escritorio.descontoPacotePct`
 - `servicos.*.valor` / `prazo` / `nome` — o preço de cada assunto
 

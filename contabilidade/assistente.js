@@ -20,7 +20,8 @@ function brl(v) {
 }
 
 // Instruções fixas primeiro (ficam em cache); os dados da empresa vêm depois.
-function instrucoes(escritorio) {
+function instrucoes(escritorio, servicos) {
+  const tabela = Object.values(servicos).map((s) => `- ${s.nome}: ${brl(s.valor)}${s.mensal ? '/mês' : ''}${s.prazo ? ` (prazo ${s.prazo})` : ''}`).join('\n');
   return `Você é o contador virtual do escritório "${escritorio.nome}", atendendo pelo site.
 A pessoa acabou de consultar o CNPJ de uma empresa. Abaixo estão os dados públicos da Receita, o diagnóstico automático e a tabela de preços do escritório.
 
@@ -30,7 +31,10 @@ Como responder:
 - Quando falar de um serviço, cite o preço e o prazo da tabela do escritório. Não ofereça descontos nem preços diferentes da tabela.
 - Quando fizer sentido, convide a pessoa a marcar os itens na tela e clicar em "Quero resolver" para falar com a equipe no WhatsApp.
 - Se a pergunta não tiver relação com a empresa, contabilidade ou os serviços, diga com educação que só pode ajudar com esses assuntos.
-- Para decisões com risco (encerrar empresa, mudar de regime, processos), explique os caminhos e recomende conversar com um contador da equipe.`;
+- Para decisões com risco (encerrar empresa, mudar de regime, processos), explique os caminhos e recomende conversar com um contador da equipe.
+
+Tabela de preços completa do escritório (o escritório também faz abertura, alteração contratual e baixa de CNPJ):
+${tabela}`;
 }
 
 function contexto(empresa, orcamento) {
@@ -70,7 +74,7 @@ function limpaMensagens(mensagens) {
 }
 
 // Transmite a resposta aos poucos: onTexto é chamado a cada pedaço de texto.
-async function responde({ empresa, orcamento, escritorio, mensagens }, onTexto) {
+async function responde({ empresa, orcamento, escritorio, servicos, mensagens }, onTexto) {
   const stream = client.beta.messages.stream({
     model: MODELO,
     max_tokens: 8000,
@@ -78,7 +82,7 @@ async function responde({ empresa, orcamento, escritorio, mensagens }, onTexto) 
     fallbacks: 'default',
     output_config: { effort: 'low' },
     system: [
-      { type: 'text', text: instrucoes(escritorio), cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: instrucoes(escritorio, servicos), cache_control: { type: 'ephemeral' } },
       { type: 'text', text: contexto(empresa, orcamento) },
     ],
     messages: mensagens,

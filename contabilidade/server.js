@@ -42,6 +42,7 @@ async function analisa(doc) {
     empresa: { ...emp.dados, cnpjFormatado: cnpj.formata(c), regime },
     orcamento: orcamento(itens, tabela),
     escritorio: tabela.escritorio,
+    servicos: tabela.servicos,
   };
 }
 
@@ -61,8 +62,8 @@ app.use('/api/', rateLimit({ windowMs: 60 * 1000, limit: 30 }));
 app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
 
 app.get('/api/config', (req, res) => {
-  const { escritorio } = tabelaPrecos();
-  res.json({ escritorio, ia: assistente.ativo() });
+  const { escritorio, servicos } = tabelaPrecos();
+  res.json({ escritorio, servicos, ia: assistente.ativo() });
 });
 
 app.get('/api/empresa/:cnpj', async (req, res) => {
@@ -104,7 +105,7 @@ app.post('/api/assistente', limiteIa, async (req, res) => {
 
 // Guarda quem pediu contato, para o escritório retornar mesmo se a pessoa não chamar no WhatsApp.
 app.post('/api/contato', (req, res) => {
-  const { nome, telefone, cnpj: doc, servicos, total } = req.body || {};
+  const { nome, telefone, cnpj: doc, servicos, total, email, assunto, mensagem } = req.body || {};
   if (!nome || !telefone) return res.status(400).json({ erro: 'Informe nome e telefone.' });
   const registro = {
     id: crypto.randomUUID(),
@@ -114,6 +115,9 @@ app.post('/api/contato', (req, res) => {
     cnpj: cnpj.limpa(doc).slice(0, 14),
     servicos: Array.isArray(servicos) ? servicos.map(String).slice(0, 30) : [],
     total: Number(total) || 0,
+    email: String(email || '').slice(0, 120),
+    assunto: String(assunto || '').slice(0, 80),
+    mensagem: String(mensagem || '').slice(0, 2000),
   };
   fs.appendFile(ARQ_CONTATOS, JSON.stringify(registro) + '\n', (err) => {
     if (err) {
