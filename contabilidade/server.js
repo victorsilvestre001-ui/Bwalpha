@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { fork } = require('child_process');
 const express = require('express');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -8,6 +9,8 @@ const cnpj = require('./cnpj');
 const { buscaEmpresa } = require('./consulta');
 const { diagnostico, orcamento } = require('./diagnostico');
 const assistente = require('./assistente');
+const pgfn = require('./pgfn/busca');
+const { trimestreMaisRecente } = require('./pgfn/atualiza');
 
 const PORT = process.env.PORT || 3100;
 const ARQ_PRECOS = path.join(__dirname, 'precos.json');
@@ -37,9 +40,10 @@ async function analisa(doc) {
     cache.set(c, emp);
   }
   const tabela = tabelaPrecos();
-  const { regime, itens } = diagnostico(emp.dados);
+  const dados = { ...emp.dados, pgfn: pgfn.dividaAtiva(c) };
+  const { regime, itens } = diagnostico(dados);
   return {
-    empresa: { ...emp.dados, cnpjFormatado: cnpj.formata(c), regime },
+    empresa: { ...dados, cnpjFormatado: cnpj.formata(c), regime },
     orcamento: orcamento(itens, tabela),
     escritorio: tabela.escritorio,
     servicos: tabela.servicos,
@@ -142,7 +146,32 @@ app.get('/api/admin/contatos', (req, res) => {
   });
 });
 
+// Com PGFN_AUTO=1, confere uma vez por dia se a PGFN publicou trimestre novo e
+// regera o índice da dívida ativa num processo separado (o site segue no ar).
+let atualizandoPgfn = false;
+async function verificaPgfn() {
+  if (atualizandoPgfn) return;
+  try {
+    const recente = await trimestreMaisRecente();
+    const atual = pgfn.info();
+    if (atual && atual.trimestre === recente) return;
+    atualizandoPgfn = true;
+    console.log(`[pgfn] atualizando índice: ${atual ? atual.trimestre : 'nenhum'} -> ${recente}`);
+    fork(path.join(__dirname, 'pgfn', 'atualiza.js'), ['--trimestre', recente])
+      .on('exit', (codigo) => {
+        atualizandoPgfn = false;
+        console.log(`[pgfn] atualização terminou (código ${codigo})`);
+      });
+  } catch (err) {
+    console.error('[pgfn] verificação falhou:', err.message);
+  }
+}
+
 if (require.main === module) {
+  if (process.env.PGFN_AUTO === '1') {
+    setTimeout(verificaPgfn, 15 * 1000);
+    setInterval(verificaPgfn, 24 * 60 * 60 * 1000);
+  }
   app.listen(PORT, () => console.log(`Consulta de empresas rodando em http://localhost:${PORT}${assistente.ativo() ? ' (com IA)' : ' (sem IA: defina ANTHROPIC_API_KEY)'}`));
 }
 

@@ -3,7 +3,7 @@ const $$ = (s) => document.querySelectorAll(s);
 const brl = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const data = (d) => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—';
-const ROTULO = { urgente: 'Urgente', atencao: 'Verificar', rotina: 'Rotina' };
+const ROTULO = { urgente: 'Urgente', atencao: 'Verificar', rotina: 'Rotina', ok: 'Em dia' };
 const icone = (id) => `<svg class="i"><use href="#i-${id}"/></svg>`;
 let atual = null;
 let config = { escritorio: {}, servicos: {}, ia: false };
@@ -151,7 +151,7 @@ function render({ empresa: e, orcamento: o, escritorio }) {
   const ativa = e.situacao === 'ATIVA';
   const itens = o.itens.map((i, n) => `
     <label class="item">
-      <input type="checkbox" data-servico="${esc(i.preco?.id || '')}" ${i.preco && i.gravidade !== 'rotina' ? 'checked' : ''} ${i.preco ? '' : 'disabled'}>
+      ${i.gravidade === 'ok' ? `<span class="ok-ic">${icone('check')}</span>` : `<input type="checkbox" data-servico="${esc(i.preco?.id || '')}" ${i.preco && i.gravidade !== 'rotina' ? 'checked' : ''} ${i.preco ? '' : 'disabled'}>`}
       <div>
         <h3>${esc(i.titulo)} <span class="tag ${i.gravidade}">${ROTULO[i.gravidade]}</span></h3>
         <p>${esc(i.explicacao)}</p>

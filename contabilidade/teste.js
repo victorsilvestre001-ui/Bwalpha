@@ -51,3 +51,35 @@ const ctx = assistente.contexto({ ...DEMOS['11222333000181'], cnpjFormatado: '11
 assert(ctx.includes('INAPTA') && ctx.includes('R$'));
 
 console.log('ok assistente');
+
+// Dívida ativa: índice pequeno gerado na hora + regras do diagnóstico
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pgfn-'));
+process.env.DADOS_DIR = dir;
+const { TAM_REGISTRO } = require('./pgfn/formato');
+const regs = [[11222333000181, 1000, 0, 2, 1, 1], [11222333000262, 500.5, 500.5, 1, 0, 4], [12345678000195, 300, 300, 1, 0, 2]];
+const bin = Buffer.alloc(regs.length * TAM_REGISTRO);
+regs.forEach(([c, t, r, q, a, tp], k) => {
+  const o = k * TAM_REGISTRO;
+  bin.writeDoubleLE(c, o); bin.writeDoubleLE(t, o + 8); bin.writeDoubleLE(r, o + 16);
+  bin.writeUInt32LE(q, o + 24); bin.writeUInt32LE(a, o + 28); bin.writeUInt8(tp, o + 32);
+});
+fs.writeFileSync(path.join(dir, 'pgfn.bin'), bin);
+fs.writeFileSync(path.join(dir, 'pgfn.json'), JSON.stringify({ trimestre: '2026_trimestre_02' }));
+const busca = require('./pgfn/busca');
+const padaria = busca.dividaAtiva('11222333000181');
+assert.strictEqual(padaria.total, 1500.5, 'soma matriz e filial');
+assert.strictEqual(padaria.emCobranca, 1000);
+assert.deepStrictEqual(padaria.tipos, ['tributos federais', 'FGTS']);
+assert.strictEqual(busca.dividaAtiva('99888777000161').total, 0);
+const comDivida = diagnostico({ ...DEMOS['11222333000181'], pgfn: padaria }, hoje).itens;
+assert(comDivida.some((i) => i.gravidade === 'urgente' && /em cobrança/.test(i.titulo)));
+const parcelada = diagnostico({ ...DEMOS['12345678000195'], pgfn: busca.dividaAtiva('12345678000195') }, hoje).itens;
+assert(parcelada.some((i) => /regularizada/.test(i.titulo)));
+const limpa = diagnostico({ ...DEMOS['12345678000195'], pgfn: busca.dividaAtiva('99888777000161') }, hoje).itens;
+assert(limpa.some((i) => i.gravidade === 'ok'));
+fs.rmSync(dir, { recursive: true, force: true });
+
+console.log('ok divida ativa');

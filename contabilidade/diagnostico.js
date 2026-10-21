@@ -4,6 +4,7 @@
 // gravidade: 'urgente'  -> bloqueia a empresa ou gera multa já
 //            'atencao'  -> provável pendência, precisa confirmar
 //            'rotina'   -> obrigação recorrente para não voltar a dever
+//            'ok'       -> conferido e sem pendência (sem serviço)
 
 const LINKS = {
   cndFederal: 'https://servicos.receitafederal.gov.br/servico/certidoes/#/home',
@@ -14,6 +15,16 @@ const LINKS = {
   pgmei: 'https://www8.receita.fazenda.gov.br/SimplesNacional/Aplicacoes/ATSPO/pgmei.app/Identificacao',
   dasnSimei: 'https://www8.receita.fazenda.gov.br/SimplesNacional/Aplicacoes/ATSPO/dasnsimei.app/Identificacao',
 };
+
+function brl(v) {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+// "2026_trimestre_02" -> "2º trimestre de 2026"
+function trimestre(t) {
+  const m = /^(\d{4})_trimestre_0?(\d)$/.exec(t || '');
+  return m ? `${m[2]}º trimestre de ${m[1]}` : t;
+}
 
 function anoDe(data) {
   return data ? Number(String(data).slice(0, 4)) : null;
@@ -96,20 +107,47 @@ function diagnostico(emp, hoje = new Date()) {
     });
   }
 
-  // 3) Débitos que só aparecem com acesso ao e-CAC (sempre recomendado)
+  // 3) Dívida ativa da União (dados abertos da PGFN) e débitos que só aparecem no e-CAC
   if (situacao !== 'NULA') {
+    const d = emp.pgfn;
+    const fonte = d ? ` (dados abertos da PGFN, ${trimestre(d.trimestre)})` : '';
+    if (d && d.emCobranca > 0) {
+      add({
+        gravidade: 'urgente', servico: 'transacao_pgfn',
+        titulo: `Dívida ativa na União: ${brl(d.emCobranca)} em cobrança`,
+        explicacao: `${d.inscricoes} inscrição(ões) em dívida ativa${d.tipos.length ? ` (${d.tipos.join(', ')})` : ''}${d.ajuizadas ? `, ${d.ajuizadas} já cobrada(s) na Justiça` : ''}${fonte}. Dívida ativa bloqueia certidões e pode levar a penhora de contas. Os editais de transação da PGFN costumam dar grandes descontos em juros e multas e parcelar em muitas vezes.`,
+        link: LINKS.regularize,
+      });
+    } else if (d && d.total > 0) {
+      add({
+        gravidade: 'atencao', servico: 'certidoes',
+        titulo: `Dívida ativa regularizada: ${brl(d.total)}`,
+        explicacao: `A empresa tem dívida ativa na União, mas parcelada, garantida ou suspensa${fonte}. Com as parcelas em dia dá para emitir certidão positiva com efeito de negativa.`,
+        link: LINKS.regularize,
+      });
+    } else if (d) {
+      add({
+        gravidade: 'ok', servico: null,
+        titulo: 'Nenhuma dívida ativa na União',
+        explicacao: `O CNPJ não aparece na dívida ativa de tributos federais, INSS e FGTS${fonte}.`,
+      });
+    }
     add({
       gravidade: 'atencao', servico: 'diagnostico_completo',
-      titulo: 'Dívida ativa e débitos em aberto',
-      explicacao: 'Os valores exatos (Receita, PGFN, FGTS, estado e prefeitura) só aparecem com acesso ao e-CAC por procuração. Você mesmo pode conferir se o CNPJ está na lista pública de devedores da PGFN.',
-      link: LINKS.listaDevedores,
+      titulo: d ? 'Débitos na Receita, no estado e na prefeitura' : 'Dívida ativa e débitos em aberto',
+      explicacao: d
+        ? 'Débitos ainda não enviados para dívida ativa, impostos estaduais e municipais só aparecem com acesso ao e-CAC e aos portais do estado e da prefeitura, por procuração.'
+        : 'Os valores exatos (Receita, PGFN, FGTS, estado e prefeitura) só aparecem com acesso ao e-CAC por procuração. Você mesmo pode conferir se o CNPJ está na lista pública de devedores da PGFN.',
+      link: d ? undefined : LINKS.listaDevedores,
     });
-    add({
-      gravidade: 'atencao', servico: 'transacao_pgfn',
-      titulo: 'Negociação de dívida ativa com desconto',
-      explicacao: 'Se houver dívida ativa na PGFN, os editais de transação costumam dar grandes descontos em juros e multas e parcelar em muitas vezes.',
-      link: LINKS.regularize,
-    });
+    if (!d) {
+      add({
+        gravidade: 'atencao', servico: 'transacao_pgfn',
+        titulo: 'Negociação de dívida ativa com desconto',
+        explicacao: 'Se houver dívida ativa na PGFN, os editais de transação costumam dar grandes descontos em juros e multas e parcelar em muitas vezes.',
+        link: LINKS.regularize,
+      });
+    }
     add({
       gravidade: 'atencao', servico: 'certidoes',
       titulo: 'Certidões negativas',
