@@ -9,7 +9,7 @@ async function getJson(url) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
-    const r = await fetch(url, { signal: ctrl.signal, headers: { Accept: 'application/json' } });
+    const r = await fetch(url, { signal: ctrl.signal, headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0 (compatible; ConsultaCNPJ/1.0)' } });
     if (r.status === 404) return null;
     if (!r.ok) throw new Error(`${url} respondeu ${r.status}`);
     return await r.json();
