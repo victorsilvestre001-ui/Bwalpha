@@ -8,19 +8,20 @@
 <style>
   :root {
     --bg: #f5f7fa; --card: #ffffff; --texto: #1d2733; --suave: #5b6878; --borda: #e2e7ee;
-    --marca: #0f6e5c; --marca-escura: #0a5446; --marca-clara: #e3f3ef;
+    --marca: #0f6e5c; --marca-clara: color-mix(in srgb, var(--marca) 12%, #ffffff);
     --urgente: #c0392b; --urgente-bg: #fdecea; --atencao: #b7791f; --atencao-bg: #fdf5e6;
     --rotina: #2b6cb0; --rotina-bg: #eaf2fb;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #11161c; --card: #1a2129; --texto: #e6ebf0; --suave: #9aa7b5; --borda: #2a333d;
-      --marca: #2bb596; --marca-escura: #239c81; --marca-clara: #16302a;
+      --marca: #2bb596; --marca-clara: color-mix(in srgb, var(--marca) 20%, #1a2129);
       --urgente: #f0766a; --urgente-bg: #3a1e1c; --atencao: #e5b25a; --atencao-bg: #352a17;
       --rotina: #6fa8e8; --rotina-bg: #182a3e;
     }
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--texto); line-height: 1.5; }
   .wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
   header { background: var(--marca); color: #fff; padding: 48px 0 72px; }
@@ -31,7 +32,7 @@
   .busca input:focus { outline: none; border-color: var(--marca); }
   button { font: inherit; cursor: pointer; border: 0; border-radius: 10px; }
   .btn { background: var(--marca); color: #fff; font-weight: 600; padding: 14px 24px; }
-  .btn:hover { background: var(--marca-escura); }
+  .btn:hover { background: color-mix(in srgb, var(--marca) 82%, black); }
   .btn:disabled { opacity: .6; cursor: wait; }
   .dica { width: 100%; font-size: .85rem; color: var(--suave); }
   .dica a { color: var(--marca); cursor: pointer; }
@@ -62,8 +63,7 @@
   .tag.atencao { background: var(--atencao-bg); color: var(--atencao); }
   .tag.rotina { background: var(--rotina-bg); color: var(--rotina); }
   .preco { text-align: right; max-width: 240px; }
-  .preco b { white-space: nowrap; }
-  .preco b { display: block; color: var(--marca); font-size: 1.1rem; }
+  .preco b { display: block; white-space: nowrap; color: var(--marca); font-size: 1.1rem; }
   .preco small { color: var(--suave); }
   .total { position: sticky; bottom: 0; background: var(--card); border-top: 3px solid var(--marca); border-radius: 14px 14px 0 0; padding: 16px 20px; margin-top: 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; box-shadow: 0 -6px 24px rgba(0,0,0,.08); }
   .total .de { text-decoration: line-through; color: var(--suave); font-size: .9rem; }
@@ -77,6 +77,22 @@
   .sec { background: transparent; color: var(--suave); padding: 14px 16px; }
   footer { color: var(--suave); font-size: .8rem; padding: 32px 0 120px; }
   .carregando { text-align: center; color: var(--suave); padding: 30px; }
+  .marca { display: flex; align-items: center; gap: 10px; font-weight: 700; margin-bottom: 28px; opacity: .95; }
+  .marca img { height: 36px; border-radius: 6px; background: #fff; padding: 2px; }
+  .marca small { font-weight: 400; opacity: .8; }
+  .ia-selo { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,.15); border-radius: 999px; padding: 4px 12px; font-size: .8rem; margin-top: 14px; }
+  .chat .msgs { display: flex; flex-direction: column; gap: 10px; max-height: 460px; overflow-y: auto; padding: 4px 2px; }
+  .msg { padding: 10px 14px; border-radius: 14px; max-width: 85%; font-size: .95rem; white-space: normal; }
+  .msg.user { align-self: flex-end; background: var(--marca); color: #fff; border-bottom-right-radius: 4px; }
+  .msg.assistant { align-self: flex-start; background: var(--bg); border: 1px solid var(--borda); border-bottom-left-radius: 4px; }
+  .msg.assistant.digitando::after { content: '▍'; animation: pisca 1s steps(2) infinite; color: var(--marca); }
+  @keyframes pisca { 50% { opacity: 0; } }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+  .chips button { background: var(--marca-clara); color: var(--marca); padding: 8px 12px; font-size: .85rem; border-radius: 999px; }
+  .chat form { display: flex; gap: 8px; margin-top: 10px; }
+  .chat input { flex: 1; padding: 12px 14px; border: 1px solid var(--borda); border-radius: 10px; font: inherit; background: var(--bg); color: var(--texto); }
+  .chat .aviso { font-size: .75rem; color: var(--suave); margin-top: 8px; }
+  footer .escritorio { color: var(--texto); font-weight: 600; margin-bottom: 6px; }
   @media (max-width: 560px) {
     .resumo b { font-size: 1.4rem; }
     .item { grid-template-columns: auto 1fr; }
@@ -87,8 +103,10 @@
 <body>
 <header>
   <div class="wrap">
+    <div class="marca" id="marca"></div>
     <h1 id="titulo">Sua empresa está em dia?</h1>
     <p>Digite o CNPJ e veja na hora a situação na Receita, o que a empresa precisa fazer para ficar regular e quanto custa resolver cada coisa com a gente.</p>
+    <div class="ia-selo" id="iaSelo" hidden>✦ Com contador virtual de inteligência artificial</div>
   </div>
 </header>
 
@@ -100,6 +118,7 @@
   </form>
   <div id="saida"></div>
   <footer>
+    <div class="escritorio" id="rodape"></div>
     Os dados cadastrais vêm da base pública da Receita Federal. Os valores exatos de débitos (Receita, PGFN, FGTS, estado e prefeitura) só podem ser levantados com acesso ao e-CAC por procuração — fazemos isso no levantamento completo.
   </footer>
 </main>
@@ -126,6 +145,18 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const data = (d) => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—';
 const ROTULO = { urgente: 'Urgente', atencao: 'Verificar', rotina: 'Rotina' };
 let atual = null;
+let config = { escritorio: {}, ia: false };
+let conversa = [];
+
+fetch('/api/config').then((r) => r.json()).then((c) => {
+  config = c;
+  const e = c.escritorio || {};
+  if (e.corPrincipal) document.documentElement.style.setProperty('--marca', e.corPrincipal);
+  if (e.nome) document.title = e.nome + ' · Consulta de Empresa';
+  $('#marca').innerHTML = `${e.logoUrl ? `<img src="${esc(e.logoUrl)}" alt="">` : ''}<span>${esc(e.nome || '')}${e.cidade ? ` <small>· ${esc(e.cidade)}</small>` : ''}</span>`;
+  $('#rodape').textContent = [e.nome, e.cnpj && 'CNPJ ' + e.cnpj, e.email, e.cidade].filter(Boolean).join(' · ');
+  $('#iaSelo').hidden = !c.ia;
+}).catch(() => {});
 
 function mascara(v) {
   const c = v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 14);
@@ -157,7 +188,6 @@ async function consultar() {
 }
 
 function render({ empresa: e, orcamento: o, escritorio }) {
-  if (escritorio.nome) document.title = escritorio.nome + ' · Consulta de Empresa';
   const conta = (g) => o.itens.filter((i) => i.gravidade === g).length;
   const ativa = e.situacao === 'ATIVA';
   const itens = o.itens.map((i, n) => `
@@ -199,6 +229,20 @@ function render({ empresa: e, orcamento: o, escritorio }) {
       <p style="color:var(--suave);margin-top:-6px;font-size:.9rem">Marque o que quer resolver. O valor do pacote atualiza na hora.</p>
       ${itens}
     </section>
+    ${config.ia ? `
+    <section class="card chat">
+      <h2>✦ Pergunte ao contador virtual</h2>
+      <p style="color:var(--suave);margin-top:-6px;font-size:.9rem">Ele já conhece a situação desta empresa. Tire suas dúvidas na hora, 24 horas por dia.</p>
+      <div class="msgs" id="msgs"></div>
+      <div class="chips" id="chips">
+        ${['Explique a situação da minha empresa', 'O que é mais urgente resolver?', 'O que acontece se eu não resolver?', 'Como funciona o parcelamento?'].map((q) => `<button type="button">${q}</button>`).join('')}
+      </div>
+      <form id="formChat">
+        <input id="pergunta" maxlength="2000" placeholder="Escreva sua dúvida…" autocomplete="off">
+        <button class="btn">Enviar</button>
+      </form>
+      <div class="aviso">Respostas geradas por inteligência artificial, com base nos dados públicos da Receita. Para valores exatos, peça o levantamento completo.</div>
+    </section>` : ''}
     <div class="total">
       <div id="totais"></div>
       <button class="btn" id="quero">Quero resolver</button>
@@ -211,6 +255,65 @@ function render({ empresa: e, orcamento: o, escritorio }) {
   }));
   $('#quero').addEventListener('click', () => $('#dlg').showModal());
   totais();
+  conversa = [];
+  if (config.ia) {
+    $('#chips').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => pergunta(b.textContent)));
+    $('#formChat').addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      const q = $('#pergunta').value.trim();
+      if (q) { $('#pergunta').value = ''; pergunta(q); }
+    });
+  }
+}
+
+// Formatação mínima da resposta da IA: escapa tudo, depois negrito, listas e quebras de linha.
+function formataIa(t) {
+  return esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/^[-•] /gm, '• ').replace(/\n/g, '<br>');
+}
+
+let respondendo = false;
+async function pergunta(q) {
+  if (respondendo) return;
+  respondendo = true;
+  $('#chips').hidden = true;
+  const msgs = $('#msgs');
+  conversa.push({ role: 'user', content: q });
+  msgs.insertAdjacentHTML('beforeend', `<div class="msg user">${esc(q)}</div>`);
+  const bolha = document.createElement('div');
+  bolha.className = 'msg assistant digitando';
+  msgs.appendChild(bolha);
+  msgs.scrollTop = msgs.scrollHeight;
+  let texto = '';
+  try {
+    const r = await fetch('/api/assistente', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cnpj: atual.empresa.cnpj, mensagens: conversa }),
+    });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).erro || 'Não consegui responder agora.');
+    const leitor = r.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    for (;;) {
+      const { done, value } = await leitor.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const partes = buf.split('\n\n');
+      buf = partes.pop();
+      for (const p of partes) {
+        if (!p.startsWith('data: ')) continue;
+        const ev = JSON.parse(p.slice(6));
+        if (ev.erro) throw new Error(ev.erro);
+        if (ev.texto) { texto += ev.texto; bolha.innerHTML = formataIa(texto); msgs.scrollTop = msgs.scrollHeight; }
+      }
+    }
+    conversa.push({ role: 'assistant', content: texto });
+  } catch (err) {
+    conversa.pop();
+    bolha.innerHTML = `<span style="color:var(--urgente)">${esc(err.message)}</span>`;
+  } finally {
+    bolha.classList.remove('digitando');
+    respondendo = false;
+  }
 }
 
 function selecionados() {
@@ -243,7 +346,7 @@ $('#formContato').addEventListener('submit', async (ev) => {
   const tel = $('#tel').value.trim();
   fetch('/api/contato', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nome, telefone: tel, cnpj: e.cnpj, servicos: sel.map((s) => s.id) }),
+    body: JSON.stringify({ nome, telefone: tel, cnpj: e.cnpj, servicos: sel.map((s) => s.id), total: final }),
   }).catch(() => {});
   const linhas = sel.filter((s) => !s.mensal).map((s) => `• ${s.nome} (${brl(s.valor)})`);
   const msg = `Olá! Sou ${nome}. Consultei a empresa ${e.razaoSocial} (CNPJ ${e.cnpjFormatado}) no site e quero resolver:\n${linhas.join('\n')}`

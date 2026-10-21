@@ -7,8 +7,11 @@
     "start": "node server.js",
     "test": "node teste.js"
   },
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
     "express": "^4.19.2",
     "express-rate-limit": "^7.4.0",
     "helmet": "^7.1.0"
