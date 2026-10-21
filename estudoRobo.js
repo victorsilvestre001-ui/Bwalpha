@@ -57,10 +57,22 @@ function setasDoAtivo(pair, m1, getBwalphaIndicator) {
             const corpos = fechadas.slice(-21, -1).map((c) => Math.abs(c.close - c.open)), mc = corpos.reduce((a, x) => a + x, 0) / (corpos.length || 1);
             const u = fechadas.at(-1), contraCorpo = (u.close - u.open) * -lado;
             const ant = eventos.at(-1);
+            // Leituras extras para o estudo dos sinais (BACKTEST_SOURCE=sinais, pedido de 21/10).
+            const tr = fechadas.slice(1).map((c, k) => Math.max(c.high, fechadas[k].close) - Math.min(c.low, fechadas[k].close));
+            const atr14 = tr.slice(-14).reduce((a, x) => a + x, 0) / 14;
+            const trOrd = tr.slice().sort((a, b) => a - b), atrMed = trOrd[Math.floor(trOrd.length / 2)] || atr14;
+            const fech = fechadas.map((c) => c.close);
+            let g = 0, d = 0;
+            for (let k = fech.length - 14; k < fech.length; k++) { const ch = fech[k] - fech[k - 1]; if (ch > 0) g += ch; else d -= ch; }
+            const rsi = d === 0 ? 100 : 100 - 100 / (1 + g / d);
+            const mov6 = (ultimo.close - fechadas.at(-7).close) / (atr14 || 1e-9) * lado; // quanto andou a favor nas últimas 6 velas
             eventos.push({ t: mb, lado,
                 aFavorMedia: (ultimo.close - media) * lado > 0,
                 contrariaRecente: !!ant && ant.lado !== lado && mb - ant.t <= 30 * MIN,
-                velaContraForte: contraCorpo > 0 && contraCorpo >= 1.5 * mc });
+                velaContraForte: contraCorpo > 0 && contraCorpo >= 1.5 * mc,
+                minDesdeAnterior: ant ? (mb - ant.t) / MIN : null,
+                volRel: atr14 / (atrMed || 1e-9), rsi, mov6,
+                distMedia: (ultimo.close - media) / (atr14 || 1e-9) * lado });
         }
     }
     return { eventos, res };
@@ -162,4 +174,67 @@ async function runRobo(pool, { fetchLongHistory }) {
     }
 }
 
-module.exports = { runRobo, simula, setasDoAtivo, diaRobo };
+// Estudo dos sinais (pedido do dono em 21/10, "melhora a análise desses sinais agora que tem bastante dias"):
+// para cada seta, o resultado da 1ª entrada e do ciclo (gale 2, cancelado por seta nova, como o robô) e as leituras do
+// momento. Mostra o acerto por faixa de cada leitura, separado em duas metades no tempo: só vale um filtro que melhora
+// nas duas. BACKTEST_SOURCE=sinais; ROBO_FONTE como no runRobo (padrão: os dois); logs SINAIS_*.
+function resultadoDoEvento(e, seta, res, pair) {
+    let lucro = 0, ganhou = false, g = 0;
+    for (; g <= 2; g++) {
+        const b = e.t + g * M5;
+        if (g > 0 && seta.has(b)) break;
+        const r = res(b) * e.lado, v = MULT[g];
+        if (r > 0) { lucro += v * PAYOUT[pair]; ganhou = true; break; }
+        if (r === 0) break;
+        lucro -= v;
+    }
+    return { primeira: res(e.t) * e.lado > 0, ganhou, lucro, redCompleto: !ganhou && g > 2 };
+}
+const FAIXAS = {
+    ativo: (e) => e.pair,
+    lado: (e) => (e.lado > 0 ? 'COMPRA' : 'VENDA'),
+    sessao_brt: (e) => { const h = Math.floor(brtMin(e.t) / 60); return h >= 22 || h < 4 ? '22h-04h' : h < 9 ? '04h-09h' : h < 13 ? '09h-13h' : h < 18 ? '13h-18h' : '18h-22h'; },
+    a_favor_media: (e) => (e.aFavorMedia ? 'sim' : 'nao'),
+    seta_contraria_30min: (e) => (e.contrariaRecente ? 'sim' : 'nao'),
+    vela_forte_contra: (e) => (e.velaContraForte ? 'sim' : 'nao'),
+    min_desde_seta_anterior: (e) => (e.minDesdeAnterior == null ? '?' : e.minDesdeAnterior <= 30 ? '<=30' : e.minDesdeAnterior <= 120 ? '35-120' : '>120'),
+    volatilidade: (e) => (e.volRel < 0.8 ? 'baixa' : e.volRel < 1.3 ? 'normal' : 'alta'),
+    rsi_a_favor: (e) => { const r = e.lado > 0 ? e.rsi : 100 - e.rsi; return r < 40 ? '<40' : r < 60 ? '40-60' : '>=60'; },
+    andou_6velas: (e) => (e.mov6 < -1 ? 'contra' : e.mov6 > 1 ? 'a_favor' : 'parado'),
+    dist_media_atr: (e) => (e.distMedia < -1 ? '<-1' : e.distMedia < 0 ? '-1..0' : e.distMedia < 1 ? '0..1' : '>1'),
+};
+async function runSinais(pool, { fetchLongHistory }) {
+    const { getBwalphaIndicator } = require('./marketRoutes');
+    const fontes = process.env.ROBO_FONTE === 'twelve' ? ['twelve'] : process.env.ROBO_FONTE === 'exnova' ? ['exnova'] : ['exnova', 'twelve'];
+    for (const fonte of fontes) {
+        const todos = [];
+        for (const pair of ['XAUUSD', 'EURJPY']) {
+            let m1;
+            try {
+                if (fonte === 'exnova') {
+                    const { rows } = await pool.query('SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 ORDER BY time', [pair]);
+                    m1 = rows.slice(0, -1).map((r) => ({ time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }));
+                } else m1 = await fetchLongHistory(pair, 'M1', Number(process.env.HOR_PAGINAS) || 25);
+            } catch (err) { console.log(`SINAIS_ERRO ${fonte} ${pair} ${err.message}`); continue; }
+            if (!m1?.length) continue;
+            const { eventos, res } = setasDoAtivo(pair, m1, getBwalphaIndicator);
+            const seta = new Set(eventos.map((e) => e.t));
+            for (const e of eventos) todos.push({ ...e, pair, ...resultadoDoEvento(e, seta, res, pair) });
+        }
+        if (!todos.length) continue;
+        todos.sort((a, b) => a.t - b.t);
+        const corte = todos[Math.floor(todos.length / 2)].t;
+        const resume = (l) => ({ n: l.length, acerto_1a: l.length ? +(100 * l.filter((x) => x.primeira).length / l.length).toFixed(1) : null,
+            ciclo: l.length ? +(100 * l.filter((x) => x.ganhou).length / l.length).toFixed(1) : null,
+            red_completo: l.filter((x) => x.redCompleto).length, lucro_unid: +l.reduce((a, x) => a + x.lucro, 0).toFixed(1) });
+        console.log(`SINAIS_TOTAL ${fonte} de=${new Date(todos[0].t).toISOString().slice(0, 10)} ate=${new Date(todos.at(-1).t).toISOString().slice(0, 10)} ${JSON.stringify({ tudo: resume(todos), metade1: resume(todos.filter((x) => x.t < corte)), metade2: resume(todos.filter((x) => x.t >= corte)) })}`);
+        for (const [nome, f] of Object.entries(FAIXAS)) {
+            const grupos = {};
+            for (const e of todos) ((grupos[f(e)] ||= { m1: [], m2: [] })[e.t < corte ? 'm1' : 'm2']).push(e);
+            const out = Object.fromEntries(Object.entries(grupos).map(([k, g]) => [k, { m1: resume(g.m1), m2: resume(g.m2) }]));
+            console.log(`SINAIS_FAIXA ${fonte} ${nome} ${JSON.stringify(out)}`);
+        }
+    }
+}
+
+module.exports = { runSinais, runRobo, simula, setasDoAtivo, diaRobo };
