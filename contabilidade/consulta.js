@@ -111,6 +111,7 @@ async function buscaEmpresa(cnpj) {
       if (d === null) return null;
       return normaliza(d);
     } catch (err) {
+      console.warn('[consulta] fonte falhou:', err.message);
       erros.push(err.message);
     }
   }

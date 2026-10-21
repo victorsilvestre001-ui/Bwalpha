@@ -22,7 +22,15 @@ const mei = diagnostico(DEMOS['12345678000195'], hoje);
 assert.strictEqual(mei.regime, 'MEI');
 assert(mei.itens.some((i) => i.servico === 'dasn_simei'));
 
-for (const i of [...inapta.itens, ...mei.itens]) assert(tabela.servicos[i.servico], `serviço sem preço: ${i.servico}`);
+// Saiu do MEI há anos e está no Simples com exclusão futura: sem alerta de MEI, com alerta de exclusão.
+const vj = diagnostico({ ...DEMOS['12345678000195'], mei: false, simples: true, dataExclusaoMei: '2023-12-31', dataExclusaoSimples: '2026-12-31' }, hoje);
+assert(!vj.itens.some((i) => i.titulo === 'Desenquadrada do MEI'), 'saída antiga do MEI não é alerta');
+assert(vj.itens.some((i) => i.titulo === 'Exclusão do Simples Nacional agendada'));
+assert.strictEqual(vj.regime, 'Simples Nacional');
+const recente = diagnostico({ ...DEMOS['12345678000195'], mei: false, simples: true, dataExclusaoMei: '2026-06-30' }, hoje);
+assert(recente.itens.some((i) => i.titulo === 'Desenquadrada do MEI'), 'saída recente do MEI é alerta');
+
+for (const i of [...inapta.itens, ...mei.itens, ...vj.itens]) assert(tabela.servicos[i.servico], `serviço sem preço: ${i.servico}`);
 
 const o = orcamento(inapta.itens, tabela);
 const ids = o.servicos.map((s) => s.id);

@@ -61,11 +61,26 @@ function diagnostico(emp, hoje = new Date()) {
   const regime = emp.mei ? 'MEI' : emp.simples ? 'Simples Nacional' : 'Lucro Presumido / Real';
 
   // 2) Saída do MEI / Simples
-  if (emp.dataExclusaoMei && !emp.mei) {
+  // Saída do MEI há mais de um ano: a migração para ME normalmente já foi feita, não é alerta.
+  const umAno = 365 * 24 * 60 * 60 * 1000;
+  const dataEm = (d) => new Date(`${String(d).slice(0, 10)}T00:00:00`);
+  if (emp.dataExclusaoMei && !emp.mei && hoje - dataEm(emp.dataExclusaoMei) <= umAno) {
     add({
       gravidade: 'urgente', servico: 'migracao_mei_me',
       titulo: 'Desenquadrada do MEI',
       explicacao: `A empresa deixou de ser MEI em ${formataData(emp.dataExclusaoMei)}. A partir daí ela tem obrigações de Microempresa (contador, declarações mensais), e quem continua pagando só o DAS-MEI acumula dívida.`,
+    });
+  }
+  if (emp.simples && emp.dataExclusaoSimples && dataEm(emp.dataExclusaoSimples) > hoje) {
+    add({
+      gravidade: 'urgente', servico: 'parcelamento',
+      titulo: 'Exclusão do Simples Nacional agendada',
+      explicacao: `A Receita informa que a empresa sai do Simples em ${formataData(emp.dataExclusaoSimples)}. Isso costuma vir de um termo de exclusão por débitos ou pendências. Regularizando dentro do prazo do termo, a empresa continua no Simples e não passa a pagar mais imposto.`,
+    });
+    add({
+      gravidade: 'atencao', servico: 'diagnostico_completo',
+      titulo: 'Conferir o termo de exclusão',
+      explicacao: 'O termo de exclusão fica na caixa postal do Simples Nacional (DTE-SN). Ele diz o motivo e o prazo para regularizar.',
     });
   }
   if (emp.dataExclusaoSimples && !emp.simples) {
