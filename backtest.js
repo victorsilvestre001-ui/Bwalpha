@@ -789,6 +789,11 @@ async function run() {
         console.log('BACKTEST_END');
         return;
     }
+    if (process.env.BACKTEST_SOURCE === 'site') {
+        try { await require('./estudoSite').runSite(pool); } catch (err) { console.error('BACKTEST_ERR SITE:', err.message); }
+        console.log('BACKTEST_END');
+        return;
+    }
     if (process.env.BACKTEST_SOURCE === 'sinais') {
         try { await require('./estudoRobo').runSinais(pool, { fetchLongHistory }); } catch (err) { console.error('BACKTEST_ERR SINAIS:', err.message); }
         console.log('BACKTEST_END');
