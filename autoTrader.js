@@ -149,6 +149,10 @@ async function connect(s = st) {
                     [String(m.msg.option_id), res]).then(({ rows }) => rows.forEach((r) => {
                     console.log(`${s.tag}: resultado #${r.id} ${r.pair} ${r.direction} (corretora): ${res}`);
                     if (s === st && res === 'erro' && (r.conta || 'treino') === 'treino') fazGale(r).catch((err) => console.error('ROBO_DEMO gale erro:', err.message));
+                    if (s === sr && r.conta === 'real' && r.detalhes?.estrategia === 'bw_seta') {
+                        if (res === 'erro') fazGaleReal(r).catch((err) => console.error('ROBO_REAL gale erro:', err.message));
+                        else sr.cicloAte = 0; // ciclo real terminou (WIN ou empate)
+                    }
                 })).catch(() => {});
             }
         } else if (m.request_id && s.pending.has(m.request_id)) {
@@ -370,6 +374,61 @@ async function fazGale(r) {
         { ...d, gale: g, origem: d.origem || r.id, expira, entrada: null }, { valor: Math.round(VALOR * GALE_MULT[g] * 100) / 100, gale: true, soTreino: true });
 }
 
+// Conta REAL só com a seta do bwalpha (pedido do dono em 22/10: "120 reais, com gale, parar depois de 2 REDs
+// completos"). Liga com AUTO_REAL=1 + AUTO_REAL_BW=1; entrada AUTO_REAL_VALOR, gale até 2 (×2,2 e ×4,84) seguindo o
+// resultado da PRÓPRIA conta real e cancelado por seta nova como na demo. Um ciclo real por vez. Depois de
+// AUTO_REAL_BW_STOP (padrão 2) REDs completos desde as 22h de Brasília, não abre ciclo real novo até as 22h seguintes.
+const REAL_BW = REAL && process.env.AUTO_REAL_BW === '1';
+const REAL_BW_STOP = Number(process.env.AUTO_REAL_BW_STOP) || 2;
+function inicioJanela22h(now) {
+    const hora = Number(process.env.AUTO_WINS_INICIO_HORA ?? 22);
+    const brt = now - 3 * 3600_000, inicioHoje = Math.floor(brt / 86_400_000) * 86_400_000 + hora * 3600_000;
+    return (brt >= inicioHoje ? inicioHoje : inicioHoje - 86_400_000) + 3 * 3600_000;
+}
+async function podeRealBw(now) {
+    if (!REAL_BW || !sr.ready || !sr.balanceId || (sr.cicloAte || 0) > now) return false;
+    const { rows } = await pool.query(`SELECT COUNT(*) FILTER (WHERE result = 'erro' AND (detalhes->>'gale')::int = 2)::int AS reds,
+            COUNT(*) FILTER (WHERE result IS NULL AND status NOT LIKE 'recusada%' AND created_at > NOW() - INTERVAL '20 minutes')::int AS abertas
+        FROM auto_trades WHERE conta = 'real' AND detalhes->>'estrategia' = 'bw_seta' AND created_at >= $1`, [new Date(inicioJanela22h(now))]);
+    if (rows[0].reds >= REAL_BW_STOP) {
+        const chave = inicioJanela22h(now);
+        if (sr.stopAvisado !== chave) { sr.stopAvisado = chave; console.log(`ROBO_REAL: ${rows[0].reds} REDs completos desde as 22h (limite ${REAL_BW_STOP}); conta real parada até as 22h`); }
+        return false;
+    }
+    return rows[0].abertas === 0;
+}
+async function abrirReal(pair, lado, candleTime, expiraMs, detalhes, valor) {
+    const { rows } = await pool.query(
+        `INSERT INTO auto_trades (dia, pair, candle_time, direction, prob, detalhes, valor, status, conta) VALUES ($1, $2, $3, $4, $5, $6, $7, 'enviando', 'real') RETURNING id`,
+        [brDay(Date.now()), pair, new Date(candleTime), lado, lado === 'COMPRA' ? 1 : 0, detalhes, valor]);
+    const req = send('sendMessage', {
+        name: 'binary-options.open-option', version: '1.0',
+        body: { user_balance_id: sr.balanceId, active_id: TRADE_IDS[pair], option_type_id: 3, direction: lado === 'COMPRA' ? 'call' : 'put', expired: Math.floor(expiraMs / 1000), price: valor },
+    }, sr);
+    sr.pending.set(req, rows[0].id);
+    console.log(`ROBO_REAL: entrada #${rows[0].id} ${pair} ${lado} (REAL, ${valor}) ${JSON.stringify(detalhes)}`);
+}
+async function fazGaleReal(r) {
+    const d = r.detalhes || {};
+    const g = (d.gale || 0) + 1;
+    if (g > 2 || !d.duracao) { sr.cicloAte = 0; console.log(`ROBO_REAL: RED completo no ciclo #${d.origem || r.id} ${r.pair} ${r.direction}`); return; }
+    const minuto = Math.floor(Date.now() / 60_000) * 60_000;
+    for (let k = 0; k < 40 && !(st.tickFeito >= minuto); k++) await new Promise((res) => setTimeout(res, 500));
+    const bloco = Math.floor(Date.now() / 300_000) * 300_000;
+    const ultima = st.bwLado?.[r.pair];
+    if ((ultima && ultima !== r.direction) || st.bwQuando?.[r.pair] === bloco) {
+        sr.cicloAte = 0;
+        console.log(`ROBO_REAL: gale cancelado (#${r.id} ${r.pair} ${r.direction}): saiu seta nova (${ultima})`);
+        return;
+    }
+    const now = Date.now();
+    let expira = Math.floor(now / 60_000) * 60_000 + d.duracao;
+    if (expira - now < 40_000) expira += 60_000;
+    console.log(`ROBO_REAL: gale ${g} da entrada #${d.origem || r.id} ${r.pair} ${r.direction}`);
+    await abrirReal(r.pair, r.direction, Math.floor(now / 60_000) * 60_000, expira, { ...d, gale: g, origem: d.origem || r.id, expira, entrada: null },
+        Math.round(VALOR_REAL * GALE_MULT[g] * 100) / 100);
+}
+
 // Pico do ouro (estudoProfundo.js com gale, 13/10): minuto do Ouro com faixa ≥ 3 ATR → contra, expira em 1 min.
 // Lucrou com gale 2 nas 3 fases da Exnova, mas sem força estatística (88 casos). Só na demo, com gale.
 // AUTO_NOVAS_DESLIGADAS=pico_ouro desliga.
@@ -580,6 +639,14 @@ async function abrir(pair, lado, candleTime, expiraMs, prob, detalhes, opcoes = 
     st.pending.set(ordem(st, valor), id);
     (st.pairDaOrdem ||= new Map()).set(id, pair);
     console.log(`ROBO_DEMO: entrada #${id} ${pair} ${lado} (treino, ${valor}) ${JSON.stringify(detalhes)}`);
+    // Seta do bwalpha na conta real (AUTO_REAL_BW=1): só a 1ª entrada do ciclo; os gales reais seguem o resultado real.
+    if (detalhes.estrategia === 'bw_seta' && !opcoes.gale) {
+        if (await podeRealBw(now).catch(() => false)) {
+            sr.cicloAte = now + 16 * 60_000;
+            await abrirReal(pair, lado, candleTime, expiraMs, { ...detalhes, treino_id: id }, VALOR_REAL);
+        }
+        return;
+    }
     // Mesma entrada no saldo real, se as travas deixarem (gale e estratégias só de treino nunca vão para a real).
     if (opcoes.soTreino || detalhes.gale_ok) return;
     if (!(await podeReal(now).catch(() => false))) return;
@@ -679,7 +746,7 @@ async function start() {
     if (process.env.AUTO_TRADE !== '1') return;
     if (!process.env.EXNOVA_EMAIL || !process.env.EXNOVA_PASSWORD) return console.error('ROBO_DEMO: faltam EXNOVA_EMAIL/EXNOVA_PASSWORD.');
     try { await ensureTable(); } catch (err) { return console.error('ROBO_DEMO: erro ao criar a tabela:', err.message); }
-    console.log(`ROBO_DEMO: ligado${SO_BW ? ' (SÓ a seta do bwalpha)' : ''} (máx. ${MAX_POR_DIA} entradas por dia, valor ${VALOR}, ${REAL ? `REAL ligado (${REAL_MAX_DIA}x ${VALOR_REAL}/dia, para com ${REAL_STOP_ERROS} erros)` : 'só saldo de treino'}, regras extras: ${REGRAS_ATIVAS.join(',') || 'nenhuma'}, novas: ${process.env.AUTO_NOVAS === '0' ? 'desligadas' : Object.keys(NOVAS_ATIVOS).join(',')})`);
+    console.log(`ROBO_DEMO: ligado${SO_BW ? ' (SÓ a seta do bwalpha)' : ''} (máx. ${MAX_POR_DIA} entradas por dia, valor ${VALOR}, ${REAL ? (REAL_BW ? `REAL ligado só na seta do bwalpha (entrada ${VALOR_REAL}, gale 2, para com ${REAL_BW_STOP} REDs completos desde as 22h)` : `REAL ligado (${REAL_MAX_DIA}x ${VALOR_REAL}/dia, para com ${REAL_STOP_ERROS} erros)`) : 'só saldo de treino'}, regras extras: ${REGRAS_ATIVAS.join(',') || 'nenhuma'}, novas: ${process.env.AUTO_NOVAS === '0' ? 'desligadas' : Object.keys(NOVAS_ATIVOS).join(',')})`);
     connect(st);
     if (REAL) {
         if (process.env.EXNOVA_REAL_EMAIL && process.env.EXNOVA_REAL_PASSWORD) connect(sr);
