@@ -90,6 +90,9 @@ function simula(ativos, limiteWins, maxCiclos = 0, filtro = null) {
         for (const e of eventos) if (!filtro || filtro(e)) ops.push({ pair, t: e.t, lado: e.lado, seta, res });
     }
     ops.sort((a, b) => a.t - b.t);
+    // ROBO_DESDE (data ISO): só simula as setas a partir dela (ex.: dias em que o robô ficou desligado).
+    const desde = Date.parse(process.env.ROBO_DESDE || '');
+    if (Number.isFinite(desde)) ops.splice(0, ops.length, ...ops.filter((o) => o.t >= desde));
     const dias = {}, ciclos = [], winsEm = {}; // winsEm[dia] = horários em que os ciclos ganharam
     for (const o of ops) {
         const dia = diaRobo(o.t);
@@ -106,7 +109,7 @@ function simula(ativos, limiteWins, maxCiclos = 0, filtro = null) {
         }
         if (ganhou) (winsEm[dia] ||= []).push(o.t + (g + 1) * M5);
         (dias[dia] ||= []).push(lucro);
-        ciclos.push({ dia, pair: o.pair, lucro, ganhou, g, cancelado, redCompleto: !ganhou && !cancelado && g > 2 });
+        ciclos.push({ dia, t: o.t, lado: o.lado, pair: o.pair, lucro, ganhou, g, cancelado, redCompleto: !ganhou && !cancelado && g > 2 });
     }
     return { dias, ciclos };
 }
@@ -127,6 +130,10 @@ function resumo(nome, { dias, ciclos }) {
         maior_queda: +queda.toFixed(0), meses: Object.fromEntries(Object.entries(meses).map(([m, l]) => [m, +l.toFixed(0)])), piores_dias: pior,
         por_ativo: Object.fromEntries(['XAUUSD', 'EURJPY'].map((p) => { const c = ciclos.filter((x) => x.pair === p); return [p, { ciclos: c.length, lucro: +c.reduce((a, x) => a + x.lucro, 0).toFixed(0), red_completo: c.filter((x) => x.redCompleto).length }]; }))
     })}`);
+    if (process.env.ROBO_DETALHE === '1') for (const c of ciclos) {
+        const hora = new Date(c.t - 3 * H).toISOString().slice(5, 16).replace('T', ' ');
+        console.log(`ROBO_CICLO ${nome} ${hora} ${c.pair} ${c.lado > 0 ? 'COMPRA' : 'VENDA'} ${c.ganhou ? (c.g === 0 ? 'WIN' : `WIN_gale${c.g}`) : c.redCompleto ? 'RED_COMPLETO' : c.cancelado ? 'cancelado' : 'empate'} ${c.lucro.toFixed(2)}`);
+    }
     console.log(`ROBO_DIAS ${nome} ${porDia.map(([d, l]) => `${d.slice(5)}:${l}`).join(' ')}`);
 }
 
@@ -156,6 +163,7 @@ async function runRobo(pool, { fetchLongHistory }) {
         if (cen.includes('wins3')) resumo(`${fonte}|${v}|limite3`, simula(ativos, 3));
         if (cen.includes('wins1')) resumo(`${fonte}|${v}|limite1win`, simula(ativos, 1));
         if (cen.includes('ciclo1')) resumo(`${fonte}|${v}|1ciclo`, simula(ativos, 0, 1));
+        if (cen.includes('ciclo3')) resumo(`${fonte}|${v}|3ciclos`, simula(ativos, 0, 3));
         if (cen.includes('livre')) resumo(`${fonte}|${v}|sem_limite`, simula(ativos, 0));
         // ROBO_FILTROS=1: cada filtro da armadilha com o limite de 3 WINs e com o de 1 WIN.
         if (process.env.ROBO_FILTROS === '1') {
