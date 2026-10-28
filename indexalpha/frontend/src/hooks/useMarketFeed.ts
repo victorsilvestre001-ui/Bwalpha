@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Snapshot } from "../types";
 
-interface Feed {
+export interface Feed {
   data: Snapshot | null;
   error: string | null;
   lastUpdate: Date | null;

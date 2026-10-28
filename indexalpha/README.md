@@ -31,9 +31,19 @@ indexalpha/
         │   ├── AIThesisCard.tsx         Tese da IA + alerta de risco
         │   ├── TradeExecutionPanel.tsx  Entrada, stop, alvo, R$ por contrato
         │   └── SignalHistoryTable.tsx   Últimos 10 sinais com P&L simulado
+        ├── themes/
+        │   ├── mission/                 Tema "Missão" (padrão): telemetria estilo lançamento espacial
+        │   └── HackerDashboard.tsx      Tema "Terminal": CRT, chuva Matrix, glitch
         ├── hooks/useMarketFeed.ts       Atualiza o snapshot a cada 5 s
         └── types.ts                     Contrato tipado da API
 ```
+
+A interface tem dois temas, alternados pelo botão no canto inferior direito ou por `?theme=mission` / `?theme=terminal` na URL:
+
+- **Missão:** campo de estrelas e limbo da Terra, medidores circulares de telemetria, trajetória do score com zonas de BUY/SELL, constelação orbital dos 20 pilares, votação GO/NO-GO das condições de entrada, régua da posição em voo e contagem regressiva na abertura.
+- **Terminal:** visual hacker com CRT, chuva Matrix, glitch na troca de sinal, números "decodificando" e `event.log` ao vivo.
+
+Ambos respeitam `prefers-reduced-motion`.
 
 Fluxo a cada tick (5 s):
 

@@ -7,7 +7,7 @@
 }
 
 body {
-  @apply bg-void font-mono text-ph antialiased;
+  @apply bg-black antialiased;
 }
 
 ::selection {
@@ -134,6 +134,38 @@ body {
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
+}
+
+/* ---------- Tema "mission": órbitas, feixes e fluxo de dados ---------- */
+.orbit {
+  transform-origin: 260px 260px;
+  animation: orbit-spin linear infinite;
+}
+.orbit-counter {
+  animation: orbit-spin linear infinite reverse;
+}
+@keyframes orbit-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.dash-flow {
+  animation: dash-flow 1.2s linear infinite;
+}
+@keyframes dash-flow {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+.beam {
+  background: linear-gradient(90deg, transparent 0%, rgba(77, 163, 255, 0.9) 50%, transparent 100%);
+  background-size: 40% 100%;
+  background-repeat: no-repeat;
+  animation: beam 5s ease-in-out infinite;
+}
+@keyframes beam {
+  0% { background-position: -40% 0; }
+  60%, 100% { background-position: 140% 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
