@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+data/.cache_*.json
+data/backtest_trades.csv
+data/backtest_signals.csv
+*.egg-info/

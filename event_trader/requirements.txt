@@ -1,0 +1,10 @@
+pandas>=2.1
+numpy>=1.26
+requests>=2.31
+loguru>=0.7
+# opcionais
+anthropic>=2.0
+openai>=1.40
+# dev
+pytest>=8
+pytest-asyncio>=0.23
