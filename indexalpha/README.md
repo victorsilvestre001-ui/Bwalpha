@@ -77,6 +77,10 @@ Para servir tudo numa porta só, rode `npm run build`. O FastAPI passa a servir 
 
 Testes: `cd indexalpha/backend && python -m pytest`.
 
+### Backtest com dados reais
+
+`cd indexalpha/backend && python -m backtest.run_backtest` baixa candles de 5 min dos 20 pilares, do Ibovespa e do dólar (Yahoo Finance, últimos ~60 pregões), roda o motor sem olhar o futuro e grava `backtest/results/report.md` com o resultado por variante, a estabilidade nas duas metades do período e o poder de previsão do score. Os dados ficam em cache em `backtest/data/` (`--refresh` baixa de novo).
+
 ### Variáveis de ambiente
 
 | Variável | Padrão | Efeito |
