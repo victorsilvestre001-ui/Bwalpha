@@ -1,0 +1,23 @@
+[
+  {
+    "ticker": "ELET3",
+    "timestamp": "2026-10-27T18:42:00-03:00",
+    "headline": "Fato Relevante — Recebimento de Oferta Pública de Aquisição (OPA)",
+    "body_text": "A Companhia comunica que recebeu proposta vinculante para Oferta Pública de Aquisição da totalidade das ações ordinárias, ao preço de R$ 58,00 por ação, representando prêmio de 41,5% sobre o fechamento de 27/10/2026. A alienação de controle está sujeita à aprovação do CADE e da assembleia. [EXEMPLO SIMULADO]",
+    "source_id": "demo-json:0001"
+  },
+  {
+    "ticker": "BBAS3",
+    "timestamp": "2026-10-27T19:05:00-03:00",
+    "headline": "Fato Relevante — Dividendos extraordinários",
+    "body_text": "O Conselho de Administração aprovou a distribuição de dividendos extraordinários de R$ 2,10 por ação, valor recorde e acima da política de remuneração, com data-com em 05/11/2026. [EXEMPLO SIMULADO]",
+    "source_id": "demo-json:0002"
+  },
+  {
+    "ticker": "MGLU3",
+    "timestamp": "2026-10-27T20:15:00-03:00",
+    "headline": "Fato Relevante — Inconsistências contábeis",
+    "body_text": "A Companhia identificou inconsistências em lançamentos contábeis de exercícios anteriores, com potencial fraude em contas de fornecedores. Foi instaurada investigação independente e houve renúncia do Diretor Financeiro. A divulgação de resultados do 3T26 está suspensa. [EXEMPLO SIMULADO]",
+    "source_id": "demo-json:0003"
+  }
+]
