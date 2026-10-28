@@ -15,14 +15,23 @@ export const fmtTime = (iso: string): string =>
 export const actionColor: Record<Action, string> = {
   BUY: "text-bull",
   SELL: "text-bear",
-  HOLD: "text-slate-300",
+  HOLD: "text-cy",
 };
 
 export const actionBadge: Record<Action, string> = {
-  BUY: "bg-bull/15 text-bull ring-bull/40",
-  SELL: "bg-bear/15 text-bear ring-bear/40",
-  HOLD: "bg-slate-500/15 text-slate-300 ring-slate-500/40",
+  BUY: "border-bull/60 bg-bull/10 text-bull",
+  SELL: "border-bear/60 bg-bear/10 text-bear",
+  HOLD: "border-cy/50 bg-cy/10 text-cy",
 };
 
 export const signColor = (v: number): string =>
-  v > 0 ? "text-bull" : v < 0 ? "text-bear" : "text-slate-400";
+  v > 0 ? "text-bull" : v < 0 ? "text-bear" : "text-ph-dim";
+
+/** Barra ASCII: [██████░░░░] */
+export const asciiBar = (fraction: number, width = 20): string => {
+  const filled = Math.round(Math.min(1, Math.max(0, fraction)) * width);
+  return `${"█".repeat(filled)}${"░".repeat(width - filled)}`;
+};
+
+/** Linha de "chave ........ valor" com pontos de preenchimento. */
+export const dotted = (label: string, width = 16): string => `${label} ${".".repeat(Math.max(2, width - label.length))}`;

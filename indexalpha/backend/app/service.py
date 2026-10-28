@@ -19,6 +19,8 @@ log = logging.getLogger(__name__)
 
 TICK_SECONDS: float = 5.0
 AI_REFRESH_SECONDS: float = 60.0
+AI_DRIVER_REFRESH_SECONDS: float = 20.0
+"""Intervalo mínimo para refazer a tese quando só os top drivers mudam (eles trocam de ordem quase todo tick)."""
 HISTORY_SIZE: int = 10
 SCORE_HISTORY_SIZE: int = 120
 
@@ -156,9 +158,17 @@ class IndexAlphaService:
             return
         if self._thesis_task is not None and not self._thesis_task.done():
             return
-        key = (self._signal.action.value, tuple(p.ticker for p in self._reading.top_drivers))
-        stale = time.monotonic() - self._thesis_at >= AI_REFRESH_SECONDS
-        if not (force or self._thesis is None or key != self._thesis_key or stale):
+        key = (self._signal.action.value, tuple(sorted(p.ticker for p in self._reading.top_drivers)))
+        age = time.monotonic() - self._thesis_at
+        action_changed = self._thesis_key is None or key[0] != self._thesis_key[0]
+        drivers_changed = self._thesis_key is not None and key[1] != self._thesis_key[1]
+        if not (
+            force
+            or self._thesis is None
+            or action_changed
+            or (drivers_changed and age >= AI_DRIVER_REFRESH_SECONDS)
+            or age >= AI_REFRESH_SECONDS
+        ):
             return
 
         data = ThesisInput(

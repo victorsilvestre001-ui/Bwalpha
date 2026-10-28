@@ -1,72 +1,119 @@
 import type { Snapshot } from "../types";
-import { actionBadge, actionColor, fmtPct, fmtPoints, fmtSigned, fmtTime, signColor } from "../lib/format";
+import { usePulse, useScramble } from "../hooks/useMotion";
+import { actionBadge, actionColor, asciiBar, dotted, fmtPct, fmtPoints, fmtSigned, signColor } from "../lib/format";
+import { TerminalPanel } from "./TerminalPanel";
 
 interface Props {
   data: Snapshot;
-  lastUpdate: Date | null;
+  syncCount: number;
 }
 
 function Sparkline({ values }: { values: number[] }) {
   if (values.length < 2) return null;
-  const w = 240;
-  const h = 56;
+  const w = 300;
+  const h = 80;
   const y = (v: number) => ((1 - v) / 2) * h; // escala fixa -1..+1
   const step = w / (values.length - 1);
-  const path = values.map((v, i) => `${i === 0 ? "M" : "L"}${(i * step).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
-  const last = values[values.length - 1];
+  const pts = values.map((v, i) => [i * step, y(v)] as const);
+  const path = pts.map(([px, py], i) => `${i === 0 ? "M" : "L"}${px.toFixed(1)},${py.toFixed(1)}`).join(" ");
+  const [lx, ly] = pts[pts.length - 1];
+  const color = values[values.length - 1] >= 0 ? "#39ff88" : "#ff3b5c";
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="h-14 w-full max-w-[240px]" aria-label="Evolução do Index_Score">
-      <line x1="0" x2={w} y1={y(0.5)} y2={y(0.5)} className="stroke-bull/30" strokeDasharray="3 3" />
-      <line x1="0" x2={w} y1={y(0)} y2={y(0)} className="stroke-ink-600" />
-      <line x1="0" x2={w} y1={y(-0.5)} y2={y(-0.5)} className="stroke-bear/30" strokeDasharray="3 3" />
-      <path d={path} fill="none" strokeWidth="1.75" className={last >= 0 ? "stroke-bull" : "stroke-bear"} />
+    <svg viewBox={`0 0 ${w} ${h}`} className="h-20 w-full" aria-label="Evolução do Index_Score">
+      <defs>
+        <filter id="neon" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="2.2" result="b" />
+          <feMerge>
+            <feMergeNode in="b" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+      {[0.5, 0, -0.5].map((g) => (
+        <line
+          key={g}
+          x1="0"
+          x2={w}
+          y1={y(g)}
+          y2={y(g)}
+          stroke={g === 0 ? "#1f9a55" : g > 0 ? "#39ff88" : "#ff3b5c"}
+          strokeOpacity={g === 0 ? 0.5 : 0.35}
+          strokeDasharray={g === 0 ? undefined : "2 4"}
+        />
+      ))}
+      <path d={path} fill="none" stroke={color} strokeWidth="1.6" filter="url(#neon)" />
+      <circle cx={lx} cy={ly} r="3" fill={color} filter="url(#neon)">
+        <animate attributeName="r" values="2.5;5;2.5" dur="1.4s" repeatCount="indefinite" />
+      </circle>
     </svg>
   );
 }
 
-export function HeaderStatus({ data, lastUpdate }: Props) {
+export function HeaderStatus({ data, syncCount }: Props) {
   const { signal, market } = data;
+  const scoreText = fmtSigned(data.index_score);
+  const scrambled = useScramble(scoreText, 16, 30);
+  const glitching = usePulse(signal.action, 700);
+
   return (
-    <header className="grid gap-4 rounded-xl border border-ink-700 bg-ink-900 p-5 md:grid-cols-[auto_1fr_auto] md:items-center">
-      <div>
-        <p className="text-xs uppercase tracking-widest text-slate-500">Index_Score</p>
-        <p className={`font-mono text-6xl font-semibold tabular-nums ${signColor(data.index_score)}`}>
-          {fmtSigned(data.index_score)}
-        </p>
-        <p className="mt-1 font-mono text-xs text-slate-500">raw Σw·z {fmtSigned(data.raw_score, 3)}</p>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-6 md:justify-center">
-        <div>
-          <p className="text-xs uppercase tracking-widest text-slate-500">Ação</p>
-          <span
-            className={`mt-1 inline-block rounded-md px-4 py-1.5 font-mono text-2xl font-bold ring-1 ${actionBadge[signal.action]}`}
+    <TerminalPanel
+      title="index_score"
+      path="~/engine/live"
+      right={<span className="text-ph-dim">sync #{syncCount.toString().padStart(4, "0")}</span>}
+    >
+      <div className="grid gap-6 lg:grid-cols-[auto_1fr_auto] lg:items-center">
+        <div className={glitching ? "shake" : ""}>
+          <p className="text-[11px] uppercase tracking-[0.3em] text-ph-dim">&gt; Σ peso × z-score</p>
+          <p
+            data-text={scoreText}
+            className={`glitch glow-strong font-display text-8xl leading-none tabular-nums ${signColor(data.index_score)} ${
+              glitching ? "is-glitching" : ""
+            }`}
           >
-            {signal.action}
-          </span>
+            {scrambled}
+          </p>
+          <p className="mt-1 text-xs text-ph-dim">
+            raw = <span className="text-ph/80">{fmtSigned(data.raw_score, 3)}</span> · tanh(raw) · cobertura{" "}
+            {fmtPct(data.coverage)}
+          </p>
         </div>
-        <div>
-          <p className="text-xs uppercase tracking-widest text-slate-500">Confiança</p>
-          <p className={`font-mono text-3xl tabular-nums ${actionColor[signal.action]}`}>{fmtPct(signal.confidence)}</p>
-          {signal.volatility_filter_applied && (
-            <p className="text-xs text-amber-400">Filtro de vol ativo (−50%)</p>
-          )}
-        </div>
-        <Sparkline values={data.score_history.map((p) => p.score)} />
-      </div>
 
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-1 font-mono text-sm md:text-right">
-        <dt className="text-slate-500">WIN</dt>
-        <dd className="tabular-nums text-slate-100">{fmtPoints(market.win_price)}</dd>
-        <dt className="text-slate-500">Fluxo estr.</dt>
-        <dd className={`tabular-nums ${signColor(market.foreign_flow)}`}>R$ {fmtSigned(market.foreign_flow, 0)} mi</dd>
-        <dt className="text-slate-500">Vol. impl.</dt>
-        <dd className={`tabular-nums ${market.vix > 25 ? "text-amber-400" : "text-slate-100"}`}>
-          {market.vix.toFixed(1)}%
-        </dd>
-        <dt className="text-slate-500">Atualizado</dt>
-        <dd className="tabular-nums text-slate-400">{lastUpdate ? fmtTime(lastUpdate.toISOString()) : "—"}</dd>
-      </dl>
-    </header>
+        <div className="grid gap-4 sm:grid-cols-[auto_1fr] sm:items-center">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.3em] text-ph-dim">signal::</p>
+            <p
+              className={`glow-strong mt-1 inline-block border px-4 py-1 font-display text-5xl leading-none ${actionBadge[signal.action]} ${
+                glitching ? "shake" : ""
+              }`}
+            >
+              {signal.action}
+              <span className="animate-blink">_</span>
+            </p>
+            <p className={`mt-3 whitespace-nowrap text-sm ${actionColor[signal.action]}`}>
+              conf [<span className="glow">{asciiBar(signal.confidence, 16)}</span>] {fmtPct(signal.confidence)}
+            </p>
+            {signal.volatility_filter_applied && (
+              <p className="glow mt-1 animate-blink text-xs text-amber">!! VOL FILTER ATIVO · confiança −50%</p>
+            )}
+          </div>
+          <Sparkline values={data.score_history.map((p) => p.score)} />
+        </div>
+
+        <dl className="grid grid-cols-[auto_auto] gap-x-2 gap-y-0.5 text-sm">
+          <dt className="whitespace-pre text-ph-dim">{dotted("WIN", 12)}</dt>
+          <dd className="glow text-right tabular-nums text-ph">{fmtPoints(market.win_price)}</dd>
+          <dt className="whitespace-pre text-ph-dim">{dotted("FLUXO.ESTR", 12)}</dt>
+          <dd className={`text-right tabular-nums ${signColor(market.foreign_flow)}`}>
+            {fmtSigned(market.foreign_flow, 0)} mi
+          </dd>
+          <dt className="whitespace-pre text-ph-dim">{dotted("VOL.IMPL", 12)}</dt>
+          <dd className={`text-right tabular-nums ${market.vix > 25 ? "glow text-amber" : "text-ph"}`}>
+            {market.vix.toFixed(1)}%
+          </dd>
+          <dt className="whitespace-pre text-ph-dim">{dotted("ATR", 12)}</dt>
+          <dd className="text-right tabular-nums text-ph">{market.atr_pct.toFixed(2)}%</dd>
+        </dl>
+      </div>
+    </TerminalPanel>
   );
 }

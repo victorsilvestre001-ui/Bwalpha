@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Signal, TradeLevels } from "../types";
-import { actionBadge, fmtBRL, fmtPoints } from "../lib/format";
+import { actionColor, dotted, fmtBRL, fmtPoints } from "../lib/format";
+import { TerminalPanel } from "./TerminalPanel";
 
 interface Props {
   signal: Signal;
@@ -9,15 +10,15 @@ interface Props {
   atrPct: number;
 }
 
-function Row({ label, value, sub, tone = "text-slate-100" }: { label: string; value: string; sub?: string; tone?: string }) {
+function Line({ label, value, sub, tone = "text-ph" }: { label: string; value: string; sub?: string; tone?: string }) {
   return (
-    <div className="flex items-baseline justify-between border-b border-ink-700/60 py-2 last:border-0">
-      <span className="text-sm text-slate-400">{label}</span>
-      <span className="text-right font-mono tabular-nums">
-        <span className={tone}>{value}</span>
-        {sub && <span className="ml-2 text-xs text-slate-500">{sub}</span>}
+    <p className="flex flex-wrap items-baseline justify-between gap-x-2 text-sm leading-7">
+      <span className="whitespace-pre text-ph-dim">{dotted(label, 14)}</span>
+      <span className="text-right tabular-nums">
+        <span className={`glow ${tone}`}>{value}</span>
+        {sub && <span className="ml-2 text-[11px] text-ph-dim">{sub}</span>}
       </span>
-    </div>
+    </p>
   );
 }
 
@@ -25,62 +26,64 @@ export function TradeExecutionPanel({ signal, trade, winPrice, atrPct }: Props) 
   const [contracts, setContracts] = useState(1);
 
   return (
-    <section className="flex min-w-0 flex-col rounded-xl border border-ink-700 bg-ink-900 p-5">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-widest text-slate-400">Execução · WIN</h2>
-        <span className={`rounded px-2 py-0.5 font-mono text-xs ring-1 ${actionBadge[signal.action]}`}>
-          {signal.action}
-        </span>
-      </div>
-
+    <TerminalPanel
+      title="order_ticket"
+      path="WIN"
+      accent={trade ? "ph" : "cy"}
+      right={<span className={actionColor[signal.action]}>{trade ? "ARMED" : "STANDBY"}</span>}
+    >
       {trade ? (
         <>
-          <Row label="Entrada" value={fmtPoints(trade.entry)} sub="pts" />
-          <Row
-            label="Stop-Loss"
+          <Line label="side" value={signal.action} tone={actionColor[signal.action]} />
+          <Line label="entry" value={fmtPoints(trade.entry)} sub="pts" />
+          <Line
+            label="stop_loss"
             value={fmtPoints(trade.stop_loss)}
             sub={`−${fmtPoints(trade.stop_points)} pts · ${signal.stop_loss_pct.toFixed(2)}%`}
             tone="text-bear"
           />
-          <Row
-            label="Take-Profit"
+          <Line
+            label="take_profit"
             value={fmtPoints(trade.take_profit)}
             sub={`+${fmtPoints(trade.target_points)} pts · ${signal.take_profit_pct.toFixed(2)}%`}
             tone="text-bull"
           />
-          <Row label="Risco / Retorno" value={trade.risk_reward ? `1 : ${trade.risk_reward.toFixed(2)}` : "—"} />
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <div className="rounded-lg bg-bear/10 p-3">
-              <p className="text-xs text-slate-400">Perda máx.</p>
-              <p className="font-mono text-lg text-bear">{fmtBRL(-trade.risk_brl * contracts)}</p>
+          <Line label="risk:reward" value={trade.risk_reward ? `1:${trade.risk_reward.toFixed(2)}` : "—"} />
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="border border-bear/40 bg-bear/10 p-2">
+              <p className="text-[10px] uppercase tracking-widest text-ph-dim">perda máx</p>
+              <p className="glow font-display text-3xl leading-none text-bear">{fmtBRL(-trade.risk_brl * contracts)}</p>
             </div>
-            <div className="rounded-lg bg-bull/10 p-3">
-              <p className="text-xs text-slate-400">P&amp;L potencial</p>
-              <p className="font-mono text-lg text-bull">{fmtBRL(trade.reward_brl * contracts)}</p>
+            <div className="border border-bull/40 bg-bull/10 p-2">
+              <p className="text-[10px] uppercase tracking-widest text-ph-dim">p&amp;l potencial</p>
+              <p className="glow font-display text-3xl leading-none text-bull">{fmtBRL(trade.reward_brl * contracts)}</p>
             </div>
           </div>
         </>
       ) : (
-        <div className="flex flex-1 flex-col justify-center py-6 text-center">
-          <p className="font-mono text-2xl text-slate-300">{fmtPoints(winPrice)}</p>
-          <p className="mt-2 text-sm text-slate-500">Sem entrada: aguardando |score| &gt; 0,50 com fluxo confirmando.</p>
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 py-6 text-center">
+          <p className="glow-strong font-display text-5xl leading-none text-cy">{fmtPoints(winPrice)}</p>
+          <p className="text-xs uppercase tracking-[0.25em] text-cy/80">
+            aguardando gatilho<span className="animate-blink">_</span>
+          </p>
+          <p className="text-[11px] text-ph-dim">if |score| &gt; 0,50 &amp;&amp; fluxo confirma → arm</p>
         </div>
       )}
 
-      <div className="mt-auto flex items-center justify-between pt-4 text-xs text-slate-500">
-        <label className="flex items-center gap-2">
-          Contratos
+      <div className="mt-auto flex items-center justify-between gap-3 pt-4 text-[11px] text-ph-dim">
+        <label className="flex items-center gap-2 uppercase tracking-widest">
+          qty
           <input
             type="number"
             min={1}
             max={500}
             value={contracts}
             onChange={(e) => setContracts(Math.max(1, Number(e.target.value) || 1))}
-            className="w-16 rounded border border-ink-600 bg-ink-800 px-2 py-1 font-mono text-slate-200"
+            className="w-14 border border-ph/40 bg-void px-2 py-0.5 text-ph outline-none focus:border-ph"
           />
         </label>
-        <span className="font-mono">ATR {atrPct.toFixed(2)}% · R$ 0,20/pt</span>
+        <span>atr {atrPct.toFixed(2)}% · R$ 0,20/pt</span>
       </div>
-    </section>
+    </TerminalPanel>
   );
 }
