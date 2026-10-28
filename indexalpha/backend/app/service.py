@@ -5,9 +5,11 @@ from __future__ import annotations
 import asyncio
 import itertools
 import logging
+import random
 import time
 from collections import deque
 from dataclasses import asdict, dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
 from app.ai.contextual_ai import ContextualAI, ThesisInput, ThesisResult
@@ -23,6 +25,11 @@ AI_DRIVER_REFRESH_SECONDS: float = 20.0
 """Intervalo mínimo para refazer a tese quando só os top drivers mudam (eles trocam de ordem quase todo tick)."""
 HISTORY_SIZE: int = 10
 SCORE_HISTORY_SIZE: int = 120
+CANDLE_TICKS: int = 6
+"""Ticks por candle do WIN (6 × 5 s = candles de 30 s)."""
+CANDLE_HISTORY: int = 80
+WARMUP_TICKS: int = 360
+"""Histórico gerado na partida do servidor (~30 min) para o gráfico já abrir cheio."""
 
 
 @dataclass
@@ -74,12 +81,24 @@ def trade_levels(entry: float, signal: Signal) -> dict[str, Any] | None:
     }
 
 
+@dataclass
+class Candle:
+    t: str
+    o: float
+    h: float
+    l: float  # noqa: E741
+    c: float
+    v: int
+    score: float
+
+
 class IndexAlphaService:
     def __init__(
         self,
         simulator: MarketSimulator | None = None,
         engine: IndexEngine | None = None,
         ai: ContextualAI | None = None,
+        warmup_ticks: int = 0,
     ) -> None:
         self.simulator = simulator or MarketSimulator()
         self.engine = engine or IndexEngine()
@@ -96,6 +115,17 @@ class IndexAlphaService:
         self._thesis_key: tuple[str, tuple[str, ...]] | None = None
         self._thesis_at: float = 0.0
         self._thesis_task: asyncio.Task[None] | None = None
+        self._candles: deque[Candle] = deque(maxlen=CANDLE_HISTORY)
+        self._tick_no = 0
+        self._last_price: float | None = None
+        self._session_open: float | None = None
+        self._rng = random.Random()
+
+        if warmup_ticks > 0:
+            start = datetime.now(timezone.utc) - timedelta(seconds=warmup_ticks * TICK_SECONDS)
+            for i in range(warmup_ticks):
+                self.step(start + timedelta(seconds=i * TICK_SECONDS))
+            self._thesis_at = 0.0  # primeiro tick ao vivo já gera a tese com o LLM
 
     async def run(self) -> None:
         while True:
@@ -105,8 +135,8 @@ class IndexAlphaService:
                 log.exception("Falha no tick do simulador")
             await asyncio.sleep(TICK_SECONDS)
 
-    def step(self) -> None:
-        state = self.simulator.tick()
+    def step(self, now: datetime | None = None) -> None:
+        state = self.simulator.tick(now)
         reading = self.engine.compute(state.quotes)
         signal = generate_signal(reading.index_score, state.foreign_flow, state.vix, state.atr_pct)
         self._state, self._reading, self._signal = state, reading, signal
@@ -114,8 +144,27 @@ class IndexAlphaService:
         self._score_history.append(
             {"t": state.timestamp.isoformat(), "score": round(reading.index_score, 4)}
         )
+        self._update_candles(state, reading)
         self._update_trades(state, reading, signal)
         self._maybe_refresh_thesis(force=False)
+
+    def _update_candles(self, state: MarketState, reading: IndexReading) -> None:
+        price = state.win_price
+        prev = self._last_price if self._last_price is not None else price
+        if self._session_open is None:
+            self._session_open = price
+        if self._tick_no % CANDLE_TICKS == 0 or not self._candles:
+            # Abre no fechamento anterior para os candles ficarem contínuos.
+            self._candles.append(
+                Candle(t=state.timestamp.isoformat(), o=prev, h=max(prev, price), l=min(prev, price), c=price, v=0, score=0.0)
+            )
+        candle = self._candles[-1]
+        candle.h, candle.l, candle.c = max(candle.h, price), min(candle.l, price), price
+        candle.score = round(reading.index_score, 4)
+        # Volume simulado: base aleatória + proporcional ao deslocamento do preço.
+        candle.v += int(self._rng.uniform(60, 180) + abs(price - prev) * 4)
+        self._last_price = price
+        self._tick_no += 1
 
     def _update_trades(self, state: MarketState, reading: IndexReading, signal: Signal) -> None:
         price = state.win_price
@@ -213,7 +262,11 @@ class IndexAlphaService:
                 "atr_pct": state.atr_pct,
                 "macro_scenario": state.macro_scenario,
                 "factor_trends": state.factor_trends,
+                "session_open": self._session_open,
             },
+            "candles": [asdict(c) for c in self._candles],
+            "candle_seconds": CANDLE_TICKS * TICK_SECONDS,
+            "sparks": {p.ticker: self.simulator.price_history(p.ticker) for p in reading.pillars},
             "pillars": [p.to_dict() for p in reading.pillars],
             "top_drivers": [p.ticker for p in reading.top_drivers],
             "thesis": self._thesis.to_dict() if self._thesis else None,

@@ -8,6 +8,16 @@ export interface Signal {
   volatility_filter_applied: boolean;
 }
 
+export interface Candle {
+  t: string;
+  o: number;
+  h: number;
+  l: number;
+  c: number;
+  v: number;
+  score: number;
+}
+
 export interface Pillar {
   ticker: string;
   sector: string;
@@ -67,7 +77,11 @@ export interface Snapshot {
     atr_pct: number;
     macro_scenario: string;
     factor_trends: Record<string, number>;
+    session_open: number | null;
   };
+  candles: Candle[];
+  candle_seconds: number;
+  sparks: Record<string, number[]>;
   pillars: Pillar[];
   top_drivers: string[];
   thesis: Thesis | null;

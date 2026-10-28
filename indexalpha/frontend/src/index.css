@@ -168,6 +168,30 @@ input[type="number"]::-webkit-outer-spin-button {
   60%, 100% { background-position: 140% 0; }
 }
 
+/* ---------- Tema "mercado": fita de cotações e entrada de candles ---------- */
+.marquee {
+  animation: marquee 80s linear infinite;
+}
+.marquee:hover {
+  animation-play-state: paused;
+}
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+.candle-shift {
+  animation: candle-shift 700ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@keyframes candle-shift {
+  from {
+    transform: translateX(var(--slot));
+  }
+  to {
+    transform: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

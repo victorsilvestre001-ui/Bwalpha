@@ -96,3 +96,16 @@ def test_fallback_thesis_without_llm() -> None:
     assert result.source == "fallback"
     assert result.thesis_text.count(". ") >= 2
     assert "volatilidade" in result.risk_warning
+
+
+def test_warmup_builds_candles_with_past_timestamps() -> None:
+    service = IndexAlphaService(MarketSimulator(seed=2), ai=ContextualAI(enabled=False), warmup_ticks=60)
+    snap = service.snapshot()
+    candles = snap["candles"]
+    assert len(candles) == 10  # 60 ticks / 6 por candle
+    for c in candles:
+        assert c["l"] <= min(c["o"], c["c"]) and c["h"] >= max(c["o"], c["c"])
+        assert c["v"] > 0
+    assert candles[0]["t"] < candles[-1]["t"] <= snap["timestamp"]
+    assert len(snap["sparks"]["PETR4"]) == 20
+    assert snap["market"]["session_open"] is not None

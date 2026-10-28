@@ -32,14 +32,16 @@ indexalpha/
         │   ├── TradeExecutionPanel.tsx  Entrada, stop, alvo, R$ por contrato
         │   └── SignalHistoryTable.tsx   Últimos 10 sinais com P&L simulado
         ├── themes/
-        │   ├── mission/                 Tema "Missão" (padrão): telemetria estilo lançamento espacial
+        │   ├── market/                  Tema "Mercado" (padrão): plataforma de trading com candles e mapa de calor
+        │   ├── mission/                 Tema "Missão": telemetria estilo lançamento espacial
         │   └── HackerDashboard.tsx      Tema "Terminal": CRT, chuva Matrix, glitch
         ├── hooks/useMarketFeed.ts       Atualiza o snapshot a cada 5 s
         └── types.ts                     Contrato tipado da API
 ```
 
-A interface tem dois temas, alternados pelo botão no canto inferior direito ou por `?theme=mission` / `?theme=terminal` na URL:
+A interface tem três temas, alternados pelo botão no canto inferior direito ou por `?theme=market` / `?theme=mission` / `?theme=terminal` na URL:
 
+- **Mercado:** fita de cotações rolando, gráfico de candles do WIN (volume, preço ao vivo, crosshair, marcadores de entrada, stop/alvo da posição e Index_Score em painel inferior), mapa de calor estilo Finviz por setor, lista de ativos com mini-gráficos, boleta sugerida, análise da IA em formato de research e tabela de operações.
 - **Missão:** campo de estrelas e limbo da Terra, medidores circulares de telemetria, trajetória do score com zonas de BUY/SELL, constelação orbital dos 20 pilares, votação GO/NO-GO das condições de entrada, régua da posição em voo e contagem regressiva na abertura.
 - **Terminal:** visual hacker com CRT, chuva Matrix, glitch na troca de sinal, números "decodificando" e `event.log` ao vivo.
 

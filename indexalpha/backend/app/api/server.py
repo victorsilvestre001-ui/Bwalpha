@@ -16,11 +16,11 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.service import IndexAlphaService
+from app.service import WARMUP_TICKS, IndexAlphaService
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
-service = IndexAlphaService()
+service = IndexAlphaService(warmup_ticks=WARMUP_TICKS)
 
 
 @contextlib.asynccontextmanager

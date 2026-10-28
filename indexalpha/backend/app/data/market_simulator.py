@@ -126,10 +126,15 @@ class MarketSimulator:
     def last_state(self) -> MarketState | None:
         return self._last_state
 
-    def tick(self) -> MarketState:
+    def tick(self, now: datetime | None = None) -> MarketState:
+        """Avança um período. `now` permite gerar histórico com horários no passado."""
         self._step()
-        self._last_state = self._snapshot()
+        self._last_state = self._snapshot(now or datetime.now(timezone.utc))
         return self._last_state
+
+    def price_history(self, ticker: str) -> list[float]:
+        """Últimos preços do ativo (janela de 20 períodos)."""
+        return [round(p, 2) for p in self._history[ticker]]
 
     def _step(self) -> None:
         rng = self._rng
@@ -169,7 +174,7 @@ class MarketSimulator:
             self._vix += rng.uniform(4.0, 9.0)
         self._vix = min(60.0, max(10.0, self._vix))
 
-    def _snapshot(self) -> MarketState:
+    def _snapshot(self, now: datetime) -> MarketState:
         quotes: list[AssetQuote] = []
         for ticker in WEIGHTS:
             hist = self._history[ticker]
@@ -188,7 +193,7 @@ class MarketSimulator:
         atr_pct = max(0.15, mean_abs * math.sqrt(self.ATR_HORIZON_TICKS) * 100.0)
 
         return MarketState(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=now,
             quotes=quotes,
             win_price=round(self._win / 5.0) * 5.0,  # WIN negocia em múltiplos de 5 pontos
             foreign_flow=round(self._flow, 1),
