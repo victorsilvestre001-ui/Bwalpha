@@ -79,7 +79,7 @@ Testes: `cd indexalpha/backend && python -m pytest`.
 
 ### Backtest com dados reais
 
-`cd indexalpha/backend && python -m backtest.run_backtest` baixa candles de 5 min dos 20 pilares, do Ibovespa e do dólar (Yahoo Finance, últimos ~60 pregões), roda o motor sem olhar o futuro e grava `backtest/results/report.md` com o resultado por variante, a estabilidade nas duas metades do período e o poder de previsão do score. Os dados ficam em cache em `backtest/data/` (`--refresh` baixa de novo). `python -m backtest.vwap_backtest` testa configurações de VWAP no índice (cruzamento, reversão e rompimento das bandas, pullback e VWAP como filtro do Index_Score) e grava `backtest/results/vwap_report.md`.
+`cd indexalpha/backend && python -m backtest.run_backtest` baixa candles de 5 min dos 20 pilares, do Ibovespa e do dólar (Yahoo Finance, últimos ~60 pregões), roda o motor sem olhar o futuro e grava `backtest/results/report.md` com o resultado por variante, a estabilidade nas duas metades do período e o poder de previsão do score. Os dados ficam em cache em `backtest/data/` (`--refresh` baixa de novo). `python -m backtest.vwap_backtest` testa configurações de VWAP no índice (cruzamento, reversão e rompimento das bandas, pullback e VWAP como filtro do Index_Score) e grava `backtest/results/vwap_report.md`. `python -m backtest.rsi_backtest` faz o mesmo para o RSI (reversão 30/70, 20/80, RSI 2, filtro de VWAP, momentum na linha 50 e RSI confirmando o cruzamento da VWAP) e grava `backtest/results/rsi_report.md`.
 
 ### Variáveis de ambiente
 

@@ -75,6 +75,8 @@ class Strategy:
     entry: Callable[[int, dict[str, np.ndarray]], Order | None]
     exit_on_cross: bool = False
     """Sai quando o preço fecha do outro lado da VWAP (na abertura seguinte)."""
+    exit_when: Callable[[int, dict[str, np.ndarray], int], bool] | None = None
+    """Saída genérica (ex.: RSI voltando a 50), avaliada no fechamento; executa na abertura seguinte."""
 
 
 def run(df: pd.DataFrame, strat: Strategy) -> list[float]:
@@ -121,6 +123,9 @@ def run(df: pd.DataFrame, strat: Strategy) -> list[float]:
             if any(math.isnan(a[k][i]) for k in ("vwap", "sigma", "atr")) or a["sigma"][i] == 0:
                 continue
             if pos and strat.exit_on_cross and (a["close"][i] - a["vwap"][i]) * pos["side"] < 0:
+                pending_exit = True
+                continue
+            if pos and strat.exit_when and strat.exit_when(i, a, pos["side"]):
                 pending_exit = True
                 continue
             if pos is None and FIRST_ENTRY <= clock[i] <= LAST_ENTRY:
