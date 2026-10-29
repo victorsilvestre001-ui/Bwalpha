@@ -1,4 +1,4 @@
-"""Backtest de configurações de RSI no índice (Ibovespa à vista como substituto do WIN).
+"""Backtest de configurações de RSI no índice (BOVA11 em pontos de índice como substituto do WIN).
 
     cd indexalpha/backend
     python -m backtest.rsi_backtest
@@ -18,8 +18,8 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 
-from .run_backtest import COST_POINTS, POINT_VALUE_BRL, RESULTS, compute_features, load, table
-from .vwap_backtest import FIRST_ENTRY, LAST_ENTRY, Order, Strategy, index_volume, run, vwap_bands
+from .run_backtest import COST_POINTS, POINT_VALUE_BRL, RESULTS, atr_pct_by_day, load_tradable, table
+from .vwap_backtest import FIRST_ENTRY, LAST_ENTRY, Order, Strategy, run, vwap_bands
 
 STOP_ATR = 2.0
 
@@ -157,12 +157,10 @@ def stats(name: str, df: pd.DataFrame, strat: Strategy, days: list) -> dict:
 
 
 def main() -> None:
-    ibov, panel, usd, _ = load(refresh=False)
-    feats = compute_features(ibov, panel, usd)
-    bands = vwap_bands(ibov, index_volume(ibov.index))
-    df = ibov[["open", "high", "low", "close"]].join(bands).join(feats[["atr_pct"]].rename(columns={"atr_pct": "atr"}))
+    points, vol = load_tradable()
+    df = points.join(vwap_bands(points, vol)).assign(atr=atr_pct_by_day(points))
     for period in (2, 7, 9, 14, 21):
-        df[f"rsi{period}"] = rsi(ibov["close"], period)
+        df[f"rsi{period}"] = rsi(points["close"], period)
     days = sorted(set(df.index.date))
 
     rows = sorted((stats(s.name, df, s, days) for s in STRATEGIES), key=lambda r: r["total_pts"], reverse=True)
@@ -171,7 +169,8 @@ def main() -> None:
 
 Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')} · {len(days)} pregões ({days[0]} a {days[-1]}) · candles de 5 min.
 
-**Premissas:** Ibovespa à vista no lugar do WIN (R$ {POINT_VALUE_BRL:.2f}/ponto/contrato) · RSI de Wilder · decisão no
+**Premissas:** BOVA11 em pontos de índice no lugar do WIN (R$ {POINT_VALUE_BRL:.2f}/ponto/contrato; o ^BVSP calculado
+tem autocorrelação artificial que distorce o resultado) · RSI de Wilder · decisão no
 fechamento e execução na abertura seguinte · stop de {STOP_ATR:.0f}×ATR(14) · custo de {COST_POINTS:.0f} pts por operação ·
 entradas entre {FIRST_ENTRY:%H:%M} e {LAST_ENTRY:%H:%M} · zera no fim do dia.
 

@@ -109,6 +109,30 @@ def load(refresh: bool) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, list[str
     return ibov, panel, usd_aligned, missing
 
 
+def load_tradable() -> tuple[pd.DataFrame, pd.Series]:
+    """BOVA11 (ETF negociado) em pontos de índice + volume financeiro real do ETF.
+
+    Use isto para estratégias de preço/volume: o índice calculado (^BVSP) tem autocorrelação
+    artificial de curto prazo (+0,08 contra ≈0 no BOVA11), porque as ações não negociam todas
+    no mesmo instante — o que infla estratégias de tendência e prejudica as de reversão.
+    """
+    ibov = fetch(INDEX_SYMBOL, refresh=False)["close"]
+    ibov.index = pd.to_datetime(ibov.index, utc=True).tz_convert("America/Sao_Paulo")
+    etf = fetch("BOVA11.SA", refresh=False)
+    etf.index = pd.to_datetime(etf.index, utc=True).tz_convert("America/Sao_Paulo")
+    ratio = (ibov / etf["close"]).dropna().groupby(lambda t: t.date()).median()
+    factor = pd.Series(etf.index.date, index=etf.index).map(ratio)
+    points = etf[["open", "high", "low", "close"]].mul(factor, axis=0).dropna()
+    volume = (etf["close"] * etf["volume"]).reindex(points.index).fillna(0.0)
+    return points, volume
+
+
+def atr_pct_by_day(df: pd.DataFrame, window: int = ATR_WINDOW) -> pd.Series:
+    prev = df["close"].groupby(df.index.date).shift()
+    tr = pd.concat([df["high"] - df["low"], (df["high"] - prev).abs(), (df["low"] - prev).abs()], axis=1).max(axis=1)
+    return rolling_by_day(tr, "mean", window) / df["close"] * 100
+
+
 # ----------------------------------------------------------------------------- sinais
 
 

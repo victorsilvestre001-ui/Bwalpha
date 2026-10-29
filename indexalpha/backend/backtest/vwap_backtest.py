@@ -1,11 +1,11 @@
-"""Backtest de configurações de VWAP no índice (Ibovespa à vista como substituto do WIN).
+"""Backtest de configurações de VWAP no índice (BOVA11 em pontos de índice como substituto do WIN).
 
     cd indexalpha/backend
     python -m backtest.vwap_backtest
 
-O Yahoo não traz volume do ^BVSP, então o "volume do índice" é o volume financeiro somado
-dos 20 pilares em cada candle (preço × quantidade). A VWAP é ancorada no pregão (zera todo dia)
-e as bandas usam o desvio padrão ponderado por volume em torno dela.
+Preço e volume do BOVA11 (ETF negociado), convertidos para pontos de índice: o ^BVSP calculado
+tem autocorrelação artificial que inflava o cruzamento da VWAP (ver `run_backtest.load_tradable`).
+A VWAP é ancorada no pregão (zera todo dia) e as bandas usam o desvio padrão ponderado por volume.
 
 Mesmas regras do backtest principal: decisão no fechamento, execução na abertura seguinte,
 stop antes do alvo quando os dois são tocados no mesmo candle, custo de 10 pontos por operação,
@@ -30,9 +30,11 @@ from .run_backtest import (
     COST_POINTS,
     POINT_VALUE_BRL,
     RESULTS,
+    atr_pct_by_day,
     compute_features,
     fetch,
     load,
+    load_tradable,
     table,
 )
 
@@ -269,11 +271,8 @@ STRATEGIES = [
 def main() -> None:
     ibov, panel, usd, _ = load(refresh=False)
     feats = compute_features(ibov, panel, usd)
-    vol = index_volume(ibov.index)
-    bands = vwap_bands(ibov, vol)
-    df = ibov[["open", "high", "low", "close"]].join(bands).join(
-        feats[["pillars", "atr_pct"]].rename(columns={"atr_pct": "atr"})
-    )
+    points, vol = load_tradable()
+    df = points.join(vwap_bands(points, vol)).assign(atr=atr_pct_by_day(points)).join(feats[["pillars"]])
     days = sorted(set(df.index.date))
     rows = [stats(s.name, run(df, s), len(days)) for s in STRATEGIES]
     rows_sorted = sorted(rows, key=lambda r: r["total_pts"], reverse=True)
@@ -283,8 +282,8 @@ def main() -> None:
 
 Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')} · {len(days)} pregões ({days[0]} a {days[-1]}) · candles de 5 min.
 
-**Premissas:** Ibovespa à vista no lugar do WIN (R$ {POINT_VALUE_BRL:.2f}/ponto/contrato) · VWAP ancorada no pregão,
-com volume = volume financeiro somado dos 20 pilares (o Yahoo não traz volume do índice) · bandas = desvio padrão
+**Premissas:** BOVA11 em pontos de índice no lugar do WIN (R$ {POINT_VALUE_BRL:.2f}/ponto/contrato) · VWAP ancorada no pregão,
+com o volume financeiro real do BOVA11 · bandas = desvio padrão
 ponderado por volume · decisão no fechamento e execução na abertura seguinte · custo de {COST_POINTS:.0f} pts por operação
 · entradas só entre {FIRST_ENTRY:%H:%M} e {LAST_ENTRY:%H:%M} · zera no fim do dia.
 
