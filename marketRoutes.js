@@ -191,6 +191,8 @@ for (const label of (process.env.SINAL_OTC ?? 'EURUSD-OTC,EURJPY-OTC,XAUUSD-OTC'
     SIGNAL_PAIRS[label] = { label, otc: true };
 }
 const SIGNAL_INTERVALS = { M1: '1min', M5: '5min' };
+const { sinalOtcM1, preparar: prepararOtcEstat } = require('./sinalEstatisticoOtc');
+prepararOtcEstat(Object.values(SIGNAL_PAIRS).filter((p) => p.otc).map((p) => p.label));
 
 // Forex opera 24h de segunda a sexta. Fecha sexta 22h UTC, reabre domingo 22h UTC.
 function isMarketOpen(date = new Date()) {
@@ -1387,7 +1389,10 @@ router.post('/signal', authMiddleware, requireSignalAccess, signalLimiter, async
                 });
             }
             // OTC: leitura técnica nos candles da corretora (não há streaming nem Twelve Data para o OTC).
-            result = otc ? await getTechnicalSignal(pair, 'M1') : await getM1Signal(pair, requestedAt);
+            // OTC (01/11): primeiro o sinal pelo estudo dos candles da corretora; se a tabela ainda não
+            // estiver pronta, a leitura técnica de antes.
+            if (otc) result = await sinalOtcM1(pair, fetchExnovaCandles).catch((err) => { console.error('OTC_ESTAT erro:', err.message); return null; });
+            if (!result) result = otc ? await getTechnicalSignal(pair, 'M1') : await getM1Signal(pair, requestedAt);
             if (result && entry - Date.now() < M1_MIN_ENTRY_LEAD_MS) {
                 // Não dá tempo de entrar neste candle: a entrada vai para o seguinte, com confiança baixa.
                 entry += M1_MS;

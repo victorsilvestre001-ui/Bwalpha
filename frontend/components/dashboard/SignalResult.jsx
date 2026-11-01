@@ -87,6 +87,19 @@ export default function SignalResult({ result, timing, onRetry }) {
         </div>
       </div>
 
+      {result.historico && (
+        <div className="rounded-xl border border-void-line bg-void-deep/60 p-4">
+          <div className="flex items-center justify-between font-mono text-[11px] uppercase tracking-wider text-mist-faint">
+            <span>Pelo histórico</span>
+            <span>Confiança {result.confidence}</span>
+          </div>
+          <div className="mt-1.5 font-display text-sm font-semibold text-mist">
+            Esse tipo de sinal acertou {result.historico.pct}% no teste ({result.historico.n} sinais)
+          </div>
+          {result.explicacao && <p className="mt-0.5 text-xs leading-relaxed text-mist-dim">{result.explicacao}</p>}
+        </div>
+      )}
+
       {timing && <CandleTimer direction={result.direction} timeframe={result.timeframe} {...timing} />}
 
       <PressureBar pressao={result.pressao} />
