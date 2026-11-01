@@ -187,13 +187,16 @@ function agrega(m1, min) {
 }
 
 async function runMinerador(pool, deps) {
-    const PAIRS = ['EURUSD', 'EURJPY', 'XAUUSD'];
+    // MIN_PARES (pedido de 01/11: sinais de minuto no OTC): ativos a minerar; os "-OTC" abrem 24h, sem filtro de mercado.
+    const PAIRS = (process.env.MIN_PARES || 'EURUSD,EURJPY,XAUUSD').split(',').map((x) => x.trim()).filter(Boolean);
     const exM1 = [], exM5 = [], tdM5 = [];
     for (const pair of PAIRS) {
         const { rows } = await pool.query('SELECT time, open, high, low, close FROM otc_candles WHERE active = $1 ORDER BY time', [pair]);
         const m1 = rows.slice(0, -1).map((r) => ({ time: new Date(r.time).getTime(), open: +r.open, high: +r.high, low: +r.low, close: +r.close }));
-        exM1.push(...amostras(m1, pair, 60_000, deps.isMarketOpen));
-        exM5.push(...amostras(agrega(m1, 5), pair, 300_000, deps.isMarketOpen));
+        console.log(`MIN_DADOS ${pair} candles=${m1.length}${m1.length ? ` de=${new Date(m1[0].time).toISOString().slice(0, 10)}` : ''}`);
+        const aberto = /-OTC$/i.test(pair) ? null : deps.isMarketOpen;
+        exM1.push(...amostras(m1, pair, 60_000, aberto));
+        exM5.push(...amostras(agrega(m1, 5), pair, 300_000, aberto));
         if (process.env.MIN_TD !== '0') {
             try {
                 const td = (await deps.fetchLongHistory(pair, 'M5', parseInt(process.env.PA_TD_PAGES, 10) || 4)).filter((x) => deps.isMarketOpen(new Date(x.time)));
