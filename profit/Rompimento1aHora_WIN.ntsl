@@ -9,13 +9,14 @@
 //  - Alvo pequeno (200) dá prejuízo neste método: no estudo, só alvos de 600 a 1000 ficaram positivos.
 //
 // ATENÇÃO ao horário: confira no backtest se a faixa é das 10:00 às 11:00. Se o Profit marcar o candle
-// pelo horário de fim, troque HoraIniFaixa para 1005 e HoraFimFaixa para 1105.
+// pelo horário de fim, troque HoraIniFaixa para 1005, HoraFimFaixa para 1105 e HoraUltimoFaixa para 1100.
 input
   Contratos(20);
   Alvo(1000);
   StopMax(600);
   HoraIniFaixa(1000);
   HoraFimFaixa(1100);
+  HoraUltimoFaixa(1055); // último candle da faixa: as ordens ficam prontas para o candle das 11:00
   HoraLimite(1600);     // não abre operação depois deste horário
   HoraZerar(1655);
   Folga(50);
@@ -53,7 +54,7 @@ begin
     feito := True;
 
   // Ordens de rompimento (stop) para o próximo candle
-  if (not feito) and (hi > 0) and (Time >= HoraFimFaixa - 5) and (Time < HoraLimite)
+  if (not feito) and (hi > 0) and (Time >= HoraUltimoFaixa) and (Time < HoraLimite)
      and (not IsBought) and (not IsSold) then
   begin
     if Close < hi then
