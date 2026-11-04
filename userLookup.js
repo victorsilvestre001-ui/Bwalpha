@@ -39,6 +39,28 @@ async function grantVip() {
     }
 }
 
+// VIP_REVOKE_EMAILS="a@x.com,b@y.com": tira o VIP da conta (pedido do dono). Marca vip_grants como 'revoked'
+// para o VIP não voltar no próximo login. Roda depois do VIP_GRANT: se o e-mail estiver nos dois, vale o bloqueio.
+async function revokeVip() {
+    const emails = (process.env.VIP_REVOKE_EMAILS || '').split(',').map((x) => x.trim().toLowerCase())
+        .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+    for (const email of emails) {
+        try {
+            await pool.query(
+                `INSERT INTO vip_grants (email, provider, status, subscription_id, expires_at, updated_at)
+                 VALUES ($1, 'manual', 'revoked', NULL, NULL, NOW())
+                 ON CONFLICT (email) DO UPDATE SET status = 'revoked', expires_at = NULL, updated_at = NOW()`,
+                [email]);
+            const r = await pool.query(
+                `UPDATE users SET plan = 'free', subscription_status = 'revoked', subscription_expires_at = NULL
+                 WHERE LOWER(email) = $1 AND plan <> 'owner' RETURNING id`, [email]);
+            console.log(`VIP_REVOKE: ${email} ${r.rowCount ? `VIP removido da conta ${r.rows[0].id}` : 'sem conta; não recebe VIP se se cadastrar'}`);
+        } catch (err) {
+            console.error(`VIP_REVOKE erro (${email}):`, err.message);
+        }
+    }
+}
+
 // HISTORY_RESET_USERS="email|2026-10-07T03:40:00Z,...": recomeça o histórico visível dessa conta a partir
 // da data (os sinais antigos continuam no banco para os estudos). Pode ficar ligado: a data é fixa.
 async function resetHistory() {
@@ -60,6 +82,7 @@ async function resetHistory() {
 async function run() {
     await fixEmail();
     await grantVip();
+    await revokeVip();
     await resetHistory();
     const q = (process.env.USER_LOOKUP || '').trim().toLowerCase();
     if (!q) return;
