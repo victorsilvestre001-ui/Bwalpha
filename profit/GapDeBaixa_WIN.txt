@@ -1,0 +1,56 @@
+// GAP DE BAIXA - WIN 5 minutos (compra quando o índice abre bem abaixo do fechamento de ontem)
+// Estudo (BOVA11 em pontos do índice, dez/2023 a nov/2026): 118 operações, lucro em todos os 6 semestres,
+// fator de lucro 1,56, ~41 operações por ano. NÃO foi testado no WIN: rode o backtest no Profit antes de tudo.
+//
+// Regra:
+//  - Referência = preço do WIN às 17h do dia anterior (fechamento do candle das 16:55).
+//  - Às 10h (abertura do mercado à vista), se o WIN está GapMin pontos ou mais ABAIXO da referência: COMPRA.
+//  - Alvo = voltar até a referência (o gap fecha). Stop de proteção = StopMax pontos. Sai às 16:55 se nada acontecer.
+//
+// ATENÇÃO ao horário: se no backtest a entrada não sair no candle das 10:00, troque HoraDecisao para 1000
+// e HoraRef para 1700 (depende de o Profit marcar o candle pelo horário de início ou de fim).
+input
+  Contratos(20);
+  GapMin(700);          // pontos abaixo do fechamento de ontem
+  StopMax(2000);        // stop de proteção em pontos
+  HoraRef(1655);        // candle cujo fechamento é a referência (17h)
+  HoraDecisao(955);     // candle cujo fechamento decide a entrada (10h); a ordem sai na abertura do seguinte
+  HoraSaida(1650);      // zera na abertura do candle seguinte (16:55)
+  Folga(50);
+
+var
+  ref, g, alvo, st: Float;
+  hojeOk: Boolean;
+
+begin
+  ref := ref[1];
+  hojeOk := hojeOk[1];
+  if Date <> Date[1] then
+    hojeOk := True;
+
+  // Entrada: uma vez por dia, só sem posição
+  if (Time = HoraDecisao) and hojeOk and (ref > 0) and (not IsBought) and (not IsSold) then
+  begin
+    g := Close - ref;
+    if g <= -GapMin then
+      BuyAtMarket(Contratos);
+    hojeOk := False;
+  end;
+
+  // Saídas
+  if IsBought then
+  begin
+    alvo := ref[1];
+    if alvo <= 0 then
+      alvo := ref;
+    st := BuyPrice - StopMax;
+    SellToCoverLimit(alvo, BuyPosition);
+    SellToCoverStop(st, st - Folga, BuyPosition);
+    if Time >= HoraSaida then
+      ClosePosition;
+  end;
+
+  // Guarda a referência do dia (fechamento das 17h) depois de usar a de ontem
+  if Time = HoraRef then
+    ref := Close;
+end;
