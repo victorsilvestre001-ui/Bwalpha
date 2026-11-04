@@ -1,0 +1,131 @@
+// UT Bot WIN - 20 contratos, alvo 200 pontos (parcial) + resto seguindo a linha do UT
+// Use primeiro no histórico (WINFUT 5 min) e depois na conta de SIMULAÇÃO.
+input
+  Contratos(20);
+  Parcial(10);          // contratos que saem no alvo
+  Alvo(200);            // pontos
+  StopMax(150);         // pontos
+  KeyValue(2.0);        // maior = menos sinais
+  PeriodoATR(14);
+  MaxEntradas(3);       // por dia
+  MaxStops(2);          // para o dia depois de X saídas sem alvo
+  AFavorDoDia(1);       // 1 = só compra acima da abertura do dia / só vende abaixo
+  HoraIni(915);
+  HoraFim(1700);
+  HoraZerar(1740);
+  Folga(50);            // pontos de folga no stop-limite para garantir a execução
+
+var
+  tr, atr, nLoss, p, ts, st, ent: Float;
+  abDia: Float;
+  hoje, stopsHoje: Integer;
+  bateu, compra, venda, pode: Boolean;
+
+begin
+  // Mantém os valores do candle anterior
+  atr := atr[1];
+  ts := ts[1];
+  abDia := abDia[1];
+  hoje := hoje[1];
+  stopsHoje := stopsHoje[1];
+  bateu := bateu[1];
+
+  // Novo dia: zera os contadores
+  if Date <> Date[1] then
+  begin
+    hoje := 0;
+    stopsHoje := 0;
+    abDia := Open;
+  end;
+
+  // ATR (média de Wilder)
+  tr := Max(High - Low, Max(Abs(High - Close[1]), Abs(Low - Close[1])));
+  if atr = 0 then
+    atr := tr
+  else
+    atr := (atr * (PeriodoATR - 1) + tr) / PeriodoATR;
+  nLoss := KeyValue * atr;
+
+  // Linha do UT Bot
+  p := ts[1];
+  if (Close > p) and (Close[1] > p) then
+    ts := Max(p, Close - nLoss)
+  else if (Close < p) and (Close[1] < p) then
+    ts := Min(p, Close + nLoss)
+  else if Close > p then
+    ts := Close - nLoss
+  else
+    ts := Close + nLoss;
+
+  // Fechou uma posição sem bater o alvo: conta como stop
+  if ((IsBought[1]) or (IsSold[1])) and (not IsBought) and (not IsSold) then
+  begin
+    if not bateu then
+      stopsHoje := stopsHoje + 1;
+    bateu := False;
+  end;
+
+  // Sinais
+  compra := (Close > ts) and (Close[1] <= ts[1]);
+  venda  := (Close < ts) and (Close[1] >= ts[1]);
+  pode := (CurrentBar > 50) and (hoje < MaxEntradas) and (stopsHoje < MaxStops)
+          and (Time >= HoraIni) and (Time <= HoraFim);
+
+  if (AFavorDoDia = 1) then
+  begin
+    compra := compra and (Close > abDia);
+    venda  := venda and (Close < abDia);
+  end;
+
+  // Entradas (só sem posição)
+  if (not IsBought) and (not IsSold) and pode then
+  begin
+    if compra then
+    begin
+      BuyAtMarket(Contratos);
+      hoje := hoje + 1;
+      bateu := False;
+    end
+    else if venda then
+    begin
+      SellShortAtMarket(Contratos);
+      hoje := hoje + 1;
+      bateu := False;
+    end;
+  end;
+
+  // Comprado: parcial no alvo, stop no maior entre (entrada - StopMax) e a linha do UT
+  if IsBought then
+  begin
+    ent := BuyPrice;
+    if High >= ent + Alvo then
+      bateu := True;
+    st := Max(ent - StopMax, ts);
+    if bateu then
+      st := Max(st, ent);
+    if not bateu then
+      SellToCoverLimit(ent + Alvo, Parcial);
+    SellToCoverStop(st, st - Folga, BuyPosition);
+  end;
+
+  // Vendido: o mesmo, espelhado
+  if IsSold then
+  begin
+    ent := SellPrice;
+    if Low <= ent - Alvo then
+      bateu := True;
+    st := Min(ent + StopMax, ts);
+    if bateu then
+      st := Min(st, ent);
+    if not bateu then
+      BuyToCoverLimit(ent - Alvo, Parcial);
+    BuyToCoverStop(st, st + Folga, SellPosition);
+  end;
+
+  // Zera no fim do dia
+  if (Time >= HoraZerar) and (IsBought or IsSold) then
+    ClosePosition;
+
+  // Linha do UT no gráfico
+  PlotN(1, ts);
+end;
