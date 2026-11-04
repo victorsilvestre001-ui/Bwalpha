@@ -1,0 +1,83 @@
+// ROMPIMENTO DA 1ª HORA - WIN 5 minutos (uma operação por dia)
+// Estudo (BOVA11 em pontos do índice, dez/2023 a nov/2026): 663 operações (~0,9 por dia), fator de lucro 1,21,
+// lucro em todos os 6 semestres; últimos 60 dias em 5 min: fator de lucro 1,63. NÃO foi testado no WIN ainda.
+//
+// Regra:
+//  - Faixa = máxima e mínima das 10:00 às 11:00 (primeira hora do mercado à vista).
+//  - Depois das 11:00, rompeu a máxima: COMPRA; rompeu a mínima: VENDE. Só a primeira do dia.
+//  - Alvo 1000 pontos, stop 600 pontos. Zera às 16:55 se nada acontecer.
+//  - Alvo pequeno (200) dá prejuízo neste método: no estudo, só alvos de 600 a 1000 ficaram positivos.
+//
+// ATENÇÃO ao horário: confira no backtest se a faixa é das 10:00 às 11:00. Se o Profit marcar o candle
+// pelo horário de fim, troque HoraIniFaixa para 1005 e HoraFimFaixa para 1105.
+input
+  Contratos(20);
+  Alvo(1000);
+  StopMax(600);
+  HoraIniFaixa(1000);
+  HoraFimFaixa(1100);
+  HoraLimite(1600);     // não abre operação depois deste horário
+  HoraZerar(1655);
+  Folga(50);
+
+var
+  hi, lo, st, tg: Float;
+  feito: Boolean;
+
+begin
+  hi := hi[1];
+  lo := lo[1];
+  feito := feito[1];
+
+  if Date <> Date[1] then
+  begin
+    hi := 0;
+    lo := 0;
+    feito := False;
+  end;
+
+  // Monta a faixa da primeira hora
+  if (Time >= HoraIniFaixa) and (Time < HoraFimFaixa) then
+  begin
+    if hi = 0 then
+      hi := High
+    else
+      hi := Max(hi, High);
+    if lo = 0 then
+      lo := Low
+    else
+      lo := Min(lo, Low);
+  end;
+
+  if IsBought or IsSold then
+    feito := True;
+
+  // Ordens de rompimento (stop) para o próximo candle
+  if (not feito) and (hi > 0) and (Time >= HoraFimFaixa - 5) and (Time < HoraLimite)
+     and (not IsBought) and (not IsSold) then
+  begin
+    if Close < hi then
+      BuyStop(hi + 5, hi + 5 + Folga, Contratos);
+    if Close > lo then
+      SellShortStop(lo - 5, lo - 5 - Folga, Contratos);
+  end;
+
+  // Saídas
+  if IsBought then
+  begin
+    tg := BuyPrice + Alvo;
+    st := BuyPrice - StopMax;
+    SellToCoverLimit(tg, BuyPosition);
+    SellToCoverStop(st, st - Folga, BuyPosition);
+  end;
+  if IsSold then
+  begin
+    tg := SellPrice - Alvo;
+    st := SellPrice + StopMax;
+    BuyToCoverLimit(tg, SellPosition);
+    BuyToCoverStop(st, st + Folga, SellPosition);
+  end;
+
+  if (Time >= HoraZerar) and (IsBought or IsSold) then
+    ClosePosition;
+end;
