@@ -23,6 +23,68 @@ function simNao(v) {
   return String(v || '').toLowerCase().startsWith('s');
 }
 
+// "31/12/2026" -> "2026-12-31"
+function dataBr(d) {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(d || '');
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
+}
+
+function deReceitaWs(d) {
+  // A ReceitaWS responde 200 com status ERROR quando o CNPJ não existe.
+  if (d.status === 'ERROR') return null;
+  const s = d.simples || {};
+  const mei = d.simei || {};
+  const principal = (d.atividade_principal || [])[0] || {};
+  return {
+    cnpj: String(d.cnpj || '').replace(/\D/g, ''),
+    razaoSocial: d.nome,
+    nomeFantasia: d.fantasia || '',
+    situacao: (d.situacao || '').toUpperCase(),
+    dataSituacao: dataBr(d.data_situacao),
+    motivoSituacao: d.motivo_situacao || '',
+    abertura: dataBr(d.abertura),
+    cnae: String(principal.code || '').replace(/\D/g, ''),
+    atividade: principal.text || '',
+    naturezaJuridica: d.natureza_juridica || '',
+    porte: d.porte || '',
+    capitalSocial: Number(d.capital_social) || 0,
+    uf: d.uf || '',
+    municipio: d.municipio || '',
+    simples: !!s.optante,
+    dataExclusaoSimples: dataBr(s.data_exclusao),
+    mei: !!mei.optante,
+    dataExclusaoMei: dataBr(mei.data_exclusao),
+    socios: (d.qsa || []).map((x) => ({ nome: x.nome, qualificacao: String(x.qual || '').replace(/^\d+-/, '') })),
+    fonte: 'ReceitaWS',
+  };
+}
+
+function deCnpja(d) {
+  const co = d.company || {};
+  return {
+    cnpj: d.taxId,
+    razaoSocial: co.name,
+    nomeFantasia: d.alias || '',
+    situacao: ((d.status && d.status.text) || '').toUpperCase(),
+    dataSituacao: d.statusDate || null,
+    motivoSituacao: (d.reason && d.reason.text) || '',
+    abertura: d.founded || null,
+    cnae: d.mainActivity ? String(d.mainActivity.id) : '',
+    atividade: (d.mainActivity && d.mainActivity.text) || '',
+    naturezaJuridica: co.nature ? `${String(co.nature.id).replace(/(\d{3})(\d)/, '$1-$2')} - ${co.nature.text}` : '',
+    porte: (co.size && co.size.text) || '',
+    capitalSocial: Number(co.equity) || 0,
+    uf: (d.address && d.address.state) || '',
+    municipio: ((d.address && d.address.city) || '').toUpperCase(),
+    simples: !!(co.simples && co.simples.optant),
+    dataExclusaoSimples: null, // a API aberta da CNPJá não informa datas de exclusão
+    mei: !!(co.simei && co.simei.optant),
+    dataExclusaoMei: null,
+    socios: (co.members || []).map((x) => ({ nome: x.person && x.person.name, qualificacao: x.role && x.role.text })),
+    fonte: 'CNPJá',
+  };
+}
+
 function deBrasilApi(d) {
   return {
     cnpj: d.cnpj,
@@ -100,21 +162,27 @@ async function buscaEmpresa(cnpj) {
   if (DEMOS[c]) return DEMOS[c];
   if (process.env.DEMO === '1') return { ...DEMOS['11222333000181'], cnpj: c };
 
+  // Tenta as fontes em ordem. Uma fonte pode dizer "não encontrado" por estar desatualizada,
+  // então só desiste com "não encontrado" quando nenhuma fonte achou e nenhuma deu erro.
   const erros = [];
   const fontes = [
     [`https://brasilapi.com.br/api/cnpj/v1/${c}`, deBrasilApi],
+    [`https://receitaws.com.br/v1/cnpj/${c}`, deReceitaWs],
+    [`https://open.cnpja.com/office/${c}`, deCnpja],
     [`https://publica.cnpj.ws/cnpj/${c}`, dePublicaCnpjWs],
   ];
   for (const [url, normaliza] of fontes) {
     try {
       const d = await getJson(url);
-      if (d === null) return null;
-      return normaliza(d);
+      const emp = d && normaliza(d);
+      if (emp && emp.razaoSocial) return emp;
+      console.warn('[consulta] fonte sem o CNPJ:', url);
     } catch (err) {
       console.warn('[consulta] fonte falhou:', err.message);
       erros.push(err.message);
     }
   }
+  if (!erros.length) return null;
   throw new Error(`Não foi possível consultar o CNPJ agora (${erros.join('; ')})`);
 }
 
