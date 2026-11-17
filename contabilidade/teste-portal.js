@@ -73,6 +73,39 @@ const notas = require('./portal/notas');
   assert(!('usuarioId' in pub.json.orcamento) && !('token' in pub.json.orcamento));
   assert.strictEqual((await req('GET', '/api/orcamento-publico/nao-existe')).status, 404);
 
+  // Resumo do dia antes da resposta: o orçamento aparece como pendente
+  r = await req('GET', '/api/portal/resumo');
+  assert.strictEqual(r.json.resumo.pendentes.length, 1);
+  assert.ok(r.json.resumo.agenda.every((e) => e.emDias >= 0 && e.emDias <= 10));
+
+  // O cliente aprova pela página pública; o assinante recebe um alerta e não dá para responder duas vezes
+  const tokenOrc = pub.json.orcamento ? (await req('GET', '/api/portal/orcamentos')).json.orcamentos[0].token : null;
+  r = await req('POST', `/api/orcamento-publico/${tokenOrc}/resposta`, { acao: 'aprovar', nome: 'João' });
+  assert.strictEqual(r.json.status, 'aprovado');
+  assert.strictEqual((await req('POST', `/api/orcamento-publico/${tokenOrc}/resposta`, { acao: 'recusar' })).status, 409);
+  r = await req('GET', '/api/portal/painel');
+  assert.ok(r.json.alertas.some((a) => /APROVOU/.test(a.texto)));
+  assert.strictEqual((await req('GET', '/api/portal/resumo')).json.resumo.pendentes.length, 0);
+
+  // Preferências do resumo
+  r = await req('PUT', '/api/portal/preferencias', { resumo: true, resumoEmail: false, funcionarios: true, telefone: '(15) 98888-7777' });
+  assert.strictEqual(r.json.usuario.preferencias.funcionarios, true);
+  assert.strictEqual(r.json.usuario.telefone, '15988887777');
+
+  // Admin: prévia em HTML e envio (sem canais configurados, nada sai e o motivo volta)
+  const idMaria = (await req('GET', '/api/admin/portal/assinantes', null, admin)).json.assinantes[0].id;
+  const previa = await fetch(`${base}/api/admin/portal/assinantes/${idMaria}/resumo`, { headers: admin });
+  assert.ok((await previa.text()).includes('Seu resumo do dia'));
+  r = await req('POST', `/api/admin/portal/assinantes/${idMaria}/resumo`, {}, admin);
+  assert.strictEqual(r.json.resultado.email, null, 'e-mail desligado nas preferências');
+  assert.strictEqual(r.json.resultado.whatsapp.ok, false);
+
+  // Agenda: feriado de 20/11 antecipa FGTS/INSS e adia o DAS
+  const { proximas } = require('./portal/agenda');
+  const ag = proximas({ regime: 'simples', funcionarios: true }, { hoje: '2026-11-17' });
+  assert.strictEqual(ag.find((e) => e.titulo.startsWith('DAS')).data, '2026-11-23');
+  assert.strictEqual(ag.find((e) => e.titulo === 'FGTS Digital').data, '2026-11-19');
+
   // Outro usuário não vê nada do primeiro
   const cookieMaria = cookie; cookie = '';
   await req('POST', '/api/portal/cadastro', { nome: 'Ana', email: 'ana@ex.com', senha: '12345678', cnpj: '11222333000181' });

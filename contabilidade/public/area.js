@@ -91,7 +91,7 @@ async function abaEmpresa(atualizar) {
   const el = $('#abaEmpresa');
   el.innerHTML = '<p class="vazio">Carregando sua empresa…</p>';
   try {
-    const { empresa: e, analise: a, alertas } = await api('/painel' + (atualizar ? '?atualizar=1' : ''));
+    const [{ empresa: e, analise: a, alertas }, rs] = await Promise.all([api('/painel' + (atualizar ? '?atualizar=1' : '')), api('/resumo').catch(() => null)]);
     if (!e) { el.innerHTML = '<p class="vazio">Não conseguimos consultar o CNPJ agora. Tente atualizar em instantes.</p>'; return; }
     const urg = (a.itens || []).filter((i) => i.gravidade === 'urgente').length;
     const r = a.reforma;
@@ -104,6 +104,7 @@ async function abaEmpresa(atualizar) {
         <div><span>Pendências urgentes</span><b>${urg}</b></div>
         <div><span>Dívida ativa em cobrança</span><b>${brl(a.dividaAtiva)}</b></div>
       </div>
+      ${rs ? cardResumo(rs) : ''}
       <section class="card">
         <h2>${icone('sino')} Alertas do seu agente</h2>
         <p class="sub">Todo dia o sistema reconsulta seu CNPJ e avisa aqui quando algo muda: situação, dívida ativa, exclusões e prazos.</p>
@@ -121,6 +122,23 @@ async function abaEmpresa(atualizar) {
       </section>`;
     $('#atualizar').addEventListener('click', () => abaEmpresa(true));
   } catch (err) { trataErro(err, el); }
+}
+
+const quando = (n) => (n === 0 ? 'hoje' : n === 1 ? 'amanhã' : `em ${n} dias`);
+function cardResumo({ resumo: r, canais, preferencias }) {
+  const lis = (arr) => `<ul class="alertas">${arr.join('')}</ul>`;
+  const enviado = canais.email || canais.whatsapp;
+  const meios = [canais.email && 'por e-mail', canais.whatsapp && 'pelo WhatsApp'].filter(Boolean).join(' e ');
+  return `
+    <section class="card resumo-dia">
+      <h2>${icone('ia')} Seu resumo de hoje</h2>
+      <p class="sub">${enviado && preferencias.resumo !== false ? `Também enviado todo dia útil de manhã ${meios}.` : 'Este resumo é atualizado todo dia aqui na sua Área.'}</p>
+      <h3>📅 Impostos e prazos dos próximos 10 dias</h3>
+      ${r.agenda.length ? lis(r.agenda.map((x) => `<li>${icone('sino')}<span><b>${x.data.split('-').reverse().join('/')} · ${quando(x.emDias)}</b> — ${esc(x.titulo)}<small>${esc(x.detalhe)}</small></span></li>`)) : '<p class="vazio">Nada vence nos próximos 10 dias.</p>'}
+      ${r.pendentes.length ? `<h3>📝 Orçamentos aguardando aprovação · ${brl(r.valorPendente)}</h3>${lis(r.pendentes.map((o) => `<li>${icone('orc')}<span>Nº ${String(o.numero).padStart(4, '0')} · ${esc(o.cliente.nome)} · <b>${brl(o.total)}</b><small>vence ${quando(o.validade.dias)} · <a target="_blank" rel="noopener" href="${linkZap(`Olá! Passando para lembrar do orçamento${o.titulo ? ` "${o.titulo}"` : ''} de ${brl(o.total)}. Ficou alguma dúvida? ${location.origin}/o/${o.token}`, '')}">lembrar o cliente no WhatsApp</a></small></span></li>`))}` : ''}
+      ${r.respondidos.length ? `<h3>✅ Respostas de clientes</h3>${lis(r.respondidos.map((o) => `<li>${icone('check')}<span>${esc(o.cliente.nome)} <b>${o.status === 'aprovado' ? 'aprovou' : 'recusou'}</b> o orçamento de ${brl(o.total)}</span></li>`))}` : ''}
+      ${r.dica ? `<h3>💡 Reforma Tributária: dica do dia</h3><p><b>${esc(r.dica.titulo)}:</b> ${esc(r.dica.texto)}</p>` : ''}
+    </section>`;
 }
 
 // ----- Notas fiscais -----
@@ -247,10 +265,11 @@ async function abaOrcamentos() {
       </section>
       <section class="card">
         <h2>Orçamentos gerados</h2>
-        ${orcamentos.length ? `<table class="lista-docs"><thead><tr><th>Nº</th><th>Cliente</th><th class="ocultar-cel">Título</th><th>Total</th><th></th></tr></thead><tbody>
+        ${orcamentos.length ? `<table class="lista-docs"><thead><tr><th>Nº</th><th>Cliente</th><th class="ocultar-cel">Título</th><th>Total</th><th>Situação</th><th></th></tr></thead><tbody>
           ${orcamentos.map((o) => { const link = `${location.origin}/o/${o.token}`; return `<tr>
             <td>${String(o.numero).padStart(4, '0')}<br><small>${data(o.criadoEm)}</small></td>
             <td>${esc(o.cliente.nome)}</td><td class="ocultar-cel">${esc(o.titulo || '—')}</td><td>${brl(o.total)}</td>
+            <td><select data-status="${o.id}" class="sel-status st-${o.status || 'aguardando'}">${['aguardando', 'aprovado', 'recusado'].map((s) => `<option value="${s}" ${(o.status || 'aguardando') === s ? 'selected' : ''}>${{ aguardando: 'Aguardando', aprovado: 'Aprovado', recusado: 'Recusado' }[s]}</option>`).join('')}</select>${o.respondidoPor && o.respondidoPor !== 'empresa' ? '<br><small>pelo cliente</small>' : ''}</td>
             <td class="acoes"><a href="/o/${esc(o.token)}" target="_blank" rel="noopener">Abrir</a><a target="_blank" rel="noopener" href="${linkZap(`Olá! Segue o orçamento${o.titulo ? ` "${o.titulo}"` : ''} no valor de ${brl(o.total)}: ${link}`, '')}">Enviar</a><button data-copia="${esc(link)}">Copiar link</button></td>
           </tr>`; }).join('')}</tbody></table>` : '<p class="vazio">Nenhum orçamento ainda.</p>'}
       </section>`;
@@ -261,6 +280,9 @@ async function abaOrcamentos() {
     if ($('#iaEscopo')) $('#iaEscopo').addEventListener('click', escopoIa);
     $('#formOrc').addEventListener('submit', salvaOrc);
     $$('[data-copia]').forEach((b) => b.addEventListener('click', () => { navigator.clipboard.writeText(b.dataset.copia); b.textContent = 'Copiado!'; }));
+    $$('[data-status]').forEach((s) => s.addEventListener('change', async () => {
+      try { await api(`/orcamentos/${s.dataset.status}`, { method: 'PATCH', body: { status: s.value } }); s.className = `sel-status st-${s.value}`; } catch (err) { alert(err.message); }
+    }));
   } catch (err) { trataErro(err, el); }
 }
 const num = (v) => Number(String(v || '').replace(/\./g, '').replace(',', '.')) || 0;
@@ -320,6 +342,27 @@ function abaConta() {
       <div class="linha-botoes"><button class="btn azul" id="trocarPlano">Ver planos / renovar</button><a class="sec" target="_blank" rel="noopener" href="${linkZap('Olá! Preciso de ajuda com minha conta na Área do Cliente.')}">${icone('zap')} Suporte</a></div>
     </section>`;
   $('#trocarPlano').addEventListener('click', mostraPlanos);
+  const p = u.preferencias || {};
+  $('#abaConta').insertAdjacentHTML('beforeend', `
+    <section class="card">
+      <h2>${icone('sino')} Resumo diário</h2>
+      <p class="sub">Todo dia útil de manhã enviamos um resumo com os impostos que vencem, orçamentos pendentes, notas e alertas da sua empresa.</p>
+      <form id="formPref" class="grade-form">
+        <label class="campo cheio"><input type="checkbox" id="pResumo" ${p.resumo !== false ? 'checked' : ''}> Quero receber o resumo diário</label>
+        <label class="campo"><input type="checkbox" id="pEmail" ${p.resumoEmail !== false ? 'checked' : ''}> Por e-mail (${esc(u.email)})</label>
+        <label class="campo"><input type="checkbox" id="pZap" ${p.resumoWhatsapp !== false ? 'checked' : ''}> Pelo WhatsApp</label>
+        <label class="campo"><span>Número do WhatsApp</span><input id="pTel" value="${esc(u.telefone || '')}" inputmode="tel" maxlength="20"></label>
+        <label class="campo"><span>&nbsp;</span><span><input type="checkbox" id="pFunc" ${p.funcionarios ? 'checked' : ''}> A empresa tem funcionários (inclui FGTS, INSS e salários na agenda)</span></label>
+        <div class="cheio"><button class="btn azul">Salvar preferências</button> <span id="okPref"></span></div>
+      </form>
+    </section>`);
+  $('#formPref').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    try {
+      const r = await api('/preferencias', { method: 'PUT', body: { resumo: $('#pResumo').checked, resumoEmail: $('#pEmail').checked, resumoWhatsapp: $('#pZap').checked, funcionarios: $('#pFunc').checked, telefone: $('#pTel').value } });
+      eu.usuario = r.usuario; $('#okPref').textContent = 'Salvo ✅';
+    } catch (err) { $('#okPref').textContent = err.message; }
+  });
 }
 
 function trataErro(err, el) {

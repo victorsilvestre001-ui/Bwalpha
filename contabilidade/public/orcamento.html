@@ -40,7 +40,15 @@
   .acoes { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; padding: 0 20px 40px; }
   .acoes a, .acoes button { font: inherit; font-weight: 700; border: 0; border-radius: 12px; padding: 14px 22px; cursor: pointer; text-decoration: none; }
   .imprimir { background: var(--marca); color: #fff; }
-  .aceitar { background: #25d366; color: #fff; }
+  .aceitar { background: #1e7a4f; color: #fff; }
+  .recusar { background: #fff; color: #c0392b; box-shadow: inset 0 0 0 2px #f3c7c2; }
+  .falar { background: #25d366; color: #fff; }
+  .resposta { max-width: 860px; margin: 0 auto 18px; padding: 0 20px; text-align: center; }
+  .resposta label { display: block; font-weight: 600; margin-bottom: 10px; }
+  .resposta input { font: inherit; padding: 10px 12px; border: 1px solid var(--borda); border-radius: 10px; margin-left: 6px; }
+  .respondido { font-size: 1.05rem; padding: 14px; border-radius: 12px; background: #e6f5ec; color: #1e7a4f; }
+  .respondido.recusado { background: #fdecea; color: #c0392b; }
+  @media print { .resposta { display: none; } }
   .rodape { text-align: center; color: var(--suave); font-size: .78rem; padding: 0 20px 30px; }
   .erro { max-width: 600px; margin: 80px auto; text-align: center; color: var(--suave); }
   @media (max-width: 640px) {
@@ -101,8 +109,20 @@ fetch('/api/orcamento-publico/' + encodeURIComponent(token)).then((r) => r.json(
         <div class="assin"><div>${esc(e.fantasia || e.nome)}</div><div>De acordo: ${esc(o.cliente.nome)}</div></div>
       </div>
     </div>
-    <div class="acoes"><button class="imprimir" onclick="print()">Imprimir / salvar em PDF</button>${zap ? `<a class="aceitar" href="${zap}" target="_blank" rel="noopener">Aprovar pelo WhatsApp</a>` : ''}</div>
+    <div class="resposta" id="resposta">${o.status && o.status !== 'aguardando'
+      ? `<p class="respondido ${o.status}">Orçamento <b>${o.status}</b>${o.respondidoEm ? ` em ${new Date(o.respondidoEm).toLocaleDateString('pt-BR')}` : ''}.</p>`
+      : `<label>Seu nome <input id="rNome" maxlength="120" placeholder="Quem está respondendo"></label>
+         <div class="acoes"><button class="aceitar" data-acao="aprovar">Aprovar orçamento</button><button class="recusar" data-acao="recusar">Recusar</button></div>`}</div>
+    <div class="acoes"><button class="imprimir" onclick="print()">Imprimir / salvar em PDF</button>${zap ? `<a class="falar" href="${zap}" target="_blank" rel="noopener">Falar no WhatsApp</a>` : ''}</div>
     <p class="rodape">Orçamento gerado pela Área do Cliente V&amp;J Assessoria Contábil.</p>`;
+  document.querySelectorAll('[data-acao]').forEach((b) => b.addEventListener('click', async () => {
+    const acao = b.dataset.acao;
+    const motivo = acao === 'recusar' ? (prompt('Quer contar o motivo? (opcional)') || '') : '';
+    if (acao === 'aprovar' && !confirm(`Confirmar a aprovação do orçamento nº ${numero} no valor de ${brl(o.total)}?`)) return;
+    const r = await fetch(`/api/orcamento-publico/${encodeURIComponent(token)}/resposta`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao, nome: document.getElementById('rNome').value, motivo }) });
+    const j = await r.json();
+    document.getElementById('resposta').innerHTML = r.ok ? `<p class="respondido ${j.status}">Obrigado! Orçamento <b>${j.status}</b>. ${esc(e.fantasia || e.nome)} já foi avisado.</p>` : `<p class="respondido recusado">${esc(j.erro)}</p>`;
+  }));
 }).catch((err) => { document.getElementById('doc').innerHTML = `<p class="erro">${esc(err.message || 'Orçamento não encontrado.')}</p>`; });
 </script>
 </body>

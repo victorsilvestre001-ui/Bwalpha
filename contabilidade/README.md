@@ -78,3 +78,16 @@ Todas as alíquotas e tabelas estão em **`public/tributos.js` → `REGRAS`**, c
 - **Notas fiscais (NFS-e Nacional)**: o assinante informa CNPJ/CPF do cliente, descrição e valor → rascunho com os dados do tomador puxados pelo CNPJ → confirma → emissão. Com `FOCUS_NFE_TOKEN` (e `FOCUS_NFE_AMBIENTE=homologacao` para testes) a nota vai direto para a API da Focus NFe (`POST /v2/nfsen`, consulta e cancelamento em `portal/notas.js`), o que exige a empresa cadastrada na Focus com certificado A1 e a configuração fiscal (código IBGE do município e código de tributação nacional). Sem o token, a nota entra na **fila da equipe** no `/admin`, que emite e anexa número e PDF.
 - **Orçamentos**: CNPJ do cliente, itens, valores, desconto, prazo, pagamento e escopo (com botão de IA se houver `ANTHROPIC_API_KEY`) → página pública `/o/<token>` pronta para imprimir/PDF e aprovar pelo WhatsApp.
 - Testes: `npm test` (inclui `teste-portal.js`, ponta a ponta).
+
+## Resumo diário (relacionamento com o cliente)
+
+Todo dia útil, a partir de `RESUMO_HORA` (padrão 7h, horário de Brasília), cada assinante ativo recebe um resumo (`portal/resumo.js`):
+agenda de impostos dos próximos 10 dias conforme o regime e se tem funcionários (`portal/agenda.js`, com feriados nacionais),
+orçamentos aguardando aprovação (com os que vencem logo em destaque), respostas de clientes, notas emitidas, alertas da empresa e uma dica da Reforma.
+
+- **E-mail**: Resend (`RESEND_API_KEY` e `EMAIL_FROM` com domínio verificado no Resend).
+- **WhatsApp**: API oficial do WhatsApp Business (`WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_TEMPLATE`, `WHATSAPP_TEMPLATE_LANG`). Mensagem iniciada pela empresa precisa de modelo aprovado pela Meta, com 3 variáveis: `{{1}}` nome, `{{2}}` resumo em uma linha, `{{3}}` link da Área do Cliente.
+- `SITE_URL`: endereço usado nos links (padrão: o domínio do Railway).
+- O cliente liga/desliga e escolhe os canais em **Minha conta**; o mesmo resumo aparece no topo de **Minha empresa**.
+- No `/admin`, cada assinante tem **Ver resumo do dia** (prévia do e-mail) e **Enviar resumo agora**.
+- Orçamentos agora têm situação (aguardando/aprovado/recusado). O cliente aprova ou recusa na própria página do orçamento e o assinante recebe um alerta.

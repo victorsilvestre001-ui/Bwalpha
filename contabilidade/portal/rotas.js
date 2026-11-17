@@ -7,12 +7,14 @@ const auth = require('./auth');
 const pagamentos = require('./pagamentos');
 const notas = require('./notas');
 const cnpjUtil = require('../cnpj');
+const resumo = require('./resumo');
+const canais = require('./canais');
 
 const DIA = 24 * 60 * 60 * 1000;
 const txt = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
 const dinheiro = (v) => Math.round(Number(v) * 100) / 100;
 
-module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, assistente }) {
+module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, assistente, site }) {
   const r = express.Router();
   r.use(auth.leCookies);
   const limiteLogin = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, message: { erro: 'Muitas tentativas. Espere alguns minutos.' } });
@@ -105,6 +107,20 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (req.body.proximoDps) patch.proximoDps = Math.max(1, Number(req.body.proximoDps) || 1);
     const u = db.atualiza('usuarios', req.usuario.id, patch);
     res.json({ usuario: auth.publico(u) });
+  });
+
+  // ---------- Resumo diário e preferências ----------
+  r.get('/resumo', auth.exigePlano, (req, res) => {
+    const u = req.usuario;
+    res.json({ resumo: resumo.monta(u), linha: resumo.linhaCurta(resumo.monta(u)), historico: u.resumos || [], preferencias: u.preferencias || {}, canais: { email: canais.emailAtivo(), whatsapp: canais.whatsappAtivo() } });
+  });
+
+  r.put('/preferencias', auth.exigeLogin, (req, res) => {
+    const b = req.body || {};
+    const preferencias = { resumo: b.resumo !== false, resumoEmail: b.resumoEmail !== false, resumoWhatsapp: b.resumoWhatsapp !== false, funcionarios: !!b.funcionarios };
+    const patch = { preferencias };
+    if (b.telefone !== undefined) patch.telefone = txt(b.telefone, 20).replace(/\D/g, '');
+    res.json({ usuario: auth.publico(db.atualiza('usuarios', req.usuario.id, patch)) });
   });
 
   // ---------- Notas fiscais ----------
@@ -214,7 +230,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       usuarioId: req.usuario.id, numero, token: crypto.randomBytes(12).toString('base64url'), cliente, itens,
       titulo: txt(req.body.titulo, 160), escopo: txt(req.body.escopo, 6000), subtotal, desconto, total: dinheiro(subtotal - desconto),
       validadeDias: Math.min(180, Math.max(1, Number(req.body.validadeDias) || 15)), prazo: txt(req.body.prazo, 200),
-      pagamento: txt(req.body.pagamento, 300), observacoes: txt(req.body.observacoes, 2000),
+      pagamento: txt(req.body.pagamento, 300), observacoes: txt(req.body.observacoes, 2000), status: 'aguardando',
     });
     res.json({ orcamento: o });
   });
@@ -233,6 +249,14 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     }
   });
 
+  r.patch('/orcamentos/:id', auth.exigePlano, (req, res) => {
+    const o = db.acha('orcamentos', (x) => x.id === req.params.id && x.usuarioId === req.usuario.id);
+    if (!o) return res.status(404).json({ erro: 'Orçamento não encontrado.' });
+    const status = ['aguardando', 'aprovado', 'recusado'].includes(req.body.status) ? req.body.status : null;
+    if (!status) return res.status(400).json({ erro: 'Situação inválida.' });
+    res.json({ orcamento: db.atualiza('orcamentos', o.id, { status, respondidoEm: status === 'aguardando' ? null : new Date().toISOString(), respondidoPor: 'empresa' }) });
+  });
+
   r.delete('/orcamentos/:id', auth.exigePlano, (req, res) => {
     db.remove('orcamentos', (o) => o.id === req.params.id && o.usuarioId === req.usuario.id);
     res.json({ ok: true });
@@ -248,6 +272,23 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     res.json({ orcamento: dados, emissor: { nome: u.empresa ? u.empresa.razaoSocial : u.nome, fantasia: u.empresa && u.empresa.nomeFantasia, cnpj: u.cnpj, email: u.email, telefone: u.telefone, cidade: u.empresa ? `${u.empresa.municipio}/${u.empresa.uf}` : '' } });
   });
 
+  // O cliente aprova ou recusa pela página do orçamento; o assinante recebe um alerta
+  publico.post('/:token/resposta', express.json(), (req, res) => {
+    const o = db.acha('orcamentos', (x) => x.token === req.params.token);
+    if (!o) return res.status(404).json({ erro: 'Orçamento não encontrado.' });
+    if (o.status && o.status !== 'aguardando') return res.status(409).json({ erro: `Este orçamento já foi ${o.status}.` });
+    const acao = req.body.acao === 'aprovar' ? 'aprovado' : req.body.acao === 'recusar' ? 'recusado' : null;
+    if (!acao) return res.status(400).json({ erro: 'Resposta inválida.' });
+    const nome = txt(req.body.nome, 120);
+    db.atualiza('orcamentos', o.id, { status: acao, respondidoEm: new Date().toISOString(), respondidoPor: nome || 'cliente', motivoRecusa: acao === 'recusado' ? txt(req.body.motivo, 500) : undefined });
+    const dono = db.acha('usuarios', (u) => u.id === o.usuarioId);
+    if (dono) {
+      const alerta = { em: new Date().toISOString(), texto: `${o.cliente.nome}${nome ? ` (${nome})` : ''} ${acao === 'aprovado' ? 'APROVOU' : 'recusou'} o orçamento nº ${String(o.numero).padStart(4, '0')} de ${o.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.` };
+      db.atualiza('usuarios', dono.id, { alertas: [alerta, ...(dono.alertas || [])].slice(0, 30) });
+    }
+    res.json({ ok: true, status: acao });
+  });
+
   // ---------- Admin (senha do painel) ----------
   const admin = express.Router();
   admin.get('/assinantes', (req, res) => {
@@ -260,6 +301,17 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     const patch = dias < 0 ? { planoAte: new Date().toISOString() } : { planoAte: pagamentos.estende(u, dias) };
     if (req.body.planoId) patch.planoId = req.body.planoId;
     res.json({ usuario: auth.publico(db.atualiza('usuarios', u.id, patch)) });
+  });
+  admin.get('/assinantes/:id/resumo', (req, res) => {
+    const u = db.acha('usuarios', (x) => x.id === req.params.id);
+    if (!u) return res.status(404).send('Conta não encontrada');
+    res.type('html').send(resumo.html(u, resumo.monta(u), site));
+  });
+  admin.post('/assinantes/:id/resumo', async (req, res) => {
+    const u = db.acha('usuarios', (x) => x.id === req.params.id);
+    if (!u) return res.status(404).json({ erro: 'Conta não encontrada.' });
+    const { resultado } = await resumo.envia(u, { site });
+    res.json({ resultado });
   });
   admin.get('/notas', (req, res) => {
     const nomes = Object.fromEntries(db.lista('usuarios').map((u) => [u.id, { nome: u.empresa ? u.empresa.razaoSocial : u.nome, cnpj: u.cnpj, fiscal: u.fiscal }]));

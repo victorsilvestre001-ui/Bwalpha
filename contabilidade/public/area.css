@@ -86,3 +86,12 @@ body.area { background: var(--bg); }
   .lista-docs .ocultar-cel { display: none; }
   .topo-conta span { display: none; }
 }
+
+.resumo-dia { border-left: 4px solid var(--destaque); }
+.resumo-dia h3 { color: var(--marca); font-size: 1rem; margin: 18px 0 4px; }
+.resumo-dia a { color: var(--marca-2); font-weight: 700; }
+.sel-status { border: 0; border-radius: 999px; padding: 4px 10px; font: inherit; font-size: .78rem; font-weight: 800; cursor: pointer; }
+.sel-status.st-aguardando { background: var(--atencao-bg); color: var(--atencao); }
+.sel-status.st-aprovado { background: var(--ok-bg); color: var(--ok); }
+.sel-status.st-recusado { background: var(--urgente-bg); color: var(--urgente); }
+#formPref input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--marca); vertical-align: -3px; margin-right: 6px; }
