@@ -19,7 +19,10 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
   r.use(auth.leCookies);
   const limiteLogin = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, message: { erro: 'Muitas tentativas. Espere alguns minutos.' } });
   const planos = () => tabelaPrecos().planosPortal || [];
-  const planoDo = (u) => planos().find((p) => p.id === u.planoId) || planos()[0];
+  const planoDo = (u) => {
+    if (auth.ehDono(u)) return { id: 'dono', nome: 'Dono do site (acesso total)', valor: 0, notasMes: 100000, recursos: [] };
+    return planos().find((p) => p.id === u.planoId) || planos()[0];
+  };
 
   // Guarda um retrato da empresa e gera alertas quando algo muda (o "agente" de cada cliente)
   async function atualizaAnalise(u, forcar = false) {
@@ -293,6 +296,12 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
   const admin = express.Router();
   admin.get('/assinantes', (req, res) => {
     res.json({ assinantes: db.lista('usuarios').map((u) => ({ ...auth.publico(u), analise: undefined })).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)) });
+  });
+  admin.post('/assinantes/:id/papel', express.json(), (req, res) => {
+    const u = db.acha('usuarios', (x) => x.id === req.params.id);
+    if (!u) return res.status(404).json({ erro: 'Conta não encontrada.' });
+    const papel = req.body.papel === 'dono' ? 'dono' : 'cliente';
+    res.json({ usuario: auth.publico(db.atualiza('usuarios', u.id, { papel })) });
   });
   admin.post('/assinantes/:id/liberar', express.json(), (req, res) => {
     const u = db.acha('usuarios', (x) => x.id === req.params.id);

@@ -100,6 +100,27 @@ const notas = require('./portal/notas');
   assert.strictEqual(r.json.resultado.email, null, 'e-mail desligado nas preferências');
   assert.strictEqual(r.json.resultado.whatsapp.ok, false);
 
+  // Mensagem do WhatsApp: partes em uma linha cada (regra dos modelos da Meta)
+  const resumoMod = require('./portal/resumo');
+  const db = require('./portal/db');
+  const partes = resumoMod.partesWhatsapp(resumoMod.monta(db.acha('usuarios', (u) => u.id === idMaria)));
+  for (const v of Object.values(partes)) assert(!/[\n\t]/.test(v), 'variável sem quebra de linha');
+
+  // Dono do site: acesso total sem plano e /admin pelo próprio login, sem a senha
+  const cookieAntesDono = cookie;
+  cookie = '';
+  await req('POST', '/api/portal/cadastro', { nome: 'Dono', email: 'dono@ex.com', senha: '12345678', cnpj: '43403653000124' });
+  assert.strictEqual((await req('GET', '/api/portal/notas')).status, 402, 'antes de virar dono, sem plano');
+  assert.strictEqual((await req('GET', '/api/admin/portal/assinantes')).status, 401, 'cliente comum não entra no admin');
+  const idDono = (await req('GET', '/api/admin/portal/assinantes', null, admin)).json.assinantes.find((u) => u.email === 'dono@ex.com').id;
+  r = await req('POST', `/api/admin/portal/assinantes/${idDono}/papel`, { papel: 'dono' }, admin);
+  assert.strictEqual(r.json.usuario.dono, true);
+  assert.strictEqual(r.json.usuario.assinante, true);
+  assert.strictEqual((await req('GET', '/api/portal/notas')).status, 200, 'dono usa tudo sem plano');
+  assert.strictEqual((await req('GET', '/api/admin/portal/assinantes')).status, 200, 'dono entra no admin sem senha');
+  assert.strictEqual((await req('GET', '/api/admin/contatos')).status, 200);
+  cookie = cookieAntesDono;
+
   // Agenda: feriado de 20/11 antecipa FGTS/INSS e adia o DAS
   const { proximas } = require('./portal/agenda');
   const ag = proximas({ regime: 'simples', funcionarios: true }, { hoje: '2026-11-17' });

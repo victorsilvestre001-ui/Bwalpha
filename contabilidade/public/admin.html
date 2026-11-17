@@ -111,7 +111,7 @@ async function carregaPortal() {
       <td>${esc(u.email)}<br><small>${esc(u.telefone || '')}</small></td>
       <td>${esc(u.planoId || '—')}${u.pedidoPlanoEm ? '<br><small>pediu pelo site</small>' : ''}</td>
       <td>${u.assinante ? new Date(u.planoAte).toLocaleDateString('pt-BR') : '<span style="color:#c0392b">Inativo</span>'}</td>
-      <td><button data-liberar="${u.id}" data-dias="30">+30 dias</button> <button data-liberar="${u.id}" data-dias="-1">Bloquear</button><br><button data-previa="${u.id}">Ver resumo do dia</button> <button data-enviar="${u.id}">Enviar resumo agora</button></td>
+      <td>${u.dono ? '<b>Dono do site</b><br>' : ''}<button data-liberar="${u.id}" data-dias="30">+30 dias</button> <button data-liberar="${u.id}" data-dias="-1">Bloquear</button><br><button data-previa="${u.id}">Ver resumo do dia</button> <button data-enviar="${u.id}">Enviar resumo agora</button></td>
     </tr>`).join('') : '<tr><td colspan="6" style="color:var(--suave)">Nenhum cadastro ainda.</td></tr>';
   document.querySelectorAll('[data-previa]').forEach((b) => b.addEventListener('click', async () => {
     const r = await fetch(`/api/admin/portal/assinantes/${b.dataset.previa}/resumo`, { headers: { 'x-admin-senha': senha } });
@@ -168,7 +168,7 @@ $('#csv').addEventListener('click', () => {
   a.download = 'contatos.csv';
   a.click();
 });
-if (senha) carrega().catch(() => {});
+carrega().catch(() => {}); // entra direto se for o dono logado na Área do Cliente (ou com a senha salva)
 </script>
 </body>
 </html>

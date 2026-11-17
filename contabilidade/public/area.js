@@ -337,7 +337,7 @@ function abaConta() {
         <div><span>Nome</span><b>${esc(u.nome)}</b></div>
         <div><span>E-mail</span><b>${esc(u.email)}</b></div>
         <div><span>Plano</span><b>${esc(eu.plano ? eu.plano.nome : '—')}</b></div>
-        <div><span>Acesso até</span><b>${u.assinante ? data(u.planoAte) : 'Inativo'}</b></div>
+        <div><span>Acesso até</span><b>${u.dono ? 'Sem vencimento' : u.assinante ? data(u.planoAte) : 'Inativo'}</b></div>
       </div>
       <div class="linha-botoes"><button class="btn azul" id="trocarPlano">Ver planos / renovar</button><a class="sec" target="_blank" rel="noopener" href="${linkZap('Olá! Preciso de ajuda com minha conta na Área do Cliente.')}">${icone('zap')} Suporte</a></div>
     </section>`;
@@ -382,6 +382,7 @@ async function inicia() {
   $('#topoConta').hidden = false;
   $('#nomeEmpresa').textContent = eu.usuario.empresa ? eu.usuario.empresa.razaoSocial : eu.usuario.nome;
   $('#linkSimulador').href = `/planejamento?cnpj=${eu.usuario.cnpj}`;
+  $('#linkAdmin').hidden = !eu.usuario.dono;
   if (!eu.usuario.assinante) return mostraPlanos();
   tela('telaApp');
   abre('empresa');

@@ -47,8 +47,10 @@ function usuarioDaSessao(req) {
   return db.acha('usuarios', (u) => u.id === s.usuarioId);
 }
 
+const ehDono = (u) => !!u && u.papel === 'dono';
+
 function planoAtivo(u) {
-  return !!u && !!u.planoAte && new Date(u.planoAte) > new Date();
+  return ehDono(u) || (!!u && !!u.planoAte && new Date(u.planoAte) > new Date());
 }
 
 function exigeLogin(req, res, next) {
@@ -68,7 +70,7 @@ function exigePlano(req, res, next) {
 // Dados que podem ir para o navegador (nunca a senha)
 function publico(u) {
   const { senha, ...resto } = u;
-  return { ...resto, assinante: planoAtivo(u) };
+  return { ...resto, assinante: planoAtivo(u), dono: ehDono(u) };
 }
 
-module.exports = { hashSenha, confereSenha, criaSessao, encerraSessao, leCookies, usuarioDaSessao, exigeLogin, exigePlano, planoAtivo, publico };
+module.exports = { ehDono, hashSenha, confereSenha, criaSessao, encerraSessao, leCookies, usuarioDaSessao, exigeLogin, exigePlano, planoAtivo, publico };

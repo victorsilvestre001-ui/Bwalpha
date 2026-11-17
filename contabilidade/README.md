@@ -86,7 +86,24 @@ agenda de impostos dos próximos 10 dias conforme o regime e se tem funcionário
 orçamentos aguardando aprovação (com os que vencem logo em destaque), respostas de clientes, notas emitidas, alertas da empresa e uma dica da Reforma.
 
 - **E-mail**: Resend (`RESEND_API_KEY` e `EMAIL_FROM` com domínio verificado no Resend).
-- **WhatsApp**: API oficial do WhatsApp Business (`WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_TEMPLATE`, `WHATSAPP_TEMPLATE_LANG`). Mensagem iniciada pela empresa precisa de modelo aprovado pela Meta, com 3 variáveis: `{{1}}` nome, `{{2}}` resumo em uma linha, `{{3}}` link da Área do Cliente.
+- **WhatsApp**: API oficial do WhatsApp Business (`WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_TEMPLATE`, `WHATSAPP_TEMPLATE_LANG`). Mensagem iniciada pela empresa precisa de modelo aprovado pela Meta (categoria Utilidade). Texto do modelo completo (6 variáveis):
+
+  ```
+  Bom dia, {{1}}! ☀️ Seu resumo de hoje na V&J Assessoria Contábil:
+
+  📅 *Impostos e prazos:* {{2}}
+
+  📝 *Orçamentos:* {{3}}
+
+  🔔 *Novidades:* {{4}}
+
+  💡 *Dica da Reforma:* {{5}}
+
+  Veja tudo na sua Área do Cliente: {{6}}
+  ```
+
+  Com `WHATSAPP_FORMATO=curto`, usa um modelo de 3 variáveis (nome, resumo em uma linha, link).
+- **Dono do site**: conta com `papel: dono` (definido no `/admin`) tem acesso total sem mensalidade e entra no `/admin` pelo próprio login.
 - `SITE_URL`: endereço usado nos links (padrão: o domínio do Railway).
 - O cliente liga/desliga e escolhe os canais em **Minha conta**; o mesmo resumo aparece no topo de **Minha empresa**.
 - No `/admin`, cada assinante tem **Ver resumo do dia** (prévia do e-mail) e **Enviar resumo agora**.

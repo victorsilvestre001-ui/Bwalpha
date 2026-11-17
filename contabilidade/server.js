@@ -54,6 +54,15 @@ async function analisa(doc) {
   };
 }
 
+const authPortal = require('./portal/auth');
+
+// Acesso ao painel do escritório: senha do admin OU login do dono do site
+function adminOk(req) {
+  if (senhaOk(req.get('x-admin-senha'))) return true;
+  authPortal.leCookies(req, null, () => {});
+  return authPortal.ehDono(authPortal.usuarioDaSessao(req));
+}
+
 function senhaOk(recebida) {
   const certa = process.env.ADMIN_SENHA;
   if (!certa || typeof recebida !== 'string') return false;
@@ -138,8 +147,7 @@ app.post('/api/contato', (req, res) => {
 
 // Painel do escritório: lista os contatos (senha em ADMIN_SENHA).
 app.get('/api/admin/contatos', (req, res) => {
-  if (!process.env.ADMIN_SENHA) return res.status(503).json({ erro: 'Defina ADMIN_SENHA no servidor para usar o painel.' });
-  if (!senhaOk(req.get('x-admin-senha'))) return res.status(401).json({ erro: 'Senha incorreta.' });
+  if (!adminOk(req)) return res.status(401).json({ erro: 'Senha incorreta.' });
   fs.readFile(ARQ_CONTATOS, 'utf8', (err, txt) => {
     if (err && err.code !== 'ENOENT') return res.status(500).json({ erro: err.message });
     const contatos = (txt || '').split('\n').filter(Boolean).map((l) => {
@@ -187,8 +195,7 @@ app.use('/api/portal', portal.portal);
 app.use('/api/orcamento-publico', portal.publico);
 app.use('/api/asaas/webhook', webhookAsaas);
 app.use('/api/admin/portal', (req, res, next) => {
-  if (!process.env.ADMIN_SENHA) return res.status(503).json({ erro: 'Defina ADMIN_SENHA no servidor para usar o painel.' });
-  if (!senhaOk(req.get('x-admin-senha'))) return res.status(401).json({ erro: 'Senha incorreta.' });
+  if (!adminOk(req)) return res.status(401).json({ erro: 'Senha incorreta.' });
   next();
 }, portal.admin);
 app.get('/o/:token', (req, res) => res.sendFile(path.join(__dirname, 'public', 'orcamento.html')));

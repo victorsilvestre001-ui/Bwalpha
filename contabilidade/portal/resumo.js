@@ -47,6 +47,26 @@ function linhaCurta(r) {
   return partes.length ? partes.join('; ') : 'nenhum vencimento ou pendência para os próximos dias';
 }
 
+// Resumo completo para o modelo do WhatsApp: uma variável por parte do resumo (sem quebras de linha)
+function partesWhatsapp(r) {
+  const curto = (iso) => iso.split('-').reverse().slice(0, 2).join('/');
+  const impostos = r.agenda.length ? r.agenda.map((e) => `${curto(e.data)} ${e.titulo}`).join(' · ') : 'nada vence nos próximos 10 dias';
+  const orcs = r.pendentes.length
+    ? `${r.pendentes.length} aguardando (${brl(r.valorPendente)}): ` + r.pendentes.slice(0, 4).map((o) => `${o.cliente.nome} ${brl(o.total)}${o.validade.dias <= 2 ? ` vence ${quando(o.validade.dias)}` : ''}`).join(' · ')
+    : 'nenhum orçamento pendente';
+  const avisos = [
+    ...r.respondidos.map((o) => `${o.cliente.nome} ${o.status === 'aprovado' ? 'aprovou' : 'recusou'} ${brl(o.total)}`),
+    ...r.notas.map((n) => `nota emitida para ${n.tomador.nome} ${brl(n.valor)}`),
+    ...r.alertas.map((a) => a.texto),
+  ];
+  return {
+    impostos,
+    orcamentos: orcs,
+    avisos: avisos.length ? avisos.slice(0, 5).join(' · ') : 'nenhuma novidade',
+    dica: r.dica ? `${r.dica.titulo}${/[?!.]$/.test(r.dica.titulo) ? ' ' : ': '}${r.dica.texto}` : 'sem dica hoje',
+  };
+}
+
 function html(u, r, site) {
   const nome = String(u.nome || '').split(/\s+/)[0];
   const sec = (titulo, corpo) => `<h3 style="color:#0b2545;font-size:16px;margin:24px 0 8px">${titulo}</h3>${corpo}`;
@@ -77,7 +97,14 @@ async function envia(u, { site, hoje = hojeSP() } = {}) {
   const resultado = { email: null, whatsapp: null };
   if (pref.resumoEmail !== false && u.email) resultado.email = await canais.enviaEmail({ para: u.email, assunto: `Seu resumo do dia · ${dataBr(hoje)}`, html: html(u, r, site) }).catch((e) => ({ ok: false, erro: e.message }));
   if (pref.resumoWhatsapp !== false && u.telefone) {
-    resultado.whatsapp = await canais.enviaWhatsapp({ numero: u.telefone, variaveis: [String(u.nome || '').split(/\s+/)[0] || 'cliente', linhaCurta(r), `${site}/area`] }).catch((e) => ({ ok: false, erro: e.message }));
+    // Modelo "completo" (padrão): 6 variáveis = nome, impostos, orçamentos, avisos, dica, link.
+    // Modelo "curto" (WHATSAPP_FORMATO=curto): 3 variáveis = nome, resumo em uma linha, link.
+    const nome = String(u.nome || '').split(/\s+/)[0] || 'cliente';
+    const p = partesWhatsapp(r);
+    const variaveis = process.env.WHATSAPP_FORMATO === 'curto'
+      ? [nome, linhaCurta(r), `${site}/area`]
+      : [nome, p.impostos, p.orcamentos, p.avisos, p.dica, `${site}/area`];
+    resultado.whatsapp = await canais.enviaWhatsapp({ numero: u.telefone, variaveis }).catch((e) => ({ ok: false, erro: e.message }));
   }
   db.atualiza('usuarios', u.id, {
     ultimoResumoEm: new Date().toISOString(), ultimoResumoDia: hoje,
@@ -104,4 +131,4 @@ function agenda({ site }) {
   setInterval(() => tick().catch((e) => console.error('[resumo]', e.message)), 10 * 60 * 1000);
 }
 
-module.exports = { monta, html, linhaCurta, envia, agenda, perfilFiscal };
+module.exports = { monta, html, linhaCurta, partesWhatsapp, envia, agenda, perfilFiscal };
