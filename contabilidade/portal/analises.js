@@ -37,6 +37,22 @@ function portal() {
     if (aberta) return res.json({ analise: resumoPublico(aberta) });
     res.json({ analise: resumoPublico(db.insere('analises', { usuarioId: req.usuario.id, status: 'rascunho', arquivos: [] })) });
   });
+  // Simulador: lê as notas e devolve só os totais de cada uma. Nada é guardado.
+  r.post('/leitura', auth.exigePlano, express.raw({ type: () => true, limit: LIMITE }), async (req, res) => {
+    const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    if (!buf.length) return res.status(400).json({ erro: 'Arquivo vazio.' });
+    const notas = [];
+    let ignorados = 0;
+    const cada = (_, texto) => { const n = ax.resumoNota(texto); if (n) notas.push(n); else ignorados++; };
+    try {
+      if (buf[0] === 0x50 && buf[1] === 0x4b) await ax.lerZip(buf, cada);
+      else if (/^\s*</.test(buf.slice(0, 200).toString('utf8').replace(/^\uFEFF/, ''))) buf.toString('utf8').split(SEP).forEach((t) => t.trim() && cada('', t));
+      else return res.status(400).json({ erro: 'Envie arquivos XML das notas ou um .zip com eles.' });
+    } catch {
+      return res.status(400).json({ erro: 'Não conseguimos abrir o arquivo .zip.' });
+    }
+    res.json({ notas, ignorados });
+  });
   r.get('/:id', auth.exigePlano, (req, res) => {
     const a = minha(req, res);
     if (a) res.json({ analise: resumoPublico(a) });

@@ -149,7 +149,7 @@ const notas = require('./portal/notas');
   // Recuperar impostos: envio de XMLs (lote) e ZIP, leitura e envio ao contador
   const { nfe, cancelamento } = require('./teste-xml-util');
   const envia = async (id, corpo, nomeArq) => {
-    const resp = await fetch(`${base}/api/portal/analises/${id}/arquivos`, { method: 'POST', headers: { cookie, 'Content-Type': 'application/octet-stream', 'X-Nome-Arquivo': encodeURIComponent(nomeArq) }, body: corpo });
+    const resp = await fetch(id === 'leitura' ? `${base}/api/portal/analises/leitura` : `${base}/api/portal/analises/${id}/arquivos`, { method: 'POST', headers: { cookie, 'Content-Type': 'application/octet-stream', 'X-Nome-Arquivo': encodeURIComponent(nomeArq) }, body: corpo });
     return { status: resp.status, json: await resp.json() };
   };
   r = await req('POST', '/api/portal/analises');
@@ -180,6 +180,12 @@ const notas = require('./portal/notas');
   assert.strictEqual(rel.notas, 6, '7 notas de venda, menos 1 cancelada');
   assert.ok(rel.categorias.Medicamentos > 0 && rel.pisCofins > 0 && rel.icms > 0);
   assert.ok(rel.avisos.some((a) => /entrada/.test(a)) && rel.avisos.some((a) => /outra empresa/.test(a)));
+  // Simulador: leitura das notas sem guardar nada (venda para empresa, compra de fornecedor, NFS-e)
+  r = await envia('leitura', [nfe({ chave: 'V1', data: '2026-05-02', dest: '11222333000181', itens: [{ ncm: '1', valor: 1000 }] }), nfe({ chave: 'F1', cnpj: '11222333000181', dest: '12345678000195', data: '2026-05-03', itens: [{ ncm: '1', valor: 400 }] }), '<CompNfse><Nfse><InfNfse><Numero>9</Numero><DataEmissao>2026-05-04</DataEmissao><PrestadorServico><Cnpj>12345678000195</Cnpj></PrestadorServico><Servico><Valores><ValorServicos>250.00</ValorServicos></Valores></Servico></InfNfse></Nfse></CompNfse>', '<lixo/>'].join('\n<!--VJ-SEP-->\n'), 'sim');
+  assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+  assert.deepStrictEqual(r.json.notas.map((n) => [n.tipo, n.emit, n.dest, n.valor]), [['nfe', '12345678', '11222333', 1000], ['nfe', '11222333', '12345678', 400], ['nfse', '12345678', '', 250]]);
+  assert.strictEqual(r.json.ignorados, 1);
+
   // Outro cliente não vê a análise
   const cookieDona = cookie; cookie = '';
   await req('POST', '/api/portal/login', { email: 'dono@ex.com', senha: '12345678' });

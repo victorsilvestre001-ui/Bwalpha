@@ -76,3 +76,15 @@
   .tabela-2027 { font-size: .82rem; }
   .cta-final .btn { width: 100%; }
 }
+
+/* Atalho: preencher o simulador com as notas */
+.atalho-notas { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 18px; align-items: center; background: var(--destaque-claro); border: 1px solid color-mix(in srgb, var(--destaque) 45%, #fff); border-radius: 14px; padding: 16px 18px; margin: 10px 0 16px; }
+.atalho-txt > b { display: block; color: var(--marca); }
+.atalho-txt span { font-size: .9rem; color: var(--suave); }
+.atalho-notas label.btn { cursor: pointer; white-space: nowrap; }
+.leitura-notas { grid-column: 1 / -1; background: #fff; border-radius: 10px; padding: 12px 14px; font-size: .92rem; }
+.leitura-notas.ok { border-left: 4px solid var(--ok); }
+.leitura-notas.erro { border-left: 4px solid var(--urgente); color: var(--urgente); }
+.leitura-notas ul { margin: 6px 0 0; padding-left: 18px; }
+.campo input.auto { background: var(--ok-bg); border-color: var(--ok); }
+@media (max-width: 640px) { .atalho-notas { grid-template-columns: 1fr; } .atalho-notas label.btn { width: 100%; } }

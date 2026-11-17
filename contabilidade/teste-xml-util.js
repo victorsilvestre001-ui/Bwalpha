@@ -4,9 +4,9 @@ function item({ ncm, cfop = '5102', valor, csosn = '102', cstPis = '49', desc = 
     + `<imposto><ICMS><ICMSSN${csosn}><orig>0</orig><CSOSN>${csosn}</CSOSN></ICMSSN${csosn}></ICMS><PIS><PISOutr><CST>${cstPis}</CST></PISOutr></PIS></imposto></det>`;
 }
 
-function nfe({ chave, cnpj = '12345678000195', data, tpNF = 1, itens }) {
+function nfe({ chave, cnpj = '12345678000195', dest = '', data, tpNF = 1, itens }) {
   return `<?xml version="1.0" encoding="UTF-8"?><nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00"><NFe><infNFe Id="NFe${chave}" versao="4.00">`
-    + `<ide><mod>55</mod><tpNF>${tpNF}</tpNF><finNFe>1</finNFe><dhEmi>${data}T10:00:00-03:00</dhEmi></ide><emit><CNPJ>${cnpj}</CNPJ></emit>`
+    + `<ide><mod>55</mod><tpNF>${tpNF}</tpNF><finNFe>1</finNFe><dhEmi>${data}T10:00:00-03:00</dhEmi></ide><emit><CNPJ>${cnpj}</CNPJ></emit>${dest ? `<dest><CNPJ>${dest}</CNPJ></dest>` : ''}`
     + itens.map(item).join('') + '</infNFe></NFe></nfeProc>';
 }
 

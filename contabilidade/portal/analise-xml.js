@@ -214,4 +214,60 @@ function relatorio(acc, { regime = 'simples', hoje = new Date() } = {}) {
   };
 }
 
-module.exports = { lerXml, lerZip, novoAcumulador, acumula, relatorio, classifica, MONOFASICOS, ehVenda };
+
+// ---------- Resumo de qualquer nota (para o simulador de regime) ----------
+// Aceita NF-e/NFC-e, CT-e e NFS-e (padrão Nacional e o ABRASF usado pelas prefeituras).
+// Devolve só o necessário: valor, mês, raiz do CNPJ do emitente e do destinatário
+// (nada de CPF de pessoa física).
+function procura(obj, nomes, prof = 0) {
+  if (!obj || typeof obj !== 'object' || prof > 12) return undefined;
+  for (const n of nomes) if (obj[n] !== undefined && typeof obj[n] !== 'object') return obj[n];
+  for (const v of Object.values(obj)) {
+    const achou = procura(v, nomes, prof + 1);
+    if (achou !== undefined) return achou;
+  }
+  return undefined;
+}
+const sub = (obj, nomes, prof = 0) => {
+  if (!obj || typeof obj !== 'object' || prof > 12) return undefined;
+  for (const n of nomes) if (obj[n] && typeof obj[n] === 'object') return obj[n];
+  for (const v of Object.values(obj)) { const a = sub(v, nomes, prof + 1); if (a) return a; }
+  return undefined;
+};
+const raiz = (c) => (String(c || '').replace(/\D/g, '').length === 14 ? String(c).replace(/\D/g, '').slice(0, 8) : '');
+
+function resumoNota(texto) {
+  let x;
+  try { x = parser.parse(texto); } catch { return null; }
+  if (x.procEventoNFe || x.eventoNFe || x.procEventoCTe) {
+    const doc = lerXml(texto);
+    return doc && doc.tipo === 'cancelamento' ? doc : null;
+  }
+  const nfe = lerXml(texto);
+  if (nfe && nfe.tipo === 'nfe') {
+    const inf = ((x.nfeProc && x.nfeProc.NFe) || x.NFe).infNFe;
+    const valor = nfe.itens.filter((i) => ehVenda(i.cfop)).reduce((t, i) => t + i.valor, 0);
+    return { tipo: nfe.modelo === '65' ? 'nfce' : 'nfe', chave: nfe.chave, mes: nfe.data.slice(0, 7), emit: raiz(nfe.cnpjEmitente), dest: raiz(inf.dest && inf.dest.CNPJ), saida: nfe.saida && nfe.normal, valor };
+  }
+  const cte = (x.cteProc && x.cteProc.CTe) || x.CTe;
+  if (cte && cte.infCte) {
+    const i = cte.infCte;
+    const toma = String((i.ide && (i.ide.toma3 || i.ide.toma4 || {}).toma) || '0');
+    const quem = { 0: i.rem, 1: i.exped, 2: i.receb, 3: i.dest }[toma] || i.ide.toma4 || {};
+    return { tipo: 'cte', chave: String(i['@Id'] || '').replace(/^CTe/, ''), mes: String((i.ide && i.ide.dhEmi) || '').slice(0, 7), emit: raiz(i.emit && i.emit.CNPJ), dest: raiz(quem.CNPJ), saida: String(i.ide && i.ide.tpCTe) !== '2', valor: num(i.vPrest && i.vPrest.vTPrest) };
+  }
+  // NFS-e: padrão Nacional (DPS) ou ABRASF
+  const ehNfse = x.NFSe || x.CompNfse || x.Nfse || sub(x, ['CompNfse', 'InfNfse', 'infNFSe']);
+  if (!ehNfse) return null;
+  const prest = sub(x, ['prest', 'PrestadorServico', 'Prestador', 'IdentificacaoPrestador', 'emit']);
+  const toma = sub(x, ['toma', 'TomadorServico', 'Tomador', 'IdentificacaoTomador']);
+  const valor = num(procura(x, ['vServ', 'ValorServicos']));
+  const data = String(procura(x, ['dhEmi', 'DataEmissao', 'Competencia', 'dCompet', 'dhProc']) || '');
+  const numero = String(procura(x, ['nNFSe', 'Numero']) || '');
+  const emit = raiz(procura(prest, ['CNPJ', 'Cnpj']));
+  if (!valor || !/^\d{4}-\d{2}/.test(data)) return null;
+  const cancelada = /cancel/i.test(String(procura(x, ['NfseCancelamento', 'cStat']) || '')) || !!sub(x, ['NfseCancelamento']);
+  return { tipo: 'nfse', chave: `S${emit}-${numero}-${data.slice(0, 10)}`, mes: data.slice(0, 7), emit, dest: raiz(procura(toma, ['CNPJ', 'Cnpj'])), saida: !cancelada, valor };
+}
+
+module.exports = { resumoNota, lerXml, lerZip, novoAcumulador, acumula, relatorio, classifica, MONOFASICOS, ehVenda };

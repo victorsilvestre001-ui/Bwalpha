@@ -78,7 +78,16 @@
   <section class="etapa-sim" id="p2" hidden>
     <form class="card" id="formNumeros">
       <h2>2. Os números da empresa <small id="setorEscolhido"></small></h2>
-      <p class="dica-sim">Valores <b>por mês</b>, em média. Pode ser aproximado: quanto mais perto do real, melhor a estimativa.</p>
+      <div class="atalho-notas" id="atalho">
+        <div class="atalho-txt">
+          <b>Jeito rápido: envie suas notas e eu preencho para você</b>
+          <span>Um arquivo <b>.zip</b> com os XMLs das notas dos <b>últimos 12 meses</b>: as que você emitiu e as que recebeu de fornecedores. Vale NF-e, NFC-e, NFS-e e CT-e.</span>
+        </div>
+        <label class="btn" for="notasSim"><svg class="i"><use href="#i-seta"/></svg>Enviar notas</label>
+        <input type="file" id="notasSim" multiple accept=".xml,.zip" hidden>
+        <div id="leituraNotas" class="leitura-notas" hidden></div>
+      </div>
+      <p class="dica-sim">Ou digite os valores <b>por mês</b>, em média. Pode ser aproximado: quanto mais perto do real, melhor a estimativa.</p>
       <div class="campos-sim">
         <label class="campo"><span>Faturamento por mês</span><input data-dinheiro id="fFat" required placeholder="R$ 0"></label>
         <label class="campo" data-so="transporte"><span>Quantos caminhões?</span><input id="fCam" type="number" min="0" placeholder="Ex.: 4"></label>
@@ -126,6 +135,7 @@
 
 <script src="tributos.js"></script>
 <script src="planejamento.js"></script>
+<script src="planejamento-notas.js"></script>
 <script>
 // Dentro da Área do Cliente: informa a altura para o painel ajustar o quadro
 if (document.documentElement.classList.contains('embed')) {
