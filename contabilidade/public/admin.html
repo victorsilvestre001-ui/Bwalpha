@@ -57,8 +57,26 @@
     <p style="color:var(--suave);margin:0 0 12px">Análises feitas pelos clientes com os XMLs das notas. Confira com os extratos do PGDAS-D e registre o resultado: o cliente recebe o aviso no painel.</p>
     <div class="card tabela"><table><thead><tr><th>Enviada</th><th>Cliente</th><th>Notas / período</th><th>Monofásico</th><th>ICMS-ST</th><th>Potencial</th><th>Situação</th><th></th></tr></thead><tbody id="analises"></tbody></table></div>
 
-    <h1 style="margin:32px 0 12px">Assinantes da Área do Cliente</h1>
-    <div class="card tabela"><table><thead><tr><th>Cadastro</th><th>Nome / empresa</th><th>Contato</th><th>Plano</th><th>Acesso até</th><th></th></tr></thead><tbody id="assinantes"></tbody></table></div>
+    <h1 style="margin:32px 0 12px">Meus clientes</h1>
+    <p style="color:var(--suave);margin:0 0 12px">Assinantes da Área do Cliente e empresas que você cadastrou na carteira. Conecte o certificado A1 de cada empresa para baixar as notas automaticamente e use o simulador com os dados dela.</p>
+    <form id="formEmpresa" class="card" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px">
+      <b style="flex-basis:100%">Adicionar empresa de cliente</b>
+      <input id="eCnpj" placeholder="CNPJ da empresa" maxlength="18" required style="flex:1;min-width:180px">
+      <input id="eTel" placeholder="WhatsApp (opcional)" maxlength="20" style="flex:1;min-width:160px">
+      <button>Adicionar</button><span id="eMsg" style="color:var(--suave)"></span>
+    </form>
+    <div class="card tabela"><table><thead><tr><th>Cadastro</th><th>Nome / empresa</th><th>Contato</th><th>Plano</th><th>Certificado e notas</th><th></th></tr></thead><tbody id="assinantes"></tbody></table></div>
+    <dialog id="dlgCert" style="border:0;border-radius:16px;padding:24px;max-width:460px;width:calc(100% - 32px)">
+      <form id="formCertAdm" method="dialog" style="display:grid;gap:12px">
+        <h2 style="margin:0">Conectar certificado A1</h2>
+        <p id="certEmpresa" style="margin:0;color:var(--suave)"></p>
+        <label>Arquivo (.pfx ou .p12)<br><input type="file" id="cArq" accept=".pfx,.p12" required></label>
+        <label>Senha do certificado<br><input type="password" id="cSenha" required autocomplete="off" style="width:100%"></label>
+        <label style="font-size:.9rem"><input type="checkbox" id="cOk" required> Tenho autorização do cliente (contrato ou procuração) para usar este certificado <b>somente para consultar as notas fiscais</b> da empresa dele.</label>
+        <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" id="cCancelar">Cancelar</button><button id="cEnviar">Conectar</button></div>
+        <div id="cMsg" style="color:#c0392b"></div>
+      </form>
+    </dialog>
   </div>
 </div>
 <script>
@@ -82,12 +100,35 @@ async function carrega() {
 }
 
 const brlA = (v) => (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-async function apiAdmin(caminho, body) {
-  const r = await fetch('/api/admin/portal' + caminho, { method: body ? 'POST' : 'GET', headers: { 'x-admin-senha': senha, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+async function apiAdmin(caminho, body, metodo) {
+  const r = await fetch('/api/admin/portal' + caminho, { method: metodo || (body ? 'POST' : 'GET'), headers: { 'x-admin-senha': senha, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
   const j = await r.json();
   if (!r.ok) throw new Error(j.erro || 'Erro');
   return j;
 }
+
+let certAlvo = null;
+function certCelula(u) {
+  const c = u.certificado || {};
+  const nome = esc((u.empresa && u.empresa.razaoSocial) || u.nome);
+  if (!c.ativo) return `<button data-cert="${u.id}" data-nome="${nome}">Conectar certificado</button>`;
+  const vence = Math.ceil((Date.parse(c.validoAte) - Date.now()) / 86400000);
+  return `<span style="color:${vence <= 30 ? '#c0392b' : '#1e7a4f'}">✔ válido até ${new Date(c.validoAte).toLocaleDateString('pt-BR')}</span><br><small>${c.totalNotas || 0} notas · ${c.ultimaBusca ? 'busca ' + new Date(c.ultimaBusca).toLocaleString('pt-BR') : 'primeira busca em andamento'}</small>${c.ultimoErro ? `<br><small style="color:#c0392b">${esc(c.ultimoErro)}</small>` : ''}<br><button data-buscar="${u.id}">Buscar agora</button> <button data-desconectar="${u.id}">Desconectar</button>`;
+}
+$('#cCancelar').addEventListener('click', () => $('#dlgCert').close());
+$('#formCertAdm').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const f = $('#cArq').files[0];
+  if (!f) return;
+  $('#cMsg').textContent = 'Conferindo…';
+  const b64 = await new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.readAsDataURL(f); });
+  try { await apiAdmin(`/assinantes/${certAlvo}/certificado`, { pfx: b64, senha: $('#cSenha').value, autorizo: $('#cOk').checked }); $('#dlgCert').close(); carregaPortal(); } catch (e) { $('#cMsg').textContent = e.message; }
+});
+$('#formEmpresa').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  $('#eMsg').textContent = 'Consultando a Receita…';
+  try { await apiAdmin('/empresas', { cnpj: $('#eCnpj').value, telefone: $('#eTel').value }); $('#eMsg').textContent = 'Adicionada ✅'; $('#formEmpresa').reset(); carregaPortal(); } catch (e) { $('#eMsg').textContent = e.message; }
+});
 
 async function carregaPortal() {
   const [{ notas }, { assinantes }, { analises }] = await Promise.all([apiAdmin('/notas'), apiAdmin('/assinantes'), apiAdmin('/analises')]);
@@ -129,10 +170,10 @@ async function carregaPortal() {
     <tr>
       <td>${new Date(u.criadoEm).toLocaleDateString('pt-BR')}</td>
       <td>${esc(u.nome)}<br><small>${esc(u.empresa ? u.empresa.razaoSocial : '')} · ${esc(fmtCnpj(u.cnpj))}</small></td>
-      <td>${esc(u.email)}<br><small>${esc(u.telefone || '')}</small></td>
-      <td>${esc(u.planoId || '—')}${u.pedidoPlanoEm ? '<br><small>pediu pelo site</small>' : ''}</td>
-      <td>${u.assinante ? new Date(u.planoAte).toLocaleDateString('pt-BR') : '<span style="color:#c0392b">Inativo</span>'}</td>
-      <td>${u.dono ? '<b>Dono do site</b><br>' : ''}<button data-liberar="${u.id}" data-dias="30">+30 dias</button> <button data-liberar="${u.id}" data-dias="-1">Bloquear</button><br><button data-previa="${u.id}">Ver resumo do dia</button> <button data-enviar="${u.id}">Enviar resumo agora</button></td>
+      <td>${esc(u.email || '')}<br><small>${esc(u.telefone || '')}</small></td>
+      <td>${u.gerenciado ? '<small>Carteira do contador<br>(sem login)</small>' : `${esc(u.planoId || '—')}${u.pedidoPlanoEm ? '<br><small>pediu pelo site</small>' : ''}<br><small>${u.assinante ? 'até ' + new Date(u.planoAte).toLocaleDateString('pt-BR') : '<span style="color:#c0392b">Inativo</span>'}</small>`}</td>
+      <td>${certCelula(u)}</td>
+      <td>${u.dono ? '<b>Dono do site</b><br>' : ''}<a href="/planejamento?cnpj=${esc(u.cnpj)}&empresa=${u.id}" target="_blank" rel="noopener">Simulador</a>${u.gerenciado ? ` · <button data-remover="${u.id}">Remover</button>` : `<br><button data-liberar="${u.id}" data-dias="30">+30 dias</button> <button data-liberar="${u.id}" data-dias="-1">Bloquear</button><br><button data-previa="${u.id}">Ver resumo do dia</button> <button data-enviar="${u.id}">Enviar resumo agora</button>`}</td>
     </tr>`).join('') : '<tr><td colspan="6" style="color:var(--suave)">Nenhum cadastro ainda.</td></tr>';
   document.querySelectorAll('[data-previa]').forEach((b) => b.addEventListener('click', async () => {
     const r = await fetch(`/api/admin/portal/assinantes/${b.dataset.previa}/resumo`, { headers: { 'x-admin-senha': senha } });
@@ -144,6 +185,22 @@ async function carregaPortal() {
       const fmt = (x) => (x ? (x.ok ? 'enviado' : `não enviado (${x.erro})`) : 'desligado');
       alert(`E-mail: ${fmt(resultado.email)}\nWhatsApp: ${fmt(resultado.whatsapp)}`);
     } catch (e) { alert(e.message); }
+  }));
+  document.querySelectorAll('[data-cert]').forEach((b) => b.addEventListener('click', () => {
+    certAlvo = b.dataset.cert; $('#certEmpresa').textContent = b.dataset.nome; $('#cMsg').textContent = ''; $('#formCertAdm').reset(); $('#dlgCert').showModal();
+  }));
+  document.querySelectorAll('[data-buscar]').forEach((b) => b.addEventListener('click', async () => {
+    b.disabled = true; b.textContent = 'Buscando…';
+    try { const r = await apiAdmin(`/assinantes/${b.dataset.buscar}/certificado/buscar`, {}); alert(`${r.resultado.novas} nota(s) nova(s).${r.resultado.erros.length ? '\n' + r.resultado.erros.join('\n') : ''}`); } catch (e) { alert(e.message); }
+    carregaPortal();
+  }));
+  document.querySelectorAll('[data-desconectar]').forEach((b) => b.addEventListener('click', async () => {
+    if (!confirm('Desconectar e apagar o certificado e as notas baixadas desta empresa?')) return;
+    try { await apiAdmin(`/assinantes/${b.dataset.desconectar}/certificado`, null, 'DELETE'); carregaPortal(); } catch (e) { alert(e.message); }
+  }));
+  document.querySelectorAll('[data-remover]').forEach((b) => b.addEventListener('click', async () => {
+    if (!confirm('Remover esta empresa da carteira? O certificado e as notas baixadas também serão apagados.')) return;
+    try { await apiAdmin(`/empresas/${b.dataset.remover}`, null, 'DELETE'); carregaPortal(); } catch (e) { alert(e.message); }
   }));
   document.querySelectorAll('[data-liberar]').forEach((b) => b.addEventListener('click', async () => {
     try { await apiAdmin(`/assinantes/${b.dataset.liberar}/liberar`, { dias: Number(b.dataset.dias) }); carregaPortal(); } catch (e) { alert(e.message); }

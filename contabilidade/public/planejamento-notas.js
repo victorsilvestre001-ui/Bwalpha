@@ -99,7 +99,8 @@
   }
 
   // Notas já baixadas pelo certificado digital: entram com um clique
-  fetch('/api/portal/notas-capturadas', { credentials: 'same-origin' }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+  const empresaParam = new URLSearchParams(location.search).get('empresa');
+  fetch('/api/portal/notas-capturadas' + (empresaParam ? `?empresa=${encodeURIComponent(empresaParam)}` : ''), { credentials: 'same-origin' }).then((r) => (r.ok ? r.json() : null)).then((j) => {
     if (!j || !j.notas.length) return;
     mostra(`Você tem <b>${j.notas.length} notas</b> baixadas automaticamente pelo certificado digital. <button type="button" class="btn azul" id="usaCapturadas" style="padding:8px 16px;margin-left:6px">Usar essas notas</button><br><small>Se tiver as notas de venda antigas em .zip, envie também.</small>`);
     q('#usaCapturadas').addEventListener('click', () => {

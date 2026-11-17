@@ -211,7 +211,7 @@ const notas = require('./portal/notas');
     captura.transporte = async ({ url, body }) => {
       chamadas.push(url);
       if (url.includes('NFeDistribuicaoDFe')) {
-        assert.ok(body.includes('<CNPJ>12345678000195</CNPJ>') && body.includes('<cUFAutor>'));
+        assert.ok(/<CNPJ>\d{14}<\/CNPJ>/.test(body) && body.includes('<cUFAutor>'));
         const res = '<resNFe xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.01"><chNFe>35260511222333000181550010000000011000000011</chNFe><CNPJ>11222333000181</CNPJ><xNome>Fornecedor</xNome><dhEmi>2026-05-03T10:00:00-03:00</dhEmi><tpNF>1</tpNF><vNF>400.00</vNF><cSitNFe>1</cSitNFe></resNFe>';
         return { status: 200, texto: `<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope"><soap:Body><nfeDistDFeInteresseResponse xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe"><nfeDistDFeInteresseResult><retDistDFeInt xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.01"><tpAmb>1</tpAmb><cStat>138</cStat><xMotivo>Documento localizado</xMotivo><ultNSU>000000000000001</ultNSU><maxNSU>000000000000001</maxNSU><loteDistDFeInt><docZip NSU="000000000000001" schema="resNFe_1.01.xsd">${gz(res)}</docZip></loteDistDFeInt></retDistDFeInt></nfeDistDFeInteresseResult></nfeDistDFeInteresseResponse></soap:Body></soap:Envelope>` };
       }
@@ -240,6 +240,24 @@ const notas = require('./portal/notas');
     r = await req('DELETE', '/api/portal/certificado');
     assert.strictEqual(r.json.certificado.ativo, false);
     assert.strictEqual((await req('GET', '/api/portal/notas-capturadas')).json.notas.length, 0);
+    // Carteira do contador: cadastra a empresa de um cliente, conecta o certificado dela e consulta as notas
+    r = await req('POST', '/api/admin/portal/empresas', { cnpj: '11.444.777/0001-61', telefone: '(15) 97777-0000' }, admin);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+    const idCli = r.json.usuario.id;
+    assert.strictEqual((await req('POST', '/api/admin/portal/empresas', { cnpj: '11444777000161' }, admin)).status, 409);
+    assert.strictEqual((await req('POST', '/api/portal/login', { email: undefined, senha: '' })).status, 401, 'empresa da carteira não tem login');
+    assert.strictEqual((await req('POST', `/api/admin/portal/assinantes/${idCli}/certificado`, { pfx, senha: 'senha123', autorizo: true }, admin)).status, 400, 'certificado de outra empresa');
+    r = await req('POST', `/api/admin/portal/assinantes/${idCli}/certificado`, { pfx: pfxTeste({ cnpj: '11444777000161' }).toString('base64'), senha: 'senha123', autorizo: true }, admin);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+    assert.strictEqual(r.json.certificado.autorizacao.por, 'contador');
+    await new Promise((ok) => setTimeout(ok, 200));
+    assert.strictEqual((await req('GET', `/api/portal/notas-capturadas?empresa=${idCli}`)).json.notas.length, 0, 'cliente comum não vê notas de outra empresa');
+    const cookieCli = cookie; cookie = '';
+    await req('POST', '/api/portal/login', { email: 'dono@ex.com', senha: '12345678' });
+    assert.ok((await req('GET', `/api/portal/notas-capturadas?empresa=${idCli}`)).json.notas.length > 0, 'o dono vê as notas da empresa do cliente');
+    cookie = cookieCli;
+    assert.strictEqual((await req('DELETE', `/api/admin/portal/empresas/${idCli}`, null, admin)).status, 200);
+    assert.ok(!fs.existsSync(path.join(dir, 'certificados', `${idCli}.bin`)), 'certificado apagado junto');
   }
 
   // Login e saída
