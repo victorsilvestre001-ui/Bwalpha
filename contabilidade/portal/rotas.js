@@ -12,6 +12,7 @@ const canais = require('./canais');
 const analises = require('./analises');
 const certificado = require('./certificado');
 const captura = require('./captura');
+const apuracao = require('./apuracao');
 
 const DIA = 24 * 60 * 60 * 1000;
 const txt = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
@@ -43,7 +44,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       if (dividaAgora > dividaAntes) novos.push({ em: new Date().toISOString(), texto: `A dívida ativa em cobrança subiu para ${dividaAgora.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.` });
     }
     return db.atualiza('usuarios', u.id, {
-      empresa: { razaoSocial: a.empresa.razaoSocial, nomeFantasia: a.empresa.nomeFantasia, regime: a.empresa.regime, situacao: a.empresa.situacao, municipio: a.empresa.municipio, uf: a.empresa.uf, cnae: a.empresa.cnae, atividade: a.empresa.atividade, simples: a.empresa.simples, mei: a.empresa.mei },
+      empresa: { razaoSocial: a.empresa.razaoSocial, nomeFantasia: a.empresa.nomeFantasia, regime: a.empresa.regime, situacao: a.empresa.situacao, municipio: a.empresa.municipio, uf: a.empresa.uf, cnae: a.empresa.cnae, atividade: a.empresa.atividade, simples: a.empresa.simples, mei: a.empresa.mei, abertura: a.empresa.abertura },
       analise: { em: new Date().toISOString(), urgentes, situacao: a.empresa.situacao, dividaAtiva: (a.empresa.pgfn && a.empresa.pgfn.emCobranca) || 0, itens: a.orcamento.itens.map(({ gravidade, titulo, explicacao, link }) => ({ gravidade, titulo, explicacao, link })), reforma: a.reforma },
       alertas: [...novos, ...(u.alertas || [])].slice(0, 30),
     });
@@ -352,6 +353,85 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     res.json({ ok: true });
   });
 
+  // ---------- Apuração do DAS (Simples Nacional) ----------
+  const nomeComp = (c) => `${['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'][+c.slice(5, 7) - 1]}/${c.slice(0, 4)}`;
+  const brl = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  async function garanteAbertura(u) {
+    if (u.empresa && u.empresa.abertura) return u;
+    try {
+      const emp = await buscaEmpresa(u.cnpj);
+      if (emp && emp.abertura) return db.atualiza('usuarios', u.id, { empresa: { ...(u.empresa || {}), abertura: emp.abertura, cnae: (u.empresa && u.empresa.cnae) || emp.cnae } });
+    } catch { /* segue sem a data */ }
+    return u;
+  }
+  const doSimples = (u) => u.cnpj && !auth.ehDono(u) && (u.gerenciado || !u.empresa || u.empresa.simples !== false) && !(u.empresa && u.empresa.mei);
+  admin.get('/apuracoes', async (req, res) => {
+    const empresas = [];
+    for (let u of db.lista('usuarios', doSimples)) {
+      u = await garanteAbertura(u);
+      empresas.push({ id: u.id, nome: (u.empresa && u.empresa.razaoSocial) || u.nome, cnpj: u.cnpj, abertura: u.empresa && u.empresa.abertura, anexos: apuracao.anexosDa(u), meses: apuracao.painel(u, { quantas: 4 }) });
+    }
+    res.json({ empresas, integra: false });
+  });
+  const alvoApu = (req, res) => {
+    const u = db.acha('usuarios', (x) => x.id === req.params.id);
+    if (!u) { res.status(404).json({ erro: 'Empresa não encontrada.' }); return null; }
+    if (!/^\d{4}-\d{2}$/.test(req.params.comp)) { res.status(400).json({ erro: 'Competência inválida.' }); return null; }
+    return u;
+  };
+  const linhaDe = (u, comp) => apuracao.painel(u, { quantas: 60 }).find((l) => l.competencia === comp);
+  admin.post('/apuracoes/:id/:comp/ajuste', express.json(), (req, res) => {
+    const u = alvoApu(req, res);
+    if (!u) return;
+    const reg = apuracao.registro(u, req.params.comp);
+    if (!['calculada', 'aprovada'].includes(reg.status)) return res.status(409).json({ erro: 'O DAS desta competência já foi gerado. Para mudar, registre a retificação no PGDAS-D.' });
+    const num = (v) => (v === '' || v == null ? undefined : Math.max(0, Number(String(v).replace(/\./g, '').replace(',', '.')) || 0));
+    const ajuste = {};
+    if (num(req.body.rbt12) !== undefined) ajuste.rbt12 = num(req.body.rbt12);
+    const extra = {};
+    for (const t of ['servicos', 'mercadorias', 'transporte']) if (num((req.body.extra || {})[t])) extra[t] = num(req.body.extra[t]);
+    if (Object.keys(extra).length) ajuste.extra = extra;
+    const anexos = {};
+    for (const [t, a] of Object.entries(req.body.anexos || {})) if (['servicos', 'mercadorias', 'transporte'].includes(t) && ['I', 'II', 'III', 'IV', 'V'].includes(a)) anexos[t] = a;
+    if (Object.keys(anexos).length) ajuste.anexos = anexos;
+    db.atualiza('apuracoes', reg.id, { ajuste, status: 'calculada', aprovado: null });
+    res.json({ linha: linhaDe(u, req.params.comp) });
+  });
+  admin.post('/apuracoes/:id/:comp/aprovar', (req, res) => {
+    const u = alvoApu(req, res);
+    if (!u) return;
+    const reg = apuracao.registro(u, req.params.comp);
+    if (reg.status !== 'calculada') return res.status(409).json({ erro: 'Esta competência já foi aprovada.' });
+    const calc = apuracao.calcula(u, req.params.comp, apuracao.receitas(u), reg.ajuste || {});
+    db.atualiza('apuracoes', reg.id, { status: 'aprovada', aprovado: calc, aprovadoEm: new Date().toISOString() });
+    res.json({ linha: linhaDe(u, req.params.comp) });
+  });
+  admin.post('/apuracoes/:id/:comp/das', express.json(), (req, res) => {
+    const u = alvoApu(req, res);
+    if (!u) return;
+    const reg = apuracao.registro(u, req.params.comp);
+    if (reg.status === 'calculada') return res.status(409).json({ erro: 'Aprove a apuração antes de anexar o DAS.' });
+    const pdf = txt(req.body.pdf, 600);
+    if (pdf && !/^https:\/\//.test(pdf)) return res.status(400).json({ erro: 'O link do PDF precisa começar com https://' });
+    const linhaDigitavel = txt(req.body.linhaDigitavel, 80).replace(/[^\d]/g, '');
+    if (!pdf && !linhaDigitavel) return res.status(400).json({ erro: 'Informe o link do PDF ou a linha digitável do DAS.' });
+    const valor = Number(String(req.body.valor || '').replace(/\./g, '').replace(',', '.')) || (reg.aprovado && reg.aprovado.valor) || 0;
+    const vencimento = /^\d{4}-\d{2}-\d{2}$/.test(req.body.vencimento || '') ? req.body.vencimento : reg.aprovado && reg.aprovado.vencimento;
+    db.atualiza('apuracoes', reg.id, { status: 'das_disponivel', das: { pdf, linhaDigitavel, valor, vencimento, em: new Date().toISOString() } });
+    const alerta = { em: new Date().toISOString(), texto: `Seu DAS de ${nomeComp(req.params.comp)} está disponível: ${brl(valor)}, vence em ${vencimento ? vencimento.split('-').reverse().join('/') : '—'}. Veja em Minha empresa › Seu DAS.` };
+    db.atualiza('usuarios', u.id, { alertas: [alerta, ...(u.alertas || [])].slice(0, 30) });
+    res.json({ linha: linhaDe(u, req.params.comp) });
+  });
+  admin.post('/apuracoes/:id/:comp/pago', (req, res) => {
+    const u = alvoApu(req, res);
+    if (!u) return;
+    const reg = apuracao.registro(u, req.params.comp);
+    if (reg.status !== 'das_disponivel') return res.status(409).json({ erro: 'Anexe o DAS antes de marcar como pago.' });
+    db.atualiza('apuracoes', reg.id, { status: 'paga', pagoEm: new Date().toISOString() });
+    res.json({ linha: linhaDe(u, req.params.comp) });
+  });
+  admin.post('/apuracoes/:id/:comp/gerar', (req, res) => res.status(503).json({ erro: 'A geração automática do DAS precisa da Integra Contador (Serpro). Enquanto isso, gere no Portal do Simples e use "Anexar DAS".' }));
+
   admin.get('/notas', (req, res) => {
     const nomes = Object.fromEntries(db.lista('usuarios').map((u) => [u.id, { nome: u.empresa ? u.empresa.razaoSocial : u.nome, cnpj: u.cnpj, fiscal: u.fiscal }]));
     res.json({ notas: db.lista('notas', (n) => n.status !== 'rascunho').sort((a, b) => (b.enviadaEm || '').localeCompare(a.enviadaEm || '')).map((n) => ({ ...n, prestador: nomes[n.usuarioId] })) });
@@ -370,7 +450,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     try { emp = await buscaEmpresa(cnpj); } catch { /* cadastra só com o CNPJ */ }
     return db.insere('usuarios', {
       nome: nome || (emp && (emp.nomeFantasia || emp.razaoSocial)) || cnpj, cnpj, gerenciado: true, telefone, alertas: [],
-      empresa: emp ? { razaoSocial: emp.razaoSocial, nomeFantasia: emp.nomeFantasia, regime: emp.regime, situacao: emp.situacao, municipio: emp.municipio, uf: emp.uf, cnae: emp.cnae, atividade: emp.atividade, simples: emp.simples, mei: emp.mei } : null,
+      empresa: emp ? { razaoSocial: emp.razaoSocial, nomeFantasia: emp.nomeFantasia, regime: emp.regime, situacao: emp.situacao, municipio: emp.municipio, uf: emp.uf, cnae: emp.cnae, atividade: emp.atividade, simples: emp.simples, mei: emp.mei, abertura: emp.abertura } : null,
     });
   }
 
@@ -430,6 +510,8 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     res.json(captura.notasDe(id));
   });
 
+  // DAS do cliente: estimativa do mês e guias liberadas pelo contador
+  r.get('/das', auth.exigePlano, (req, res) => res.json({ meses: apuracao.painel(req.usuario, { quantas: 6 }).map(({ ajuste, ...l }) => l) }));
   r.use('/analises', analises.portal());
   return { portal: r, publico, admin };
 };

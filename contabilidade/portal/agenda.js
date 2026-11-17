@@ -90,4 +90,7 @@ function proximas(perfil, { dias = 10, hoje = hojeSP() } = {}) {
     .sort((x, y) => x.data.localeCompare(y.data));
 }
 
-module.exports = { proximas, hojeSP, doMes };
+// Vencimento do DAS de uma competência 'AAAA-MM': dia 20 do mês seguinte, ou o próximo dia útil
+const vencimentoDas = (comp) => iso(ajusta(dataUTC(Number(comp.slice(0, 4)), Number(comp.slice(5, 7)), 20), 1));
+
+module.exports = { proximas, hojeSP, doMes, vencimentoDas };

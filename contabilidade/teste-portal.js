@@ -267,6 +267,44 @@ const notas = require('./portal/notas');
     assert.ok(!fs.existsSync(path.join(dir, 'certificados', `${idCli}.bin`)), 'certificado apagado junto');
   }
 
+  // Apuração do DAS: empresa de serviços aberta em jul/2026, NFS-e em ago e set (regra de início de atividade)
+  {
+    r = await req('POST', '/api/admin/portal/empresas', { cnpj: '33665544000121' }, admin);
+    const idAp = r.status === 200 ? r.json.usuario.id : r.json.id;
+    db.atualiza('usuarios', idAp, { empresa: { razaoSocial: 'SERVICOS TECNICOS TESTE', cnae: '3313901', abertura: '2026-07-21', simples: true } });
+    fs.mkdirSync(path.join(dir, 'notas-capturadas'), { recursive: true });
+    const nf = (n, data, valor) => ({ tipo: 'nfse', chave: `S33665544-${n}-${data}`, mes: data.slice(0, 7), emit: '33665544', dest: '11222333', saida: true, valor });
+    fs.writeFileSync(path.join(dir, 'notas-capturadas', `${idAp}.json`), JSON.stringify({ nfe: { ultNSU: '0' }, nfse: { ultNSU: 3 }, canceladas: [], notas: Object.fromEntries([nf(1, '2026-08-24', 11500), nf(2, '2026-09-09', 27000), nf(3, '2026-09-22', 9500)].map((n) => [n.chave, n])) }));
+    const apu = require('./portal/apuracao');
+    const linhas = apu.painel(db.acha('usuarios', (x) => x.id === idAp), { quantas: 60 });
+    const ago = linhas.find((l) => l.competencia === '2026-08');
+    const set = linhas.find((l) => l.competencia === '2026-09');
+    assert.strictEqual(ago.valor, 690);
+    assert.strictEqual(ago.vencimento, '2026-09-21', 'dia 20 caiu no domingo');
+    assert.strictEqual(set.rbt12, 69000);
+    assert.strictEqual(set.valor, 2190);
+    assert.strictEqual(set.partes[0].anexo, 'III', 'manutenção (divisão 33) é serviço');
+    assert.ok(linhas.find((l) => l.competencia === '2026-07').semMovimento);
+    // Fluxo: ajuste -> aprovar -> anexar DAS -> cliente vê -> pago
+    assert.strictEqual((await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-09/das`, { linhaDigitavel: '123' }, admin)).status, 409, 'aprova antes');
+    r = await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-09/ajuste`, { extra: { servicos: '1.000,00' } }, admin);
+    assert.strictEqual(r.json.linha.receita, 37500);
+    r = await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-09/ajuste`, {}, admin);
+    r = await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-09/aprovar`, null, admin);
+    assert.strictEqual(r.json.linha.status, 'aprovada');
+    assert.strictEqual(r.json.linha.valor, 2190);
+    r = await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-09/das`, { pdf: 'https://exemplo.com/das.pdf', linhaDigitavel: '8566 0000 0219 0000' }, admin);
+    assert.strictEqual(r.json.linha.status, 'das_disponivel');
+    assert.ok(db.acha('usuarios', (x) => x.id === idAp).alertas[0].texto.includes('2.190,00'));
+    assert.strictEqual((await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-09/ajuste`, { rbt12: 1 }, admin)).status, 409, 'depois do DAS não muda');
+    assert.strictEqual((await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-09/pago`, null, admin)).json.linha.status, 'paga');
+    r = await req('GET', '/api/admin/portal/apuracoes', null, admin);
+    assert.ok(r.json.empresas.some((e) => e.id === idAp));
+    assert.ok(!r.json.empresas.some((e) => e.cnpj === '43403653000124'), 'o próprio escritório (dono) fica de fora');
+    // O cliente com login vê o próprio DAS
+    assert.ok(Array.isArray((await req('GET', '/api/portal/das')).json.meses));
+  }
+
   // Login e saída
   await req('POST', '/api/portal/sair');
   assert.strictEqual((await req('GET', '/api/portal/eu')).status, 401);

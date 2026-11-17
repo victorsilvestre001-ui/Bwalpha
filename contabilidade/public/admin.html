@@ -57,6 +57,10 @@
     <p style="color:var(--suave);margin:0 0 12px">Análises feitas pelos clientes com os XMLs das notas. Confira com os extratos do PGDAS-D e registre o resultado: o cliente recebe o aviso no painel.</p>
     <div class="card tabela"><table><thead><tr><th>Enviada</th><th>Cliente</th><th>Notas / período</th><th>Monofásico</th><th>ICMS-ST</th><th>Potencial</th><th>Situação</th><th></th></tr></thead><tbody id="analises"></tbody></table></div>
 
+    <h1 style="margin:32px 0 12px">Apuração do DAS (Simples Nacional)</h1>
+    <p style="color:var(--suave);margin:0 0 12px">Calculada sozinha todo mês com as notas de cada empresa (baixadas pelo certificado e emitidas pelo site). Confira, ajuste se precisar, aprove e anexe o DAS gerado no PGDAS-D: o cliente recebe o aviso e a guia na Área do Cliente.</p>
+    <div id="apuracoes"><p style="color:var(--suave)">Carregando…</p></div>
+
     <h1 style="margin:32px 0 12px">Meus clientes</h1>
     <p style="color:var(--suave);margin:0 0 12px">Assinantes da Área do Cliente e empresas que você cadastrou na carteira. Conecte o certificado A1 de cada empresa para baixar as notas automaticamente e use o simulador com os dados dela.</p>
     <form id="formEmpresa" class="card" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px">
@@ -130,7 +134,68 @@ $('#formEmpresa').addEventListener('submit', async (ev) => {
   try { await apiAdmin('/empresas', { cnpj: $('#eCnpj').value, telefone: $('#eTel').value }); $('#eMsg').textContent = 'Adicionada ✅'; $('#formEmpresa').reset(); carregaPortal(); } catch (e) { $('#eMsg').textContent = e.message; }
 });
 
+const MESES_A = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const compNome = (c) => `${MESES_A[+c.slice(5, 7) - 1]}/${c.slice(0, 4)}`;
+const pctA = (v) => `${(v * 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
+const dataA = (d) => (d ? d.split('-').reverse().join('/') : '—');
+const STATUS_APU = { calculada: 'A conferir', aprovada: 'Aprovada: gerar DAS', das_disponivel: 'DAS enviado ao cliente', paga: 'Paga' };
+async function carregaApuracoes() {
+  const { empresas } = await apiAdmin('/apuracoes');
+  const hoje = new Date().toISOString().slice(0, 10);
+  $('#apuracoes').innerHTML = empresas.length ? empresas.map((e) => `
+    <div class="card tabela" style="margin-bottom:14px">
+      <div style="padding:12px 14px 0"><b>${esc(e.nome)}</b> <small style="color:var(--suave)">${esc(fmtCnpj(e.cnpj))}${e.abertura ? ' · aberta em ' + dataA(e.abertura) : ''} · Anexos: serviços ${e.anexos.servicos}, mercadorias ${e.anexos.mercadorias}</small></div>
+      <table><thead><tr><th>Competência</th><th>Receita</th><th>RBT12</th><th>Cálculo</th><th>DAS</th><th>Vencimento</th><th>Situação</th><th></th></tr></thead><tbody>
+      ${e.meses.map((m) => { const venc = (m.das && m.das.vencimento) || m.vencimento; const atrasado = m.status !== 'paga' && venc < hoje && !m.semMovimento; return `<tr>
+        <td><b>${compNome(m.competencia)}</b></td>
+        <td>${brlA(m.receita)}<br><small>${m.notas.length} nota(s)${m.ajuste && m.ajuste.extra ? ' + ajuste' : ''}</small></td>
+        <td>${brlA(m.rbt12)}<br><small>${esc(m.regraRbt12)}</small></td>
+        <td><small>${m.partes.map((p) => `${esc(p.rotulo)}: Anexo ${p.anexo} · ${pctA(p.aliquota)}`).join('<br>') || (m.semDados ? '<span style="color:#a86a00">Sem notas no sistema neste mês: confira o faturamento</span>' : 'Sem movimento: declarar zerado')}${m.avisos.length ? `<br><span style="color:#a86a00" title="${esc(m.avisos.join(' '))}">⚠ ${m.avisos.length} aviso(s)</span>` : ''}</small></td>
+        <td><b>${brlA(m.das ? m.das.valor : m.valor)}</b></td>
+        <td style="${atrasado ? 'color:#c0392b;font-weight:700' : ''}">${dataA(venc)}${atrasado ? '<br><small>vencido</small>' : ''}</td>
+        <td>${STATUS_APU[m.status] || m.status}</td>
+        <td style="white-space:nowrap">${{
+          calculada: `<button data-apu="aprovar" data-e="${e.id}" data-c="${m.competencia}">Aprovar</button> <button data-apu="ajuste" data-e="${e.id}" data-c="${m.competencia}">Ajustar</button>`,
+          aprovada: `<button data-apu="gerar" data-e="${e.id}" data-c="${m.competencia}">Gerar DAS</button> <button data-apu="das" data-e="${e.id}" data-c="${m.competencia}" data-v="${m.valor}">Anexar DAS</button>`,
+          das_disponivel: `${m.das && m.das.pdf ? `<a href="${esc(m.das.pdf)}" target="_blank" rel="noopener">Guia</a> ` : ''}<button data-apu="pago" data-e="${e.id}" data-c="${m.competencia}">Marcar paga</button>`,
+          paga: '✔',
+        }[m.status] || ''}</td>
+      </tr>`; }).join('')}
+      </tbody></table>
+    </div>`).join('') : '<p style="color:var(--suave)">Nenhuma empresa do Simples na carteira ainda.</p>';
+  document.querySelectorAll('[data-apu]').forEach((b) => b.addEventListener('click', async () => {
+    const base = `/apuracoes/${b.dataset.e}/${b.dataset.c}`;
+    try {
+      if (b.dataset.apu === 'aprovar') await apiAdmin(base + '/aprovar', {});
+      if (b.dataset.apu === 'gerar') await apiAdmin(base + '/gerar', {});
+      if (b.dataset.apu === 'pago') await apiAdmin(base + '/pago', {});
+      if (b.dataset.apu === 'ajuste') {
+        const extra = prompt('Receita a SOMAR em serviços neste mês (notas que não vieram pelo sistema). Deixe vazio se não houver:', '');
+        if (extra === null) return;
+        const rbt12 = prompt('RBT12 correto (receita dos 12 meses anteriores), se o calculado estiver errado. Vazio = usar o calculado:', '');
+        if (rbt12 === null) return;
+        const anexo = prompt('Anexo dos serviços (III, IV ou V). Vazio = manter:', '');
+        if (anexo === null) return;
+        await apiAdmin(base + '/ajuste', { extra: { servicos: extra }, rbt12, anexos: anexo ? { servicos: anexo.trim().toUpperCase() } : {} });
+      }
+      if (b.dataset.apu === 'das') {
+        const pdf = prompt('Link do PDF do DAS (https://…). Pode deixar vazio se informar o código de barras:', '');
+        if (pdf === null) return;
+        const linhaDigitavel = prompt('Código de barras / linha digitável do DAS:', '');
+        if (linhaDigitavel === null) return;
+        const valor = prompt('Valor total da guia (com multa e juros, se houver):', Number(b.dataset.v).toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+        if (valor === null) return;
+        const venc = prompt('Data de vencimento/pagamento da guia (AAAA-MM-DD). Vazio = vencimento normal:', '');
+        if (venc === null) return;
+        await apiAdmin(base + '/das', { pdf, linhaDigitavel, valor, vencimento: venc });
+      }
+    } catch (err) { alert(err.message); }
+    carregaApuracoes();
+  }));
+}
+
 async function carregaPortal() {
+  carregaApuracoes().catch((e) => { $('#apuracoes').innerHTML = `<p style="color:#c0392b">${esc(e.message)}</p>`; });
   const [{ notas }, { assinantes }, { analises }] = await Promise.all([apiAdmin('/notas'), apiAdmin('/assinantes'), apiAdmin('/analises')]);
   const sitAn = { em_revisao: 'Aguardando revisão', revisada: 'Revisada', em_recuperacao: 'Em recuperação', sem_credito: 'Sem crédito' };
   $('#analises').innerHTML = analises.length ? analises.map((a) => { const r = a.relatorio || {}; return `

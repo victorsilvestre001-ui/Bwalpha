@@ -101,7 +101,7 @@ async function abaEmpresa(atualizar) {
   const el = $('#abaEmpresa');
   el.innerHTML = '<p class="vazio">Carregando sua empresa…</p>';
   try {
-    const [{ empresa: e, analise: a, alertas }, rs] = await Promise.all([api('/painel' + (atualizar ? '?atualizar=1' : '')), api('/resumo').catch(() => null)]);
+    const [{ empresa: e, analise: a, alertas }, rs, das] = await Promise.all([api('/painel' + (atualizar ? '?atualizar=1' : '')), api('/resumo').catch(() => null), api('/das').catch(() => null)]);
     if (!e) { el.innerHTML = '<p class="vazio">Não conseguimos consultar o CNPJ agora. Tente atualizar em instantes.</p>'; return; }
     const urg = (a.itens || []).filter((i) => i.gravidade === 'urgente').length;
     const r = a.reforma;
@@ -115,6 +115,7 @@ async function abaEmpresa(atualizar) {
         <div><span>Dívida ativa em cobrança</span><b>${brl(a.dividaAtiva)}</b></div>
       </div>
       ${rs ? cardResumo(rs) : ''}
+      ${das && e.regime === 'Simples Nacional' ? cardDas(das.meses) : ''}
       <section class="card">
         <h2>${icone('sino')} Alertas do seu agente</h2>
         <p class="sub">Todo dia o sistema reconsulta seu CNPJ e avisa aqui quando algo muda: situação, dívida ativa, exclusões e prazos.</p>
@@ -131,7 +132,34 @@ async function abaEmpresa(atualizar) {
         <div class="linha-botoes"><a class="btn azul" target="_blank" rel="noopener" href="${linkZap(`Olá! Sou cliente da Área do Cliente (${e.razaoSocial}) e quero ajuda com as pendências da empresa.`)}">${icone('zap')} Pedir ajuda à equipe</a></div>
       </section>`;
     $('#atualizar').addEventListener('click', () => abaEmpresa(true));
+    $$('[data-copiar]').forEach((b) => b.addEventListener('click', () => { navigator.clipboard.writeText(b.dataset.copiar).then(() => { b.textContent = 'Copiado ✅'; }); }));
   } catch (err) { trataErro(err, el); }
+}
+
+// DAS do Simples: estimativa pelas notas e guia liberada pelo contador
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const nomeComp = (c) => `${MESES[+c.slice(5, 7) - 1]}/${c.slice(0, 4)}`;
+function cardDas(meses) {
+  meses = (meses || []).filter((m) => !m.semDados);
+  if (!meses.length) return '';
+  const st = (m) => ({
+    calculada: m.semMovimento ? '<span class="tag rotina">Sem faturamento</span>' : '<span class="tag atencao">Estimado: o contador está conferindo</span>',
+    aprovada: '<span class="tag rotina">Conferido: guia em preparação</span>',
+    das_disponivel: m.das && Date.parse(m.das.vencimento) < Date.now() - 86400000 ? '<span class="tag urgente">Vencido: pague com urgência</span>' : '<span class="tag urgente">Guia disponível para pagar</span>',
+    paga: '<span class="tag ok">Pago</span>',
+  })[m.status] || '';
+  return `<section class="card">
+    <h2>${icone('moeda')} Seu DAS (Simples Nacional)</h2>
+    <p class="sub">Calculado automaticamente pelas suas notas fiscais do mês. O contador confere e libera a guia aqui.</p>
+    <div class="tabela-das">${meses.map((m) => `
+      <div class="linha-das">
+        <div><b>${nomeComp(m.competencia)}</b><small>Faturamento ${brl(m.receita)}${m.notas && m.notas.length ? ` · ${m.notas.length} nota(s)` : ''}</small></div>
+        <div><b>${brl(m.das ? m.das.valor : m.valor)}</b><small>vence ${data((m.das && m.das.vencimento) || m.vencimento)}</small></div>
+        <div>${st(m)}</div>
+        <div>${m.das ? `${m.das.pdf ? `<a class="btn azul pequeno" href="${esc(m.das.pdf)}" target="_blank" rel="noopener">Baixar guia</a>` : ''}${m.das.linhaDigitavel ? ` <button class="sec" data-copiar="${esc(m.das.linhaDigitavel)}">Copiar código de barras</button>` : ''}` : ''}</div>
+      </div>`).join('')}
+    </div>
+  </section>`;
 }
 
 const quando = (n) => (n === 0 ? 'hoje' : n === 1 ? 'amanhã' : `em ${n} dias`);

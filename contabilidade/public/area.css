@@ -97,3 +97,10 @@ body.area { background: var(--bg); }
 #formPref input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--marca); vertical-align: -3px; margin-right: 6px; }
 
 iframe.ferramenta { width: 100%; min-height: 900px; border: 0; border-radius: 16px; background: transparent; display: block; }
+
+/* Seu DAS */
+.tabela-das { display: grid; gap: 8px; }
+.linha-das { display: grid; grid-template-columns: 1.3fr 1fr 1.4fr auto; gap: 10px 16px; align-items: center; border: 1px solid var(--borda); border-radius: 12px; padding: 12px 14px; }
+.linha-das small { display: block; color: var(--suave); font-size: .82rem; }
+.linha-das .btn.pequeno { padding: 8px 14px; font-size: .88rem; }
+@media (max-width: 720px) { .linha-das { grid-template-columns: 1fr 1fr; } }
