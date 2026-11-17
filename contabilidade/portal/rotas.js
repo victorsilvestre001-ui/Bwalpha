@@ -340,6 +340,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     return u;
   };
   admin.post('/assinantes/:id/certificado', express.json({ limit: '100kb' }), (req, res) => { const u = empresaDe(req, res); if (u) responde(res, conectaCert(u, req, 'contador')); });
+  admin.get('/assinantes/:id/notas-capturadas', (req, res) => { const u = empresaDe(req, res); if (u) res.json(captura.notasDe(u.id)); });
   admin.post('/assinantes/:id/certificado/buscar', async (req, res) => { const u = empresaDe(req, res); if (u) responde(res, await buscaCert(u)); });
   admin.delete('/assinantes/:id/certificado', (req, res) => { const u = empresaDe(req, res); if (u) responde(res, desconectaCert(u)); });
   admin.delete('/empresas/:id', (req, res) => {

@@ -113,7 +113,7 @@ function certCelula(u) {
   const nome = esc((u.empresa && u.empresa.razaoSocial) || u.nome);
   if (!c.ativo) return `<button data-cert="${u.id}" data-nome="${nome}">Conectar certificado</button>`;
   const vence = Math.ceil((Date.parse(c.validoAte) - Date.now()) / 86400000);
-  return `<span style="color:${vence <= 30 ? '#c0392b' : '#1e7a4f'}">✔ válido até ${new Date(c.validoAte).toLocaleDateString('pt-BR')}</span><br><small>${c.totalNotas || 0} notas · ${c.ultimaBusca ? 'busca ' + new Date(c.ultimaBusca).toLocaleString('pt-BR') : 'primeira busca em andamento'}</small>${c.ultimoErro ? `<br><small style="color:#c0392b">${esc(c.ultimoErro)}</small>` : ''}<br><button data-buscar="${u.id}">Buscar agora</button> <button data-desconectar="${u.id}">Desconectar</button>`;
+  return `<span style="color:${vence <= 30 ? '#c0392b' : '#1e7a4f'}">✔ válido até ${new Date(c.validoAte).toLocaleDateString('pt-BR')}</span><br><small>${c.totalNotas || 0} notas · ${c.ultimaBusca ? 'busca ' + new Date(c.ultimaBusca).toLocaleString('pt-BR') : 'primeira busca em andamento'}</small>${c.ultimoErro ? `<br><small style="color:#c0392b">${esc(c.ultimoErro)}</small>` : ''}<br><button data-vernotas="${u.id}">Ver notas</button> <button data-buscar="${u.id}">Buscar agora</button> <button data-desconectar="${u.id}">Desconectar</button>`;
 }
 $('#cCancelar').addEventListener('click', () => $('#dlgCert').close());
 $('#formCertAdm').addEventListener('submit', async (ev) => {
@@ -188,6 +188,18 @@ async function carregaPortal() {
   }));
   document.querySelectorAll('[data-cert]').forEach((b) => b.addEventListener('click', () => {
     certAlvo = b.dataset.cert; $('#certEmpresa').textContent = b.dataset.nome; $('#cMsg').textContent = ''; $('#formCertAdm').reset(); $('#dlgCert').showModal();
+  }));
+  document.querySelectorAll('[data-vernotas]').forEach((b) => b.addEventListener('click', async () => {
+    try {
+      const { notas, canceladas } = await apiAdmin(`/assinantes/${b.dataset.vernotas}/notas-capturadas`);
+      const u = assinantes.find((x) => x.id === b.dataset.vernotas);
+      const raiz = String(u.cnpj).slice(0, 8);
+      const canc = new Set(canceladas);
+      const linhas = notas.sort((x, y) => String(y.mes).localeCompare(String(x.mes))).map((n) => `<tr><td>${esc(n.mes)}</td><td>${esc(n.tipo.toUpperCase())}</td><td>${n.emit === raiz ? 'Emitida (venda/serviço)' : 'Recebida (compra)'}</td><td>${esc(fmtCnpj(n.emit === raiz ? n.dest : n.emit) || '—')}</td><td style="text-align:right">${brlA(n.valor)}</td><td>${canc.has(n.chave) ? 'Cancelada' : ''}</td></tr>`).join('');
+      const w = window.open('', '_blank');
+      w.document.write(`<meta charset="utf-8"><title>Notas</title><body style="font-family:system-ui;padding:20px"><h2>${esc((u.empresa && u.empresa.razaoSocial) || u.nome)}: ${notas.length} notas baixadas</h2><table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Mês</th><th>Tipo</th><th>Direção</th><th>Outra parte (CNPJ)</th><th>Valor</th><th></th></tr>${linhas}</table></body>`);
+      w.document.close();
+    } catch (e) { alert(e.message); }
   }));
   document.querySelectorAll('[data-buscar]').forEach((b) => b.addEventListener('click', async () => {
     b.disabled = true; b.textContent = 'Buscando…';
