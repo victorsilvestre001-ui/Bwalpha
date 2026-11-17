@@ -202,7 +202,7 @@ if (require.main === module) {
 // Área do Cliente (login + plano pago): notas fiscais, orçamentos e painel da empresa
 const SITE = process.env.SITE_URL || 'https://site-production-3edd.up.railway.app';
 const portal = rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, assistente, site: SITE });
-if (require.main === module) require('./portal/resumo').agenda({ site: SITE });
+if (require.main === module) { require('./portal/resumo').agenda({ site: SITE }); require('./portal/captura').agenda(); }
 app.use('/api/portal', portal.portal);
 app.use('/api/orcamento-publico', portal.publico);
 app.use('/api/asaas/webhook', webhookAsaas);

@@ -98,6 +98,17 @@
     calcula();
   }
 
+  // Notas já baixadas pelo certificado digital: entram com um clique
+  fetch('/api/portal/notas-capturadas', { credentials: 'same-origin' }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+    if (!j || !j.notas.length) return;
+    mostra(`Você tem <b>${j.notas.length} notas</b> baixadas automaticamente pelo certificado digital. <button type="button" class="btn azul" id="usaCapturadas" style="padding:8px 16px;margin-left:6px">Usar essas notas</button><br><small>Se tiver as notas de venda antigas em .zip, envie também.</small>`);
+    q('#usaCapturadas').addEventListener('click', () => {
+      j.notas.forEach((n) => { if (n.chave) notas.set(n.chave, n); });
+      j.canceladas.forEach((c) => canceladas.add(c));
+      calcula();
+    });
+  }).catch(() => {});
+
   q('#notasSim').addEventListener('change', (ev) => { envia(ev.target.files); ev.target.value = ''; });
   const zona = q('#atalho');
   ['dragenter', 'dragover'].forEach((t) => zona.addEventListener(t, (ev) => ev.preventDefault()));

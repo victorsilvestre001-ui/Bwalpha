@@ -352,6 +352,8 @@ function abaConta() {
       <div class="linha-botoes"><button class="btn azul" id="trocarPlano">Ver planos / renovar</button><a class="sec" target="_blank" rel="noopener" href="${linkZap('Olá! Preciso de ajuda com minha conta na Área do Cliente.')}">${icone('zap')} Suporte</a></div>
     </section>`;
   $('#trocarPlano').addEventListener('click', mostraPlanos);
+  $('#abaConta').insertAdjacentHTML('beforeend', '<section class="card" id="cardCert"><h2>Certificado digital</h2><p class="sub">Carregando…</p></section>');
+  cardCertificado();
   const p = u.preferencias || {};
   $('#abaConta').insertAdjacentHTML('beforeend', `
     <section class="card">
@@ -372,6 +374,55 @@ function abaConta() {
       const r = await api('/preferencias', { method: 'PUT', body: { resumo: $('#pResumo').checked, resumoEmail: $('#pEmail').checked, resumoWhatsapp: $('#pZap').checked, funcionarios: $('#pFunc').checked, telefone: $('#pTel').value } });
       eu.usuario = r.usuario; $('#okPref').textContent = 'Salvo ✅';
     } catch (err) { $('#okPref').textContent = err.message; }
+  });
+}
+
+// Certificado A1: busca automática das notas da empresa
+async function cardCertificado() {
+  const el = $('#cardCert');
+  let c;
+  try { c = (await api('/certificado')).certificado; } catch (err) { return trataErro(err, el); }
+  const topo = `<h2>${icone('nota')} Certificado digital: busca automática das notas</h2>`;
+  if (!c.disponivel) { el.innerHTML = `${topo}<p class="sub">Em breve: conecte o certificado A1 da empresa e as notas chegam sozinhas, todo dia.</p>`; return; }
+  if (c.ativo) {
+    const vence = Math.ceil((Date.parse(c.validoAte) - Date.now()) / 86400000);
+    el.innerHTML = `${topo}
+      <p class="sub">Conectado. Todo dia buscamos nos serviços oficiais as <b>notas de compra (NF-e)</b> e as <b>notas de serviço do padrão nacional (NFS-e)</b> da empresa. Elas já entram no Simulador de impostos.</p>
+      <div class="kpis-empresa">
+        <div><span>Titular</span><b>${esc(c.titular)}</b></div>
+        <div><span>Válido até</span><b style="${vence <= 30 ? 'color:var(--urgente)' : ''}">${data(c.validoAte)}${vence <= 30 ? ` (${Math.max(0, vence)} dias)` : ''}</b></div>
+        <div><span>Notas baixadas</span><b>${(c.totalNotas || 0).toLocaleString('pt-BR')}</b></div>
+        <div><span>Última busca</span><b>${c.ultimaBusca ? new Date(c.ultimaBusca).toLocaleString('pt-BR') : 'Em andamento…'}</b></div>
+      </div>
+      ${c.ultimoErro ? `<p class="erro-form">Última busca com problema: ${esc(c.ultimoErro)}. Tentamos de novo automaticamente.</p>` : ''}
+      <div class="linha-botoes"><button class="btn azul" id="certBuscar">Buscar agora</button><button class="sec" id="certSair">Desconectar e apagar o certificado</button> <span id="certMsg"></span></div>`;
+    $('#certBuscar').addEventListener('click', async () => {
+      $('#certMsg').textContent = 'Buscando…';
+      try { const r = await api('/certificado/buscar', { method: 'POST' }); $('#certMsg').textContent = `${r.resultado.novas} nota(s) nova(s).`; setTimeout(cardCertificado, 1500); } catch (err) { $('#certMsg').textContent = err.message; }
+    });
+    $('#certSair').addEventListener('click', async () => {
+      if (!confirm('Desconectar? O certificado e as notas baixadas serão apagados do nosso sistema.')) return;
+      try { await api('/certificado', { method: 'DELETE' }); cardCertificado(); } catch (err) { $('#certMsg').textContent = err.message; }
+    });
+    return;
+  }
+  el.innerHTML = `${topo}
+    <p class="sub">Envie o <b>certificado A1</b> da empresa (arquivo .pfx ou .p12) e a senha. Todo dia buscamos as notas nos serviços oficiais da Receita, sem você precisar baixar nada.</p>
+    <form id="formCert" class="grade-form">
+      <label class="campo"><span>Arquivo do certificado</span><input type="file" id="certArq" accept=".pfx,.p12" required></label>
+      <label class="campo"><span>Senha do certificado</span><input type="password" id="certSenha" required autocomplete="off"></label>
+      <label class="campo cheio"><span><input type="checkbox" id="certOk" required> Autorizo a ${esc(escritorio.nome || 'V&J')} a usar este certificado <b>somente para consultar as notas fiscais</b> da minha empresa. Ele fica guardado criptografado e posso desconectar e apagar quando quiser.</span></label>
+      <div class="cheio"><button class="btn azul">Conectar certificado</button> <span id="certMsg"></span></div>
+    </form>
+    <p class="sub" style="font-size:.85rem">Vem automático: notas de compra dos últimos 90 dias e todas as novas, e notas de serviço do padrão nacional. Notas de venda antigas e de loja (NFC-e) continuam pelo envio do arquivo .zip.</p>`;
+  $('#formCert').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const f = $('#certArq').files[0];
+    if (!f) return;
+    if (f.size > 40000) { $('#certMsg').textContent = 'Arquivo grande demais para um certificado A1.'; return; }
+    $('#certMsg').textContent = 'Conferindo o certificado…';
+    const b64 = await new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.readAsDataURL(f); });
+    try { await api('/certificado', { method: 'POST', body: { pfx: b64, senha: $('#certSenha').value, autorizo: $('#certOk').checked } }); cardCertificado(); } catch (err) { $('#certMsg').textContent = err.message; }
   });
 }
 

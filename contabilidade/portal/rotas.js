@@ -10,6 +10,8 @@ const cnpjUtil = require('../cnpj');
 const resumo = require('./resumo');
 const canais = require('./canais');
 const analises = require('./analises');
+const certificado = require('./certificado');
+const captura = require('./captura');
 
 const DIA = 24 * 60 * 60 * 1000;
 const txt = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
@@ -335,6 +337,39 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (pdf && !/^https:\/\//.test(pdf)) return res.status(400).json({ erro: 'O link do PDF precisa começar com https://' });
     res.json({ nota: db.atualiza('notas', n.id, { status: 'emitida', numero: txt(req.body.numero, 30), pdf, emitidaEm: new Date().toISOString() }) });
   });
+
+  // ---------- Certificado digital A1: busca automática das notas ----------
+  const statusCert = (u) => ({ disponivel: certificado.ativo(), ...(u.certificado && u.certificado.ativo ? u.certificado : { ativo: false }) });
+  r.get('/certificado', auth.exigePlano, (req, res) => res.json({ certificado: statusCert(req.usuario) }));
+  r.post('/certificado', auth.exigePlano, async (req, res) => {
+    if (!certificado.ativo()) return res.status(503).json({ erro: 'A conexão do certificado ainda não foi ativada pelo escritório.' });
+    if (req.body.autorizo !== true) return res.status(400).json({ erro: 'Marque a autorização para continuar.' });
+    const pfx = Buffer.from(txt(req.body.pfx, 70000), 'base64');
+    const senha = String(req.body.senha || '').slice(0, 200);
+    if (pfx.length < 500) return res.status(400).json({ erro: 'Escolha o arquivo do certificado (.pfx ou .p12).' });
+    let info;
+    try { info = certificado.confere(pfx, senha, req.usuario.cnpj); } catch (err) {
+      return res.status(400).json({ erro: err instanceof certificado.ErroCertificado ? err.message : 'Não foi possível ler o certificado.' });
+    }
+    certificado.guarda(req.usuario.id, pfx, senha);
+    const u = db.atualiza('usuarios', req.usuario.id, { certificado: { ativo: true, ...info, conectadoEm: new Date().toISOString(), autorizacao: { em: new Date().toISOString(), ip: req.ip } } });
+    captura.rodaUsuario(u).catch((err) => console.error('[captura]', err.message));
+    res.json({ certificado: statusCert(u) });
+  });
+  r.post('/certificado/buscar', auth.exigePlano, async (req, res) => {
+    const c = req.usuario.certificado;
+    if (!c || !c.ativo) return res.status(400).json({ erro: 'Conecte o certificado primeiro.' });
+    if (c.ultimaBusca && Date.now() - Date.parse(c.ultimaBusca) < 60 * 60 * 1000) return res.status(429).json({ erro: 'A Receita só permite uma nova busca a cada 1 hora. A próxima busca automática já está agendada.' });
+    const resultado = await captura.rodaUsuario(req.usuario);
+    res.json({ resultado, certificado: statusCert(db.acha('usuarios', (x) => x.id === req.usuario.id)) });
+  });
+  r.delete('/certificado', auth.exigePlano, (req, res) => {
+    certificado.apaga(req.usuario.id);
+    captura.apaga(req.usuario.id);
+    const u = db.atualiza('usuarios', req.usuario.id, { certificado: { ativo: false, desconectadoEm: new Date().toISOString() } });
+    res.json({ certificado: statusCert(u) });
+  });
+  r.get('/notas-capturadas', auth.exigePlano, (req, res) => res.json(captura.notasDe(req.usuario.id)));
 
   r.use('/analises', analises.portal());
   return { portal: r, publico, admin };

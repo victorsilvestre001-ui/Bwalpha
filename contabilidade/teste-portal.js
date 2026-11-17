@@ -9,6 +9,7 @@ process.env.DADOS_DIR = dir;
 process.env.ARQ_PORTAL = path.join(dir, 'portal.json');
 process.env.ARQ_CONTATOS = path.join(dir, 'contatos.jsonl');
 process.env.ADMIN_SENHA = 'senha-de-teste';
+process.env.CERT_CHAVE = 'chave-de-teste';
 delete process.env.FOCUS_NFE_TOKEN;
 delete process.env.ASAAS_API_KEY;
 
@@ -199,6 +200,47 @@ const notas = require('./portal/notas');
   r = await req('POST', `/api/admin/portal/analises/${idAn}/revisar`, { status: 'em_recuperacao', observacao: 'Conferido com o PGDAS-D' }, admin);
   assert.strictEqual(r.json.analise.status, 'em_recuperacao');
   assert.ok((await req('GET', '/api/portal/painel')).json.alertas.some((a) => /revisou sua análise/.test(a.texto)));
+
+  // Certificado A1: conferência, guarda cifrada e busca das notas (serviços oficiais simulados)
+  {
+    const { pfxTeste } = require('./teste-xml-util');
+    const zlib = require('zlib');
+    const captura = require('./portal/captura');
+    const gz = (x) => zlib.gzipSync(Buffer.from(x)).toString('base64');
+    const chamadas = [];
+    captura.transporte = async ({ url, body }) => {
+      chamadas.push(url);
+      if (url.includes('NFeDistribuicaoDFe')) {
+        assert.ok(body.includes('<CNPJ>12345678000195</CNPJ>') && body.includes('<cUFAutor>'));
+        const res = '<resNFe xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.01"><chNFe>35260511222333000181550010000000011000000011</chNFe><CNPJ>11222333000181</CNPJ><xNome>Fornecedor</xNome><dhEmi>2026-05-03T10:00:00-03:00</dhEmi><tpNF>1</tpNF><vNF>400.00</vNF><cSitNFe>1</cSitNFe></resNFe>';
+        return { status: 200, texto: `<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope"><soap:Body><nfeDistDFeInteresseResponse xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe"><nfeDistDFeInteresseResult><retDistDFeInt xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.01"><tpAmb>1</tpAmb><cStat>138</cStat><xMotivo>Documento localizado</xMotivo><ultNSU>000000000000001</ultNSU><maxNSU>000000000000001</maxNSU><loteDistDFeInt><docZip NSU="000000000000001" schema="resNFe_1.01.xsd">${gz(res)}</docZip></loteDistDFeInt></retDistDFeInt></nfeDistDFeInteresseResult></nfeDistDFeInteresseResponse></soap:Body></soap:Envelope>` };
+      }
+      if (/DFe\/1\?/.test(url)) {
+        const nfse = '<NFSe><infNFSe><nNFSe>5</nNFSe><emit><CNPJ>12345678000195</CNPJ></emit><DPS><infDPS><dhEmi>2026-05-10T10:00:00-03:00</dhEmi><prest><CNPJ>12345678000195</CNPJ></prest><toma><CNPJ>11222333000181</CNPJ></toma><valores><vServPrest><vServ>900.00</vServ></vServPrest></valores></infDPS></DPS></infNFSe></NFSe>';
+        return { status: 200, texto: JSON.stringify({ StatusProcessamento: 'DOCUMENTOS_LOCALIZADOS', LoteDFe: [{ NSU: 1, ChaveAcesso: 'X', TipoDocumento: 'NFSE', ArquivoXml: gz(nfse) }] }) };
+      }
+      return { status: 404, texto: '' };
+    };
+    const pfx = pfxTeste().toString('base64');
+    assert.strictEqual((await req('POST', '/api/portal/certificado', { pfx, senha: 'errada', autorizo: true })).status, 400, 'senha errada');
+    assert.strictEqual((await req('POST', '/api/portal/certificado', { pfx, senha: 'senha123' })).status, 400, 'sem autorização');
+    r = await req('POST', '/api/portal/certificado', { pfx: pfxTeste({ cnpj: '99888777000166' }).toString('base64'), senha: 'senha123', autorizo: true });
+    assert.match(r.json.erro, /não da empresa/);
+    r = await req('POST', '/api/portal/certificado', { pfx, senha: 'senha123', autorizo: true });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+    assert.strictEqual(r.json.certificado.cnpj, '12345678000195');
+    assert.ok(!JSON.stringify(r.json).includes('senha123'), 'a senha nunca volta');
+    const guardado = fs.readFileSync(path.join(dir, 'certificados', fs.readdirSync(path.join(dir, 'certificados'))[0]));
+    assert.ok(!guardado.includes(Buffer.from('senha123')), 'guardado cifrado');
+    await new Promise((ok) => setTimeout(ok, 200));
+    r = await req('GET', '/api/portal/notas-capturadas');
+    assert.deepStrictEqual(r.json.notas.map((n) => [n.tipo, n.emit, n.dest, n.valor]).sort(), [['nfe', '11222333', '12345678', 400], ['nfse', '12345678', '11222333', 900]]);
+    assert.strictEqual((await req('POST', '/api/portal/certificado/buscar')).status, 429, 'respeita 1 hora');
+    assert.strictEqual((await req('GET', '/api/portal/certificado')).json.certificado.totalNotas, 2);
+    r = await req('DELETE', '/api/portal/certificado');
+    assert.strictEqual(r.json.certificado.ativo, false);
+    assert.strictEqual((await req('GET', '/api/portal/notas-capturadas')).json.notas.length, 0);
+  }
 
   // Login e saída
   await req('POST', '/api/portal/sair');
