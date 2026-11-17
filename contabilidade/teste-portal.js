@@ -39,11 +39,24 @@ const notas = require('./portal/notas');
   r = await req('POST', '/api/portal/assinar', { planoId: 'completo' });
   assert.strictEqual(r.json.semPagamentoOnline, true);
 
+  // Simulador e Recuperar impostos: fechados sem plano (vão para o login da Área do Cliente)
+  const pagina = (url) => fetch(base + url, { headers: { cookie }, redirect: 'manual' });
+  for (const url of ['/planejamento', '/economia', '/economia.html']) {
+    const p = await pagina(url);
+    assert.strictEqual(p.status, 302, `${url} bloqueada sem plano`);
+    assert.strictEqual(p.headers.get('location'), '/area');
+  }
+  assert.strictEqual((await fetch(base + '/planejamento', { redirect: 'manual' })).status, 302, 'bloqueada sem login');
+
   // Equipe libera pelo admin
   assert.strictEqual((await req('GET', '/api/admin/portal/assinantes')).status, 401);
   const { assinantes } = (await req('GET', '/api/admin/portal/assinantes', null, admin)).json;
   r = await req('POST', `/api/admin/portal/assinantes/${assinantes[0].id}/liberar`, { dias: 30 }, admin);
   assert.strictEqual(r.json.usuario.assinante, true);
+
+  // Com plano, as páginas abrem
+  assert.strictEqual((await pagina('/planejamento')).status, 200);
+  assert.strictEqual((await pagina('/economia')).status, 200);
 
   // Painel da empresa
   r = await req('GET', '/api/portal/painel');

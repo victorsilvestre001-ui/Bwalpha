@@ -159,7 +159,7 @@ function cardReforma(r, cnpj) {
       </div>
       <p class="impacto-texto">${esc(r.impacto.texto)}</p>
       <ol class="linha-acoes">
-        ${r.acoes.map((a) => `<li><span class="quando">${esc(a.quando)}</span><div><b>${esc(a.titulo)}</b><p>${esc(a.texto)}</p>${a.simulador ? `<a href="/planejamento?cnpj=${esc(cnpj)}">Simular com os números da empresa →</a>` : ''}</div></li>`).join('')}
+        ${r.acoes.map((a) => `<li><span class="quando">${esc(a.quando)}</span><div><b>${esc(a.titulo)}</b><p>${esc(a.texto)}</p>${a.simulador ? `<a href="/area">Simular na Área do Cliente →</a>` : ''}</div></li>`).join('')}
       </ol>
       <div class="reforma-cta">
         <span>Quer um plano de adequação completo, com os números da sua empresa?</span>
@@ -174,7 +174,7 @@ function cardRadar(radar, cnpj) {
   return `
     <section class="card cta-simulador cta-radar">
       <div><b>💰 Sua empresa pode estar pagando imposto a mais</b><br><span>${fortes.map((a) => esc(a.titulo)).join(' · ')}</span></div>
-      <a class="btn" href="/economia?cnpj=${esc(cnpj)}">Ver quanto dá para recuperar ${icone('seta')}</a>
+      <a class="btn" href="/area">🔒 Ver na Área do Cliente ${icone('seta')}</a>
     </section>`;
 }
 
@@ -225,8 +225,8 @@ function render({ empresa: e, orcamento: o, escritorio, reforma, radar }) {
     ${cardRadar(radar, e.cnpj)}
     ${cardReforma(reforma, e.cnpj)}
     <section class="card cta-simulador">
-      <div><b>Será que sua empresa está pagando imposto demais?</b><br><span>Compare Simples, Lucro Presumido e Lucro Real com o que muda na Reforma Tributária.</span></div>
-      <a class="btn azul" href="/planejamento?cnpj=${esc(e.cnpj)}">Descobrir o regime mais barato ${icone('seta')}</a>
+      <div><b>🔒 Exclusivo para assinantes da Área do Cliente</b><br><span>Simulador de impostos (Simples, Presumido e Real com a Reforma), radar de recuperação de impostos, emissão de notas, orçamentos e resumo diário no WhatsApp.</span></div>
+      <a class="btn azul" href="/area">Conhecer a Área do Cliente ${icone('seta')}</a>
     </section>
     ${config.ia ? `
     <section class="card chat">

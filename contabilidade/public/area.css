@@ -95,3 +95,5 @@ body.area { background: var(--bg); }
 .sel-status.st-aprovado { background: var(--ok-bg); color: var(--ok); }
 .sel-status.st-recusado { background: var(--urgente-bg); color: var(--urgente); }
 #formPref input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--marca); vertical-align: -3px; margin-right: 6px; }
+
+iframe.ferramenta { width: 100%; min-height: 900px; border: 0; border-radius: 16px; background: transparent; display: block; }

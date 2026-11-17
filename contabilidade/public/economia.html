@@ -12,6 +12,12 @@
 <link rel="stylesheet" href="estilo.css">
 <link rel="stylesheet" href="planejamento.css">
 <link rel="stylesheet" href="economia.css">
+<script>if (new URLSearchParams(location.search).get('embed') === '1') document.documentElement.classList.add('embed');</script>
+<style>
+  html.embed .menu, html.embed footer.rodape, html.embed .zap { display: none !important; }
+  html.embed body { background: transparent; }
+  html.embed .sim-topo { border-radius: 18px; padding: 36px 20px 70px; }
+</style>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -29,11 +35,7 @@
   <div class="wrap">
     <a href="/" class="logo" data-logo></a>
     <div class="links" id="links">
-      <a href="/#legalizacao">Abertura e baixa</a>
-      <a href="/#servicos">Serviços</a>
-      <a href="/planejamento">Simulador de impostos</a>
-      <a href="/economia">Recuperar impostos</a>
-      <a class="btn pequeno" href="/area">Área do Cliente</a>
+      <a class="btn pequeno" href="/area">← Voltar para a Área do Cliente</a>
     </div>
   </div>
 </nav>
@@ -133,5 +135,12 @@
 </dialog>
 
 <script src="economia.js"></script>
+<script>
+// Dentro da Área do Cliente: informa a altura para o painel ajustar o quadro
+if (document.documentElement.classList.contains('embed')) {
+  const avisa = () => parent.postMessage({ tipo: 'altura', altura: document.documentElement.scrollHeight }, location.origin);
+  new ResizeObserver(avisa).observe(document.body); addEventListener('load', avisa);
+}
+</script>
 </body>
 </html>

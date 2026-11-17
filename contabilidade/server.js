@@ -78,6 +78,14 @@ app.set('trust proxy', 1);
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: '50kb' }));
 app.use('/api/', rateLimit({ windowMs: 60 * 1000, limit: 120 }));
+// Simulador de impostos e Recuperar impostos são exclusivos da Área do Cliente (plano ativo)
+const PAGINAS_ASSINANTE = new Set(['/planejamento', '/planejamento.html', '/economia', '/economia.html']);
+app.use((req, res, next) => {
+  if (!PAGINAS_ASSINANTE.has(req.path)) return next();
+  authPortal.leCookies(req, res, () => {});
+  if (authPortal.planoAtivo(authPortal.usuarioDaSessao(req))) return next();
+  res.redirect(302, '/area');
+});
 app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
 
 app.get('/api/oportunidades', (req, res) => res.json({ oportunidades: OPORTUNIDADES }));

@@ -83,9 +83,19 @@ async function mostraPlanos() {
 $$('.lateral button').forEach((b) => b.addEventListener('click', () => abre(b.dataset.aba)));
 function abre(aba) {
   $$('.lateral button').forEach((x) => x.classList.toggle('ativa', x.dataset.aba === aba));
-  ['empresa', 'notas', 'orcamentos', 'conta'].forEach((a) => { $('#aba' + a[0].toUpperCase() + a.slice(1)).hidden = a !== aba; });
-  ({ empresa: abaEmpresa, notas: abaNotas, orcamentos: abaOrcamentos, conta: abaConta })[aba]();
+  ['empresa', 'notas', 'orcamentos', 'conta', 'simulador', 'recuperar'].forEach((a) => { $('#aba' + a[0].toUpperCase() + a.slice(1)).hidden = a !== aba; });
+  ({ empresa: abaEmpresa, notas: abaNotas, orcamentos: abaOrcamentos, conta: abaConta, simulador: () => ferramenta('Simulador', '/planejamento'), recuperar: () => ferramenta('Recuperar', '/economia') })[aba]();
 }
+
+// Simulador e Recuperar impostos abrem dentro do painel, já com o CNPJ do assinante
+function ferramenta(aba, pagina) {
+  const f = $(`#aba${aba} iframe`);
+  if (!f.src) f.src = `${pagina}?embed=1&cnpj=${eu.usuario.cnpj}`;
+}
+window.addEventListener('message', (ev) => {
+  if (ev.origin !== location.origin || !ev.data || ev.data.tipo !== 'altura') return;
+  $$('iframe.ferramenta').forEach((f) => { if (f.contentWindow === ev.source) f.style.height = `${ev.data.altura + 20}px`; });
+});
 
 async function abaEmpresa(atualizar) {
   const el = $('#abaEmpresa');
@@ -381,7 +391,6 @@ async function inicia() {
   }
   $('#topoConta').hidden = false;
   $('#nomeEmpresa').textContent = eu.usuario.empresa ? eu.usuario.empresa.razaoSocial : eu.usuario.nome;
-  $('#linkSimulador').href = `/planejamento?cnpj=${eu.usuario.cnpj}`;
   $('#linkAdmin').hidden = !eu.usuario.dono;
   if (!eu.usuario.assinante) return mostraPlanos();
   tela('telaApp');
