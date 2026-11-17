@@ -53,3 +53,18 @@ Os contatos de quem clicou em "Quero resolver" ficam em `contatos.jsonl` (um por
 - As regras ficam em `diagnostico.js` — cada item aponta para um serviço do `precos.json`.
 
 Aceita CNPJ alfanumérico (novo formato da Receita).
+
+## Simulador de impostos (`/planejamento`)
+
+Página guiada em 3 passos (atividade → números → resultado) que compara Simples Nacional, Lucro Presumido e Lucro Real e mostra o cenário de 2027 com a Reforma Tributária (CBS no lugar de PIS/Cofins, Simples "por dentro" × regime híbrido). Também abre direto do diagnóstico do CNPJ (`/planejamento?cnpj=...`).
+
+Todas as alíquotas e tabelas estão em **`public/tributos.js` → `REGRAS`**, com a lei de origem. Quando a lei mudar, atualize só esse bloco e o campo `atualizadoEm`. Fontes usadas (nov/2026):
+
+- Simples Nacional: LC 123/2006 (com LC 155/2016); transporte de cargas no Anexo III trocando ISS pelo ICMS do Anexo I (art. 18, §5-E)
+- Lucro Presumido: Lei 9.249/1995 (8% IRPJ e 12% CSLL para transporte de cargas); LC 224/2025 (+10% na presunção sobre a receita acima de R$ 5 mi)
+- Desoneração da folha do transporte rodoviário de cargas: Lei 14.973/2024 (2026: 0,9% da receita + 10% da folha; 2027: 0,6% + 15%; fim em 2028)
+- ICMS/SP: crédito outorgado de 20% para transporte (RICMS/SP, Anexo III, art. 11), não vale para o Simples
+- Reforma: LC 214/2025. A alíquota de referência da CBS para 2027 ainda não é oficial; o simulador usa 8,8% como estimativa
+- MEI: R$ 81 mil em 2026; MEI caminhoneiro R$ 251,6 mil; LC 238/2026 eleva o MEI para R$ 110 mil (2027) e R$ 140 mil (2028), a confirmar no texto oficial
+
+É uma estimativa: ICMS e ISS variam por estado, cidade e produto, e benefícios fiscais e substituição tributária não estão no cálculo.

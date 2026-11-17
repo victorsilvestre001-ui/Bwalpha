@@ -190,6 +190,10 @@ function render({ empresa: e, orcamento: o, escritorio }) {
       <p style="color:var(--suave);margin-top:-6px;font-size:.9rem">Marque o que quer resolver. O valor do pacote atualiza na hora.</p>
       ${itens}
     </section>
+    <section class="card cta-simulador">
+      <div><b>Será que sua empresa está pagando imposto demais?</b><br><span>Compare Simples, Lucro Presumido e Lucro Real com o que muda na Reforma Tributária.</span></div>
+      <a class="btn azul" href="/planejamento?cnpj=${esc(e.cnpj)}">Descobrir o regime mais barato ${icone('seta')}</a>
+    </section>
     ${config.ia ? `
     <section class="card chat">
       <h2>${icone('ia')} Pergunte ao contador virtual</h2>

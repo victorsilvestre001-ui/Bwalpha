@@ -83,3 +83,21 @@ assert(limpa.some((i) => i.gravidade === 'ok'));
 fs.rmSync(dir, { recursive: true, force: true });
 
 console.log('ok divida ativa');
+
+// Simulador tributário
+const T = require('./public/tributos.js');
+assert.strictEqual(T.setorPorCnae('4930202'), 'transporte');
+assert.strictEqual(T.setorPorCnae('4711302'), 'comercio');
+assert.strictEqual(T.setorPorCnae('6201501'), 'servicos');
+assert.ok(Math.abs(T.aliquotaEfetiva('III', 1800000) - 0.1402) < 0.0001, 'Anexo III faixa 4');
+assert.ok(Math.abs(T.aliquotaEfetiva('I', 180000) - 0.04) < 1e-9, 'Anexo I faixa 1');
+const cam = T.simula({ setor: 'transporte', faturamento: 1800000, folha: 240000, prolabore: 60000, insumos: 660000, outras: 150000, intermunicipal: 1, b2b: 1, uf: 'SP' });
+assert.strictEqual(cam.melhor.regime, 'simples');
+assert.ok(Math.abs(cam.opcoes[0].percentual - 0.1263) < 0.001, 'transporte interestadual troca ISS por ICMS');
+const pres = cam.opcoes.find((o) => o.regime === 'presumido');
+assert.ok(Math.abs(pres.detalhes.find((d) => d[0] === 'ICMS')[1] - 172800) < 1, 'ICMS 12% com crédito outorgado SP');
+const grande = T.simula({ setor: 'servicos', faturamento: 6000000, folha: 600000, prolabore: 0 });
+assert(!grande.opcoes.some((o) => o.regime === 'simples'), 'acima de 4,8 mi não pode Simples');
+const fatorR = T.simula({ setor: 'servicos', faturamento: 600000, folha: 180000, prolabore: 0 });
+assert.strictEqual(fatorR.opcoes.find((o) => o.regime === 'simples').anexo, 'III', 'Fator R >= 28%');
+console.log('ok simulador');
