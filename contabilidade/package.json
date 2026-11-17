@@ -1,11 +1,11 @@
 {
   "name": "contabilidade-consulta",
   "version": "1.0.0",
-  "description": "Consulta de empresa por CNPJ: o que ela deve, o que precisa fazer para ficar em dia e quanto custa resolver com o escritório",
+  "description": "Consulta de empresa por CNPJ: o que ela deve, o que precisa fazer para ficar em dia e quanto custa resolver com o escrit\u00f3rio",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node teste.js"
+    "test": "node teste.js && node teste-portal.js"
   },
   "engines": {
     "node": ">=18"

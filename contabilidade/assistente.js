@@ -100,4 +100,18 @@ async function responde({ empresa, orcamento, escritorio, servicos, reforma, men
   }
 }
 
-module.exports = { ativo, responde, limpaMensagens, contexto, Anthropic };
+// Um texto curto de uma vez (ex.: escopo de orçamento). Devolve só o texto final.
+async function textoUnico(pedido) {
+  const msg = await client.beta.messages.create({
+    model: MODELO,
+    max_tokens: 4000,
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default',
+    output_config: { effort: 'low' },
+    messages: [{ role: 'user', content: pedido }],
+  });
+  if (msg.stop_reason === 'refusal') throw new Error('pedido recusado');
+  return msg.content.filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
+}
+
+module.exports = { ativo, responde, textoUnico, limpaMensagens, contexto, Anthropic };

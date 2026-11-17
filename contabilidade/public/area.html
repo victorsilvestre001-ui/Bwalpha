@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Área do Cliente · V&amp;J Assessoria Contábil</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="estilo.css">
+<link rel="stylesheet" href="area.css">
+</head>
+<body class="area">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-seta" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-predio" viewBox="0 0 24 24"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h1M14 9h1M9 13h1M14 13h1M10 21v-4h4v4"/></symbol>
+  <symbol id="i-nota" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></symbol>
+  <symbol id="i-orc" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h4M15 15h1"/></symbol>
+  <symbol id="i-calc" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M8 6h8M8 10h2M14 10h2M8 14h2M14 14h2M8 18h2M14 18h2"/></symbol>
+  <symbol id="i-usuario" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+  <symbol id="i-sino" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-ia" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24"><path d="M3 21l1.7-5A9 9 0 1 1 8 19.3z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 1c-1-.5-1.5-1-2-2l1-1-1-2z"/></symbol>
+  <symbol id="i-sair" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></symbol>
+  <symbol id="i-cadeado" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-mais" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-lixo" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></symbol>
+</svg>
+
+<nav class="menu">
+  <div class="wrap">
+    <a href="/" class="logo" data-logo></a>
+    <div id="topoConta" class="topo-conta" hidden>
+      <span id="nomeEmpresa"></span>
+      <button class="sec" id="sair"><svg class="i"><use href="#i-sair"/></svg>Sair</button>
+    </div>
+  </div>
+</nav>
+
+<!-- Entrada: login e cadastro -->
+<main id="telaEntrada" class="wrap entrada" hidden>
+  <div class="entrada-texto">
+    <span class="rotulo-solto">Área do Cliente</span>
+    <h1>Sua contabilidade na palma da mão</h1>
+    <p>Emita notas fiscais, monte orçamentos profissionais e acompanhe a situação da sua empresa com a Reforma Tributária, tudo em um só lugar.</p>
+    <ul class="vantagens">
+      <li><svg class="i"><use href="#i-nota"/></svg><span><b>Nota fiscal em segundos</b>Só o CNPJ do cliente, a descrição e o valor.</span></li>
+      <li><svg class="i"><use href="#i-orc"/></svg><span><b>Orçamentos profissionais</b>Com os dados do cliente puxados pelo CNPJ e link para enviar.</span></li>
+      <li><svg class="i"><use href="#i-sino"/></svg><span><b>Um agente cuidando da sua empresa</b>Alertas de mudanças no CNPJ, dívidas e prazos da Reforma.</span></li>
+    </ul>
+  </div>
+  <div class="card entrada-form">
+    <div class="abas-entrada">
+      <button class="ativa" data-aba="login">Entrar</button>
+      <button data-aba="cadastro">Criar conta</button>
+    </div>
+    <form id="formLogin">
+      <label class="campo"><span>E-mail</span><input type="email" id="lEmail" required autocomplete="email"></label>
+      <label class="campo"><span>Senha</span><input type="password" id="lSenha" required autocomplete="current-password"></label>
+      <button class="btn azul largo">Entrar</button>
+    </form>
+    <form id="formCadastro" hidden>
+      <label class="campo"><span>Seu nome</span><input id="cNome" required maxlength="120" autocomplete="name"></label>
+      <label class="campo"><span>CNPJ da sua empresa</span><input id="cCnpj" required maxlength="18" placeholder="00.000.000/0000-00"></label>
+      <label class="campo"><span>E-mail</span><input type="email" id="cEmail" required autocomplete="email"></label>
+      <label class="campo"><span>WhatsApp</span><input id="cTel" inputmode="tel" maxlength="20" placeholder="(15) 99999-9999"></label>
+      <label class="campo"><span>Senha (mínimo 8 caracteres)</span><input type="password" id="cSenha" required minlength="8" autocomplete="new-password"></label>
+      <button class="btn azul largo">Criar minha conta</button>
+    </form>
+    <p class="erro-form" id="erroEntrada" hidden></p>
+  </div>
+</main>
+
+<!-- Escolha do plano -->
+<main id="telaPlanos" class="wrap" hidden>
+  <div class="titulo-sec" style="margin:48px auto 36px">
+    <span class="rotulo">Escolha seu plano</span>
+    <h2>Libere todas as ferramentas da Área do Cliente</h2>
+    <p>Sem fidelidade. Cancele quando quiser.</p>
+  </div>
+  <div class="grade g2" id="gradePlanosPortal"></div>
+  <div class="card aviso-plano" id="avisoPlano" hidden></div>
+</main>
+
+<!-- Painel -->
+<main id="telaApp" class="painel" hidden>
+  <aside class="lateral">
+    <button data-aba="empresa" class="ativa"><svg class="i"><use href="#i-predio"/></svg>Minha empresa</button>
+    <button data-aba="notas"><svg class="i"><use href="#i-nota"/></svg>Notas fiscais</button>
+    <button data-aba="orcamentos"><svg class="i"><use href="#i-orc"/></svg>Orçamentos</button>
+    <a href="/planejamento" id="linkSimulador"><svg class="i"><use href="#i-calc"/></svg>Simulador de impostos</a>
+    <button data-aba="conta"><svg class="i"><use href="#i-usuario"/></svg>Minha conta</button>
+  </aside>
+  <section class="conteudo">
+    <div id="abaEmpresa"></div>
+    <div id="abaNotas" hidden></div>
+    <div id="abaOrcamentos" hidden></div>
+    <div id="abaConta" hidden></div>
+  </section>
+</main>
+
+<script src="area.js"></script>
+</body>
+</html>

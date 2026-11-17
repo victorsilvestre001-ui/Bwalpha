@@ -68,3 +68,13 @@ Todas as alíquotas e tabelas estão em **`public/tributos.js` → `REGRAS`**, c
 - MEI: R$ 81 mil em 2026; MEI caminhoneiro R$ 251,6 mil; LC 238/2026 eleva o MEI para R$ 110 mil (2027) e R$ 140 mil (2028), a confirmar no texto oficial
 
 É uma estimativa: ICMS e ISS variam por estado, cidade e produto, e benefícios fiscais e substituição tributária não estão no cálculo.
+
+## Área do Cliente (`/area`) — login, plano pago, notas e orçamentos
+
+- **Conta**: cadastro com nome, CNPJ, e-mail, WhatsApp e senha (scrypt). Sessão em cookie httpOnly. Dados em `DADOS_DIR/portal.json` (`portal/db.js`).
+- **Planos** (`precos.json` → `planosPortal`): Essencial e Completo. Sem plano ativo as ferramentas respondem 402 e a tela mostra os planos.
+- **Pagamento**: assinatura mensal no Asaas (`portal/pagamentos.js`) com `ASAAS_API_KEY` e webhook em `/api/asaas/webhook` (token em `ASAAS_WEBHOOK_TOKEN`, eventos de pagamento). Cada pagamento libera 35 dias. Sem a chave, o pedido fica registrado e a equipe libera em `/admin` (botão "+30 dias").
+- **Minha empresa**: diagnóstico, plano da Reforma e o "agente": o CNPJ é reconsultado a cada 24 h e mudanças viram alertas (situação, novos itens urgentes, dívida ativa).
+- **Notas fiscais (NFS-e Nacional)**: o assinante informa CNPJ/CPF do cliente, descrição e valor → rascunho com os dados do tomador puxados pelo CNPJ → confirma → emissão. Com `FOCUS_NFE_TOKEN` (e `FOCUS_NFE_AMBIENTE=homologacao` para testes) a nota vai direto para a API da Focus NFe (`POST /v2/nfsen`, consulta e cancelamento em `portal/notas.js`), o que exige a empresa cadastrada na Focus com certificado A1 e a configuração fiscal (código IBGE do município e código de tributação nacional). Sem o token, a nota entra na **fila da equipe** no `/admin`, que emite e anexa número e PDF.
+- **Orçamentos**: CNPJ do cliente, itens, valores, desconto, prazo, pagamento e escopo (com botão de IA se houver `ANTHROPIC_API_KEY`) → página pública `/o/<token>` pronta para imprimir/PDF e aprovar pelo WhatsApp.
+- Testes: `npm test` (inclui `teste-portal.js`, ponta a ponta).

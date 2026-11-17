@@ -48,6 +48,13 @@
     </div>
     <div class="kpis" id="kpis"></div>
     <div class="card tabela"><table><thead><tr><th>Quando</th><th>Nome</th><th>CNPJ</th><th>Pedido</th><th>Total</th><th></th></tr></thead><tbody id="linhas"></tbody></table></div>
+
+    <h1 style="margin:32px 0 12px">Fila de notas fiscais</h1>
+    <p style="color:var(--suave);margin:0 0 12px">Pedidos de nota da Área do Cliente que aguardam emissão pela equipe (quando a API de notas não está ligada ou deu erro). Depois de emitir, anexe o número e o link do PDF: o cliente recebe na hora.</p>
+    <div class="card tabela"><table><thead><tr><th>Pedido</th><th>Prestador</th><th>Tomador</th><th>Serviço</th><th>Valor</th><th>Situação</th><th></th></tr></thead><tbody id="filaNotas"></tbody></table></div>
+
+    <h1 style="margin:32px 0 12px">Assinantes da Área do Cliente</h1>
+    <div class="card tabela"><table><thead><tr><th>Cadastro</th><th>Nome / empresa</th><th>Contato</th><th>Plano</th><th>Acesso até</th><th></th></tr></thead><tbody id="assinantes"></tbody></table></div>
   </div>
 </div>
 <script>
@@ -67,6 +74,48 @@ async function carrega() {
   $('#login').hidden = true;
   $('#painel').hidden = false;
   render();
+  carregaPortal().catch((e) => console.warn(e));
+}
+
+const brlA = (v) => (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+async function apiAdmin(caminho, body) {
+  const r = await fetch('/api/admin/portal' + caminho, { method: body ? 'POST' : 'GET', headers: { 'x-admin-senha': senha, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.erro || 'Erro');
+  return j;
+}
+
+async function carregaPortal() {
+  const [{ notas }, { assinantes }] = await Promise.all([apiAdmin('/notas'), apiAdmin('/assinantes')]);
+  const situacao = { fila: 'Aguardando a equipe', processando: 'Processando', emitida: 'Emitida', erro: 'Erro', cancelada: 'Cancelada' };
+  $('#filaNotas').innerHTML = notas.length ? notas.map((n) => `
+    <tr>
+      <td>${n.enviadaEm ? new Date(n.enviadaEm).toLocaleString('pt-BR') : ''}</td>
+      <td>${esc(n.prestador ? n.prestador.nome : '')}<br><small>${esc(fmtCnpj(n.prestador ? n.prestador.cnpj : ''))}${n.prestador && n.prestador.fiscal ? `<br>Mun. ${esc(n.prestador.fiscal.codigoMunicipio)} · Serv. ${esc(n.prestador.fiscal.codigoServico)}` : ''}</small></td>
+      <td>${esc(n.tomador.nome)}<br><small>${esc(fmtCnpj(n.tomador.cnpj || n.tomador.cpf))}</small></td>
+      <td style="max-width:280px">${esc(n.descricao)}${n.cancelamentoPedido ? `<br><b style="color:#c0392b">Pedido de cancelamento: ${esc(n.cancelamentoPedido)}</b>` : ''}</td>
+      <td>${brlA(n.valor)}</td>
+      <td>${situacao[n.status] || n.status}${n.numero ? `<br><small>Nº ${esc(n.numero)}</small>` : ''}${n.erro ? `<br><small style="color:#c0392b">${esc(n.erro)}</small>` : ''}</td>
+      <td>${['fila', 'erro'].includes(n.status) ? `<button data-anexar="${n.id}">Anexar nota emitida</button>` : (n.pdf ? `<a href="${esc(n.pdf)}" target="_blank" rel="noopener">PDF</a>` : '')}</td>
+    </tr>`).join('') : '<tr><td colspan="7" style="color:var(--suave)">Nenhum pedido de nota.</td></tr>';
+  document.querySelectorAll('[data-anexar]').forEach((b) => b.addEventListener('click', async () => {
+    const numero = prompt('Número da nota emitida:');
+    if (!numero) return;
+    const pdf = prompt('Link do PDF da nota (https://...):') || '';
+    try { await apiAdmin(`/notas/${b.dataset.anexar}/anexar`, { numero, pdf }); carregaPortal(); } catch (e) { alert(e.message); }
+  }));
+  $('#assinantes').innerHTML = assinantes.length ? assinantes.map((u) => `
+    <tr>
+      <td>${new Date(u.criadoEm).toLocaleDateString('pt-BR')}</td>
+      <td>${esc(u.nome)}<br><small>${esc(u.empresa ? u.empresa.razaoSocial : '')} · ${esc(fmtCnpj(u.cnpj))}</small></td>
+      <td>${esc(u.email)}<br><small>${esc(u.telefone || '')}</small></td>
+      <td>${esc(u.planoId || '—')}${u.pedidoPlanoEm ? '<br><small>pediu pelo site</small>' : ''}</td>
+      <td>${u.assinante ? new Date(u.planoAte).toLocaleDateString('pt-BR') : '<span style="color:#c0392b">Inativo</span>'}</td>
+      <td><button data-liberar="${u.id}" data-dias="30">+30 dias</button> <button data-liberar="${u.id}" data-dias="-1">Bloquear</button></td>
+    </tr>`).join('') : '<tr><td colspan="6" style="color:var(--suave)">Nenhum cadastro ainda.</td></tr>';
+  document.querySelectorAll('[data-liberar]').forEach((b) => b.addEventListener('click', async () => {
+    try { await apiAdmin(`/assinantes/${b.dataset.liberar}/liberar`, { dias: Number(b.dataset.dias) }); carregaPortal(); } catch (e) { alert(e.message); }
+  }));
 }
 
 function render() {

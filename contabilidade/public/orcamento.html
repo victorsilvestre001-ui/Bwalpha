@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Orçamento</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --marca: #0b2545; --destaque: #c9a227; --texto: #1b2533; --suave: #5d6b7c; --borda: #e3e8ef; --bg: #f2f4f8; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Plus Jakarta Sans", system-ui, sans-serif; color: var(--texto); background: var(--bg); line-height: 1.55; }
+  .folha { max-width: 860px; margin: 32px auto; background: #fff; border-radius: 18px; box-shadow: 0 20px 50px rgba(11,37,69,.1); overflow: hidden; }
+  .cab { background: linear-gradient(135deg, var(--marca), #1d4e89); color: #fff; padding: 34px 40px; display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  .cab h1 { margin: 0; font-size: 1.5rem; }
+  .cab small { opacity: .8; display: block; }
+  .num { text-align: right; }
+  .num b { display: block; color: var(--destaque); font-size: 1.9rem; letter-spacing: 1px; }
+  .corpo { padding: 32px 40px; }
+  .partes { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 26px; }
+  .partes div { background: var(--bg); border-radius: 12px; padding: 16px 18px; }
+  .partes span { display: block; font-size: .72rem; font-weight: 800; letter-spacing: 1px; color: var(--suave); text-transform: uppercase; margin-bottom: 4px; }
+  .partes b { color: var(--marca); }
+  h2 { color: var(--marca); font-size: 1.2rem; margin: 26px 0 10px; }
+  .escopo { white-space: pre-wrap; color: var(--texto); }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th { text-align: left; font-size: .75rem; letter-spacing: .5px; text-transform: uppercase; color: var(--suave); border-bottom: 2px solid var(--marca); padding: 10px 8px; }
+  td { padding: 12px 8px; border-bottom: 1px solid var(--borda); vertical-align: top; }
+  td.n, th.n { text-align: right; white-space: nowrap; }
+  .totais { margin-left: auto; width: min(320px, 100%); margin-top: 16px; }
+  .totais div { display: flex; justify-content: space-between; padding: 6px 0; }
+  .totais .grande { border-top: 2px solid var(--marca); margin-top: 6px; padding-top: 12px; font-size: 1.35rem; font-weight: 800; color: var(--marca); }
+  .condicoes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 26px; }
+  .condicoes div { border: 1px solid var(--borda); border-radius: 12px; padding: 14px; }
+  .condicoes span { display: block; font-size: .72rem; font-weight: 800; letter-spacing: 1px; color: var(--suave); text-transform: uppercase; }
+  .assin { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 56px; }
+  .assin div { border-top: 1px solid var(--texto); padding-top: 8px; text-align: center; font-size: .85rem; color: var(--suave); }
+  .acoes { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; padding: 0 20px 40px; }
+  .acoes a, .acoes button { font: inherit; font-weight: 700; border: 0; border-radius: 12px; padding: 14px 22px; cursor: pointer; text-decoration: none; }
+  .imprimir { background: var(--marca); color: #fff; }
+  .aceitar { background: #25d366; color: #fff; }
+  .rodape { text-align: center; color: var(--suave); font-size: .78rem; padding: 0 20px 30px; }
+  .erro { max-width: 600px; margin: 80px auto; text-align: center; color: var(--suave); }
+  @media (max-width: 640px) {
+    .cab, .corpo { padding: 24px 20px; }
+    .partes, .condicoes, .assin { grid-template-columns: 1fr; }
+    .num { text-align: left; }
+  }
+  @media print {
+    body { background: #fff; }
+    .folha { box-shadow: none; margin: 0; border-radius: 0; max-width: none; }
+    .acoes, .rodape { display: none; }
+    .cab { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+<div id="doc"><p class="erro">Carregando orçamento…</p></div>
+<script>
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const brl = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const doc = (d) => { const c = String(d || ''); return c.length === 14 ? c.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : c; };
+const token = location.pathname.split('/').pop();
+fetch('/api/orcamento-publico/' + encodeURIComponent(token)).then((r) => r.json().then((j) => [r.ok, j])).then(([ok, j]) => {
+  if (!ok) throw new Error(j.erro);
+  const o = j.orcamento; const e = j.emissor;
+  const emitido = new Date(o.criadoEm);
+  const validade = new Date(emitido.getTime() + o.validadeDias * 864e5);
+  const numero = String(o.numero).padStart(4, '0');
+  document.title = `Orçamento ${numero} · ${e.nome}`;
+  const zap = e.telefone ? `https://wa.me/55${String(e.telefone).replace(/^55/, '')}?text=${encodeURIComponent(`Olá! Aprovo o orçamento nº ${numero}${o.titulo ? ` (${o.titulo})` : ''} no valor de ${brl(o.total)}.`)}` : '';
+  document.getElementById('doc').innerHTML = `
+    <div class="folha">
+      <div class="cab">
+        <div><h1>${esc(e.fantasia || e.nome)}</h1><small>${esc(e.nome)} · CNPJ ${doc(e.cnpj)}</small><small>${esc(e.cidade || '')}${e.email ? ` · ${esc(e.email)}` : ''}</small></div>
+        <div class="num"><small>ORÇAMENTO</small><b>Nº ${numero}</b><small>Emitido em ${emitido.toLocaleDateString('pt-BR')}</small></div>
+      </div>
+      <div class="corpo">
+        <div class="partes">
+          <div><span>Para</span><b>${esc(o.cliente.nome)}</b>${o.cliente.cnpj ? `<br>CNPJ ${doc(o.cliente.cnpj)}` : ''}${o.cliente.municipio ? `<br>${esc(o.cliente.municipio)}/${esc(o.cliente.uf)}` : ''}</div>
+          <div><span>Validade</span><b>${validade.toLocaleDateString('pt-BR')}</b><br>${o.validadeDias} dias a partir da emissão</div>
+        </div>
+        ${o.titulo ? `<h2>${esc(o.titulo)}</h2>` : ''}
+        ${o.escopo ? `<div class="escopo">${esc(o.escopo)}</div>` : ''}
+        <h2>Itens</h2>
+        <table><thead><tr><th>Descrição</th><th class="n">Qtd.</th><th class="n">Valor unit.</th><th class="n">Total</th></tr></thead>
+          <tbody>${o.itens.map((i) => `<tr><td>${esc(i.descricao)}</td><td class="n">${i.quantidade}</td><td class="n">${brl(i.valor)}</td><td class="n">${brl(i.quantidade * i.valor)}</td></tr>`).join('')}</tbody></table>
+        <div class="totais">
+          <div><span>Subtotal</span><span>${brl(o.subtotal)}</span></div>
+          ${o.desconto ? `<div><span>Desconto</span><span>− ${brl(o.desconto)}</span></div>` : ''}
+          <div class="grande"><span>Total</span><span>${brl(o.total)}</span></div>
+        </div>
+        <div class="condicoes">
+          <div><span>Prazo</span>${esc(o.prazo || 'A combinar')}</div>
+          <div><span>Pagamento</span>${esc(o.pagamento || 'A combinar')}</div>
+          <div><span>Validade</span>${o.validadeDias} dias</div>
+        </div>
+        ${o.observacoes ? `<h2>Observações</h2><div class="escopo">${esc(o.observacoes)}</div>` : ''}
+        <div class="assin"><div>${esc(e.fantasia || e.nome)}</div><div>De acordo: ${esc(o.cliente.nome)}</div></div>
+      </div>
+    </div>
+    <div class="acoes"><button class="imprimir" onclick="print()">Imprimir / salvar em PDF</button>${zap ? `<a class="aceitar" href="${zap}" target="_blank" rel="noopener">Aprovar pelo WhatsApp</a>` : ''}</div>
+    <p class="rodape">Orçamento gerado pela Área do Cliente V&amp;J Assessoria Contábil.</p>`;
+}).catch((err) => { document.getElementById('doc').innerHTML = `<p class="erro">${esc(err.message || 'Orçamento não encontrado.')}</p>`; });
+</script>
+</body>
+</html>

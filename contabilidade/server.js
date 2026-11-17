@@ -12,6 +12,8 @@ const assistente = require('./assistente');
 const { planoReforma } = require('./reforma');
 const pgfn = require('./pgfn/busca');
 const { trimestreMaisRecente } = require('./pgfn/atualiza');
+const rotasPortal = require('./portal/rotas');
+const { router: webhookAsaas } = require('./portal/pagamentos');
 
 const PORT = process.env.PORT || 3100;
 const ARQ_PRECOS = path.join(__dirname, 'precos.json');
@@ -64,7 +66,7 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: '50kb' }));
-app.use('/api/', rateLimit({ windowMs: 60 * 1000, limit: 30 }));
+app.use('/api/', rateLimit({ windowMs: 60 * 1000, limit: 120 }));
 app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
 
 app.get('/api/config', (req, res) => {
@@ -176,5 +178,17 @@ if (require.main === module) {
   }
   app.listen(PORT, () => console.log(`Consulta de empresas rodando em http://localhost:${PORT}${assistente.ativo() ? ' (com IA)' : ' (sem IA: defina ANTHROPIC_API_KEY)'}`));
 }
+
+// Área do Cliente (login + plano pago): notas fiscais, orçamentos e painel da empresa
+const portal = rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, assistente });
+app.use('/api/portal', portal.portal);
+app.use('/api/orcamento-publico', portal.publico);
+app.use('/api/asaas/webhook', webhookAsaas);
+app.use('/api/admin/portal', (req, res, next) => {
+  if (!process.env.ADMIN_SENHA) return res.status(503).json({ erro: 'Defina ADMIN_SENHA no servidor para usar o painel.' });
+  if (!senhaOk(req.get('x-admin-senha'))) return res.status(401).json({ erro: 'Senha incorreta.' });
+  next();
+}, portal.admin);
+app.get('/o/:token', (req, res) => res.sendFile(path.join(__dirname, 'public', 'orcamento.html')));
 
 module.exports = app;

@@ -123,5 +123,32 @@
         "Reuniões de resultado com o contador"
       ]
     }
-  }
+  },
+  "planosPortal": [
+    {
+      "id": "essencial",
+      "nome": "Essencial",
+      "valor": 97,
+      "notasMes": 0,
+      "recursos": [
+        "Painel da empresa com alertas e plano da Reforma Tributária",
+        "Gerador de orçamentos profissionais ilimitados",
+        "Simulador de impostos com os números da empresa",
+        "Contador virtual com IA que conhece sua empresa"
+      ]
+    },
+    {
+      "id": "completo",
+      "nome": "Completo",
+      "valor": 197,
+      "notasMes": 30,
+      "destaque": true,
+      "recursos": [
+        "Tudo do Essencial",
+        "Emissão de nota fiscal de serviço: só CNPJ, descrição e valor (até 30 por mês)",
+        "Nota enviada pronta para o seu cliente (PDF e link)",
+        "Acompanhamento da equipe V&J"
+      ]
+    }
+  ]
 }

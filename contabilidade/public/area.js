@@ -1,0 +1,346 @@
+// Área do Cliente: entrada, planos e painel (empresa, notas, orçamentos, conta).
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => document.querySelectorAll(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const brl = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const data = (d) => (d ? new Date(d).toLocaleDateString('pt-BR') : '—');
+const icone = (id) => `<svg class="i"><use href="#i-${id}"/></svg>`;
+const docFmt = (d) => { const c = String(d || ''); return c.length === 14 ? c.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : c.length === 11 ? c.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4') : c; };
+const LOGO_SVG = '<svg class="monograma" viewBox="0 0 48 48" aria-hidden="true"><circle class="fundo" cx="24" cy="24" r="23"/><circle cx="24" cy="24" r="19.5" fill="none" stroke="#c9a227" stroke-width="1" opacity=".6"/><path d="M12.2 13.2 19.4 30.6 26.6 13.2" stroke="#fff" stroke-width="3.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M34.2 13.2v13.6c0 5.1-3.5 8.4-8.5 8.4H14.6" stroke="#c9a227" stroke-width="3.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+let escritorio = {};
+let eu = null; // { usuario, plano, focusAtivo, ia }
+const linkZap = (texto, numero) => `https://wa.me/${numero || escritorio.whatsapp || ''}${texto ? `?text=${encodeURIComponent(texto)}` : ''}`;
+
+async function api(caminho, { method = 'GET', body } = {}) {
+  const r = await fetch('/api/portal' + caminho, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined, credentials: 'same-origin' });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(j.erro || 'Erro inesperado'), { status: r.status });
+  return j;
+}
+
+function tela(id) { ['telaEntrada', 'telaPlanos', 'telaApp'].forEach((t) => { $('#' + t).hidden = t !== id; }); }
+
+fetch('/api/config').then((r) => r.json()).then((c) => {
+  escritorio = c.escritorio || {};
+  const [marca, ...resto] = (escritorio.nome || '').split(/\s+/);
+  $$('[data-logo]').forEach((el) => { el.innerHTML = `${LOGO_SVG}<span class="wm"><b>${esc(marca)}</b><small>${esc(resto.join(' '))}</small></span>`; });
+}).catch(() => {});
+
+// ---------- Entrada ----------
+$$('.abas-entrada button').forEach((b) => b.addEventListener('click', () => {
+  $$('.abas-entrada button').forEach((x) => x.classList.toggle('ativa', x === b));
+  $('#formLogin').hidden = b.dataset.aba !== 'login';
+  $('#formCadastro').hidden = b.dataset.aba !== 'cadastro';
+  $('#erroEntrada').hidden = true;
+}));
+$('#cCnpj').addEventListener('input', (e) => {
+  const c = e.target.value.replace(/\D/g, '').slice(0, 14);
+  e.target.value = c.replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d)/, '$1-$2');
+});
+function erroEntrada(msg) { $('#erroEntrada').textContent = msg; $('#erroEntrada').hidden = false; }
+$('#formLogin').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  try { await api('/login', { method: 'POST', body: { email: $('#lEmail').value, senha: $('#lSenha').value } }); inicia(); } catch (err) { erroEntrada(err.message); }
+});
+$('#formCadastro').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const botao = ev.target.querySelector('button'); botao.disabled = true; botao.textContent = 'Criando conta e consultando sua empresa…';
+  try {
+    await api('/cadastro', { method: 'POST', body: { nome: $('#cNome').value, cnpj: $('#cCnpj').value, email: $('#cEmail').value, telefone: $('#cTel').value, senha: $('#cSenha').value } });
+    inicia();
+  } catch (err) { erroEntrada(err.message); } finally { botao.disabled = false; botao.textContent = 'Criar minha conta'; }
+});
+$('#sair').addEventListener('click', async () => { await api('/sair', { method: 'POST' }).catch(() => {}); location.reload(); });
+
+// ---------- Planos ----------
+async function mostraPlanos() {
+  tela('telaPlanos');
+  const { planos, pagamentoOnline } = await api('/planos');
+  $('#gradePlanosPortal').innerHTML = planos.map((p) => `
+    <div class="plano ${p.destaque ? 'destaque' : ''}">
+      ${p.destaque ? '<span class="fita">Mais completo</span>' : ''}
+      <h3>${esc(p.nome)}</h3>
+      <div class="preco">${brl(p.valor)}<small>/mês</small></div>
+      <ul>${p.recursos.map((r) => `<li>${icone('check')}<span>${esc(r)}</span></li>`).join('')}</ul>
+      <button class="btn largo" data-plano="${esc(p.id)}">Assinar ${esc(p.nome)}</button>
+    </div>`).join('');
+  $$('[data-plano]').forEach((b) => b.addEventListener('click', async () => {
+    b.disabled = true;
+    try {
+      const r = await api('/assinar', { method: 'POST', body: { planoId: b.dataset.plano } });
+      if (r.link) { location.href = r.link; return; }
+      const plano = planos.find((p) => p.id === b.dataset.plano);
+      $('#avisoPlano').hidden = false;
+      $('#avisoPlano').innerHTML = `<b>Pedido registrado!</b> Para liberar o plano ${esc(plano.nome)} (${brl(plano.valor)}/mês), fale com a gente no WhatsApp para receber o link de pagamento. A liberação é feita logo após a confirmação.
+        <div class="linha-botoes"><a class="btn azul" target="_blank" rel="noopener" href="${linkZap(`Olá! Criei minha conta na Área do Cliente (${eu.usuario.email}) e quero assinar o plano ${plano.nome}.`)}">${icone('zap')} Falar no WhatsApp</a></div>`;
+    } catch (err) { alert(err.message); } finally { b.disabled = false; }
+  }));
+  if (!pagamentoOnline) $('#avisoPlano').hidden = true;
+}
+
+// ---------- Painel ----------
+$$('.lateral button').forEach((b) => b.addEventListener('click', () => abre(b.dataset.aba)));
+function abre(aba) {
+  $$('.lateral button').forEach((x) => x.classList.toggle('ativa', x.dataset.aba === aba));
+  ['empresa', 'notas', 'orcamentos', 'conta'].forEach((a) => { $('#aba' + a[0].toUpperCase() + a.slice(1)).hidden = a !== aba; });
+  ({ empresa: abaEmpresa, notas: abaNotas, orcamentos: abaOrcamentos, conta: abaConta })[aba]();
+}
+
+async function abaEmpresa(atualizar) {
+  const el = $('#abaEmpresa');
+  el.innerHTML = '<p class="vazio">Carregando sua empresa…</p>';
+  try {
+    const { empresa: e, analise: a, alertas } = await api('/painel' + (atualizar ? '?atualizar=1' : ''));
+    if (!e) { el.innerHTML = '<p class="vazio">Não conseguimos consultar o CNPJ agora. Tente atualizar em instantes.</p>'; return; }
+    const urg = (a.itens || []).filter((i) => i.gravidade === 'urgente').length;
+    const r = a.reforma;
+    el.innerHTML = `
+      <h1>${esc(e.razaoSocial)}</h1>
+      <p class="sub">${esc(e.atividade)} · ${esc(e.municipio)}/${esc(e.uf)} · atualizado em ${data(a.em)} <button class="sec" id="atualizar">Atualizar agora</button></p>
+      <div class="kpis-empresa">
+        <div><span>Situação</span><b>${esc(e.situacao)}</b></div>
+        <div><span>Regime</span><b>${esc(e.regime)}</b></div>
+        <div><span>Pendências urgentes</span><b>${urg}</b></div>
+        <div><span>Dívida ativa em cobrança</span><b>${brl(a.dividaAtiva)}</b></div>
+      </div>
+      <section class="card">
+        <h2>${icone('sino')} Alertas do seu agente</h2>
+        <p class="sub">Todo dia o sistema reconsulta seu CNPJ e avisa aqui quando algo muda: situação, dívida ativa, exclusões e prazos.</p>
+        ${alertas.length ? `<ul class="alertas">${alertas.map((x) => `<li>${icone('sino')}<span>${esc(x.texto)}<small>${data(x.em)}</small></span></li>`).join('')}</ul>` : '<p class="vazio">Nenhuma mudança desde o cadastro. Vamos avisar aqui assim que algo acontecer.</p>'}
+      </section>
+      ${r ? `<section class="card reforma-card">
+        <div class="reforma-topo"><div><span class="rotulo">Reforma Tributária</span><h2>Seu plano de adequação</h2><p>${esc(r.resumo)}</p></div><span class="nivel nivel-${r.impacto.nivel}">Impacto ${r.impacto.nivel === 'medio' ? 'médio' : r.impacto.nivel}</span></div>
+        <p class="impacto-texto">${esc(r.impacto.texto)}</p>
+        <ol class="linha-acoes">${r.acoes.map((x) => `<li><span class="quando">${esc(x.quando)}</span><div><b>${esc(x.titulo)}</b><p>${esc(x.texto)}</p></div></li>`).join('')}</ol>
+      </section>` : ''}
+      <section class="card">
+        <h2>Pendências e obrigações</h2>
+        ${(a.itens || []).map((i) => `<div class="item" style="cursor:default"><span class="tag ${i.gravidade}">${{ urgente: 'Urgente', atencao: 'Verificar', rotina: 'Rotina', ok: 'Em dia' }[i.gravidade]}</span><div><h3>${esc(i.titulo)}</h3><p>${esc(i.explicacao)}</p></div><span></span></div>`).join('')}
+        <div class="linha-botoes"><a class="btn azul" target="_blank" rel="noopener" href="${linkZap(`Olá! Sou cliente da Área do Cliente (${e.razaoSocial}) e quero ajuda com as pendências da empresa.`)}">${icone('zap')} Pedir ajuda à equipe</a></div>
+      </section>`;
+    $('#atualizar').addEventListener('click', () => abaEmpresa(true));
+  } catch (err) { trataErro(err, el); }
+}
+
+// ----- Notas fiscais -----
+async function abaNotas() {
+  const el = $('#abaNotas');
+  el.innerHTML = '<p class="vazio">Carregando notas…</p>';
+  try {
+    const n = await api('/notas');
+    const f = eu.usuario.fiscal || {};
+    el.innerHTML = `
+      <h1>Notas fiscais de serviço</h1>
+      <p class="sub">Informe só o CNPJ (ou CPF) do cliente, a descrição e o valor. Você confere o rascunho e confirma. Este mês: <b>${n.usadas} de ${n.limite}</b> notas.</p>
+      ${n.limite ? '' : `<div class="card aviso-sim">A emissão de notas faz parte do plano Completo. <a href="#" id="irConta">Ver planos</a></div>`}
+      <section class="card">
+        <form id="formNota" class="grade-form">
+          <label class="campo"><span>CNPJ ou CPF do cliente</span><input id="nDoc" required maxlength="18" placeholder="Somente números"></label>
+          <label class="campo"><span>Valor da nota (R$)</span><input id="nValor" required inputmode="decimal" placeholder="Ex.: 1500,00"></label>
+          <label class="campo cheio"><span>Descrição do serviço</span><textarea id="nDesc" required maxlength="2000" rows="3" placeholder="Ex.: Frete de Sorocaba/SP para Campinas/SP, carga de 12 toneladas, em 15/11/2026"></textarea></label>
+          <label class="campo"><span>Nome do cliente (se for CPF)</span><input id="nNome" maxlength="160"></label>
+          <label class="campo"><span>E-mail do cliente (opcional)</span><input id="nEmail" type="email" maxlength="160"></label>
+          <div class="cheio"><button class="btn azul">Gerar rascunho da nota</button></div>
+        </form>
+        <div id="previewNota"></div>
+      </section>
+      <section class="card">
+        <h2>Notas enviadas</h2>
+        ${n.notas.filter((x) => x.status !== 'rascunho').length ? `<table class="lista-docs"><thead><tr><th>Data</th><th>Cliente</th><th class="ocultar-cel">Descrição</th><th>Valor</th><th>Situação</th><th></th></tr></thead><tbody>
+          ${n.notas.filter((x) => x.status !== 'rascunho').map((x) => `<tr>
+            <td>${data(x.enviadaEm)}${x.numero ? `<br><small>Nº ${esc(x.numero)}</small>` : ''}</td>
+            <td>${esc(x.tomador.nome)}<br><small>${docFmt(x.tomador.cnpj || x.tomador.cpf)}</small></td>
+            <td class="ocultar-cel">${esc(x.descricao.slice(0, 80))}${x.descricao.length > 80 ? '…' : ''}</td>
+            <td>${brl(x.valor)}</td>
+            <td><span class="status st-${x.status}">${{ emitida: 'Emitida', processando: 'Processando', fila: 'Com a equipe', erro: 'Erro', cancelada: 'Cancelada' }[x.status] || x.status}</span>${x.erro ? `<br><small style="color:var(--urgente)">${esc(x.erro)}</small>` : ''}</td>
+            <td class="acoes">${x.pdf ? `<a href="${esc(x.pdf)}" target="_blank" rel="noopener">PDF</a><a target="_blank" rel="noopener" href="${linkZap(`Olá! Segue a nota fiscal${x.numero ? ` nº ${x.numero}` : ''} no valor de ${brl(x.valor)}: ${x.pdf}`, '')}">Enviar</a>` : ''}</td>
+          </tr>`).join('')}</tbody></table>` : '<p class="vazio">Nenhuma nota enviada ainda.</p>'}
+      </section>
+      <details class="card config-fiscal" ${n.fiscalOk ? '' : 'open'}>
+        <summary>Configuração fiscal da sua empresa ${n.fiscalOk ? '✅' : '(preencha uma vez)'}</summary>
+        <p class="sub">Esses dados vão em todas as notas. Na dúvida, a equipe V&amp;J preenche para você.</p>
+        <form id="formFiscal" class="grade-form">
+          <label class="campo"><span>Código IBGE do município (7 dígitos)</span><input id="fMun" maxlength="7" value="${esc(f.codigoMunicipio || '')}" placeholder="Sorocaba: 3552205"></label>
+          <label class="campo"><span>Código de tributação nacional do serviço (6 dígitos)</span><input id="fServ" maxlength="6" value="${esc(f.codigoServico || '')}" placeholder="Ex.: 010701"></label>
+          <label class="campo"><span>Série da DPS</span><input id="fSerie" type="number" min="1" value="${esc(f.serieDps || 1)}"></label>
+          <label class="campo"><span>Próximo número da DPS</span><input id="fNum" type="number" min="1" value="${esc(eu.usuario.proximoDps || 1)}"></label>
+          <div class="cheio"><button class="btn azul">Salvar configuração</button> <span id="okFiscal"></span></div>
+        </form>
+      </details>`;
+    if ($('#irConta')) $('#irConta').addEventListener('click', (e) => { e.preventDefault(); abre('conta'); });
+    $('#formNota').addEventListener('submit', geraRascunho);
+    $('#formFiscal').addEventListener('submit', salvaFiscal);
+  } catch (err) { trataErro(err, el); }
+}
+
+async function geraRascunho(ev) {
+  ev.preventDefault();
+  const botao = ev.target.querySelector('button'); botao.disabled = true;
+  try {
+    const { nota } = await api('/notas', { method: 'POST', body: { documento: $('#nDoc').value, valor: String($('#nValor').value).replace(/\./g, '').replace(',', '.'), descricao: $('#nDesc').value, nome: $('#nNome').value, email: $('#nEmail').value } });
+    const u = eu.usuario;
+    $('#previewNota').innerHTML = `
+      <div class="preview-nota">
+        <b>Confira antes de emitir</b>
+        <dl>
+          <dt>Prestador</dt><dd>${esc(u.empresa ? u.empresa.razaoSocial : u.nome)} · ${docFmt(u.cnpj)}</dd>
+          <dt>Cliente</dt><dd>${esc(nota.tomador.nome || '—')} · ${docFmt(nota.tomador.cnpj || nota.tomador.cpf)}${nota.tomador.municipio ? ` · ${esc(nota.tomador.municipio)}/${esc(nota.tomador.uf)}` : ''}</dd>
+          <dt>Serviço</dt><dd>${esc(nota.descricao)}</dd>
+          <dt>Valor</dt><dd class="valor">${brl(nota.valor)}</dd>
+        </dl>
+        <p class="sub">Nota emitida não pode ser apagada, só cancelada. Confira o CNPJ, a descrição e o valor.</p>
+        <div class="linha-botoes"><button class="btn" id="confirmaNota">Confirmar e emitir ${icone('seta')}</button><button class="sec" id="descartaNota">${icone('lixo')} Descartar</button></div>
+      </div>`;
+    $('#confirmaNota').addEventListener('click', async () => {
+      $('#confirmaNota').disabled = true;
+      try {
+        const r = await api(`/notas/${nota.id}/emitir`, { method: 'POST' });
+        const msg = { fila: 'Nota enviada para a equipe V&J. Você recebe o PDF aqui assim que for emitida.', processando: 'Nota enviada para a prefeitura/Receita. Em instantes ela aparece como emitida.', erro: `Não foi possível emitir: ${r.nota.erro || ''}` }[r.nota.status] || 'Nota enviada.';
+        alert(msg);
+        abaNotas();
+      } catch (err) { alert(err.message); $('#confirmaNota').disabled = false; }
+    });
+    $('#descartaNota').addEventListener('click', async () => { await api(`/notas/${nota.id}`, { method: 'DELETE' }); $('#previewNota').innerHTML = ''; });
+  } catch (err) { alert(err.message); } finally { botao.disabled = false; }
+}
+
+async function salvaFiscal(ev) {
+  ev.preventDefault();
+  try {
+    const r = await api('/fiscal', { method: 'PUT', body: { codigoMunicipio: $('#fMun').value, codigoServico: $('#fServ').value, serieDps: $('#fSerie').value, proximoDps: $('#fNum').value } });
+    eu.usuario = r.usuario;
+    $('#okFiscal').textContent = 'Salvo ✅';
+  } catch (err) { $('#okFiscal').textContent = err.message; }
+}
+
+// ----- Orçamentos -----
+async function abaOrcamentos() {
+  const el = $('#abaOrcamentos');
+  el.innerHTML = '<p class="vazio">Carregando orçamentos…</p>';
+  try {
+    const { orcamentos } = await api('/orcamentos');
+    el.innerHTML = `
+      <h1>Orçamentos</h1>
+      <p class="sub">Coloque o CNPJ do cliente, o que vai ser feito e os valores. O sistema monta um orçamento profissional com link para enviar.</p>
+      <section class="card">
+        <form id="formOrc">
+          <div class="grade-form">
+            <label class="campo"><span>CNPJ ou CPF do cliente</span><input id="oDoc" maxlength="18" placeholder="Somente números"></label>
+            <label class="campo"><span>Nome do cliente</span><input id="oNome" maxlength="160" placeholder="Preenchido pelo CNPJ"></label>
+            <label class="campo cheio"><span>Título do orçamento</span><input id="oTitulo" maxlength="160" placeholder="Ex.: Transporte de carga Sorocaba → Campinas (dezembro)"></label>
+          </div>
+          <div class="itens-orc"><span class="campo"><span>Itens</span></span><div id="itens"></div>
+            <button type="button" class="add-item" id="addItem">${icone('mais')} Adicionar item</button></div>
+          <div class="grade-form">
+            <label class="campo"><span>Desconto (R$)</span><input id="oDesc" inputmode="decimal" placeholder="0,00"></label>
+            <label class="campo"><span>Validade (dias)</span><input id="oVal" type="number" min="1" max="180" value="15"></label>
+            <label class="campo"><span>Prazo de execução/entrega</span><input id="oPrazo" maxlength="200" placeholder="Ex.: 5 dias úteis após o aceite"></label>
+            <label class="campo"><span>Condições de pagamento</span><input id="oPag" maxlength="300" placeholder="Ex.: 50% no aceite e 50% na entrega, via Pix"></label>
+            <label class="campo cheio"><span>Escopo / detalhes do serviço</span><textarea id="oEscopo" rows="5" maxlength="6000" placeholder="Descreva o que está incluso"></textarea>
+              ${eu.ia ? `<button type="button" class="btn-ia" id="iaEscopo">${icone('ia')} Escrever o escopo com IA</button>` : ''}</label>
+            <label class="campo cheio"><span>Observações</span><textarea id="oObs" rows="2" maxlength="2000"></textarea></label>
+          </div>
+          <div class="total-orc" id="totalOrc"></div>
+          <button class="btn azul">Gerar orçamento</button>
+        </form>
+      </section>
+      <section class="card">
+        <h2>Orçamentos gerados</h2>
+        ${orcamentos.length ? `<table class="lista-docs"><thead><tr><th>Nº</th><th>Cliente</th><th class="ocultar-cel">Título</th><th>Total</th><th></th></tr></thead><tbody>
+          ${orcamentos.map((o) => { const link = `${location.origin}/o/${o.token}`; return `<tr>
+            <td>${String(o.numero).padStart(4, '0')}<br><small>${data(o.criadoEm)}</small></td>
+            <td>${esc(o.cliente.nome)}</td><td class="ocultar-cel">${esc(o.titulo || '—')}</td><td>${brl(o.total)}</td>
+            <td class="acoes"><a href="/o/${esc(o.token)}" target="_blank" rel="noopener">Abrir</a><a target="_blank" rel="noopener" href="${linkZap(`Olá! Segue o orçamento${o.titulo ? ` "${o.titulo}"` : ''} no valor de ${brl(o.total)}: ${link}`, '')}">Enviar</a><button data-copia="${esc(link)}">Copiar link</button></td>
+          </tr>`; }).join('')}</tbody></table>` : '<p class="vazio">Nenhum orçamento ainda.</p>'}
+      </section>`;
+    addItem(); recalc();
+    $('#addItem').addEventListener('click', () => addItem());
+    $('#oDesc').addEventListener('input', recalc);
+    $('#oDoc').addEventListener('change', buscaCliente);
+    if ($('#iaEscopo')) $('#iaEscopo').addEventListener('click', escopoIa);
+    $('#formOrc').addEventListener('submit', salvaOrc);
+    $$('[data-copia]').forEach((b) => b.addEventListener('click', () => { navigator.clipboard.writeText(b.dataset.copia); b.textContent = 'Copiado!'; }));
+  } catch (err) { trataErro(err, el); }
+}
+const num = (v) => Number(String(v || '').replace(/\./g, '').replace(',', '.')) || 0;
+function addItem() {
+  const d = document.createElement('div');
+  d.className = 'linha-item';
+  d.innerHTML = '<input class="ides" placeholder="Descrição do item" maxlength="500"><input class="iqtd" type="number" min="0" step="any" value="1" aria-label="Quantidade"><input class="ival val" inputmode="decimal" placeholder="Valor unit. (R$)"><button type="button" class="rem" aria-label="Remover">✕</button>';
+  $('#itens').appendChild(d);
+  d.querySelectorAll('input').forEach((i) => i.addEventListener('input', recalc));
+  d.querySelector('.rem').addEventListener('click', () => { d.remove(); recalc(); });
+}
+function itensForm() {
+  return [...$$('#itens .linha-item')].map((d) => ({ descricao: d.querySelector('.ides').value, quantidade: Number(d.querySelector('.iqtd').value) || 1, valor: num(d.querySelector('.ival').value) })).filter((i) => i.descricao);
+}
+function recalc() {
+  const sub = itensForm().reduce((t, i) => t + i.quantidade * i.valor, 0);
+  const desc = num($('#oDesc').value);
+  $('#totalOrc').textContent = `Total: ${brl(Math.max(0, sub - desc))}`;
+}
+async function buscaCliente() {
+  const c = $('#oDoc').value.replace(/\D/g, '');
+  if (c.length !== 14) return;
+  try { const r = await fetch('/api/empresa/' + c); const j = await r.json(); if (r.ok) $('#oNome').value = j.empresa.razaoSocial; } catch {}
+}
+async function escopoIa() {
+  const b = $('#iaEscopo'); b.disabled = true; b.textContent = 'Escrevendo…';
+  try {
+    const r = await api('/orcamentos/escopo', { method: 'POST', body: { itens: itensForm(), titulo: $('#oTitulo').value, cliente: $('#oNome').value } });
+    $('#oEscopo').value = r.escopo;
+  } catch (err) { alert(err.message); } finally { b.disabled = false; b.innerHTML = `${icone('ia')} Escrever o escopo com IA`; }
+}
+async function salvaOrc(ev) {
+  ev.preventDefault();
+  try {
+    const { orcamento } = await api('/orcamentos', { method: 'POST', body: {
+      documento: $('#oDoc').value, nomeCliente: $('#oNome').value, titulo: $('#oTitulo').value, itens: itensForm(),
+      desconto: num($('#oDesc').value), validadeDias: $('#oVal').value, prazo: $('#oPrazo').value, pagamento: $('#oPag').value,
+      escopo: $('#oEscopo').value, observacoes: $('#oObs').value,
+    } });
+    window.open(`/o/${orcamento.token}`, '_blank');
+    abaOrcamentos();
+  } catch (err) { alert(err.message); }
+}
+
+// ----- Conta -----
+function abaConta() {
+  const u = eu.usuario;
+  $('#abaConta').innerHTML = `
+    <h1>Minha conta</h1>
+    <section class="card">
+      <div class="kpis-empresa">
+        <div><span>Nome</span><b>${esc(u.nome)}</b></div>
+        <div><span>E-mail</span><b>${esc(u.email)}</b></div>
+        <div><span>Plano</span><b>${esc(eu.plano ? eu.plano.nome : '—')}</b></div>
+        <div><span>Acesso até</span><b>${u.assinante ? data(u.planoAte) : 'Inativo'}</b></div>
+      </div>
+      <div class="linha-botoes"><button class="btn azul" id="trocarPlano">Ver planos / renovar</button><a class="sec" target="_blank" rel="noopener" href="${linkZap('Olá! Preciso de ajuda com minha conta na Área do Cliente.')}">${icone('zap')} Suporte</a></div>
+    </section>`;
+  $('#trocarPlano').addEventListener('click', mostraPlanos);
+}
+
+function trataErro(err, el) {
+  if (err.status === 401) return inicia();
+  if (err.status === 402) return mostraPlanos();
+  el.innerHTML = `<p class="erro-form">${esc(err.message)}</p>`;
+}
+
+async function inicia() {
+  try {
+    eu = await api('/eu');
+  } catch {
+    tela('telaEntrada');
+    $('#topoConta').hidden = true;
+    return;
+  }
+  $('#topoConta').hidden = false;
+  $('#nomeEmpresa').textContent = eu.usuario.empresa ? eu.usuario.empresa.razaoSocial : eu.usuario.nome;
+  $('#linkSimulador').href = `/planejamento?cnpj=${eu.usuario.cnpj}`;
+  if (!eu.usuario.assinante) return mostraPlanos();
+  tela('telaApp');
+  abre('empresa');
+}
+inicia();

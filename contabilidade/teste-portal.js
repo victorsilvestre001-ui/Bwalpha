@@ -1,0 +1,99 @@
+// Teste de ponta a ponta da Área do Cliente: node teste-portal.js
+const assert = require('assert');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'portal-'));
+process.env.DADOS_DIR = dir;
+process.env.ARQ_PORTAL = path.join(dir, 'portal.json');
+process.env.ARQ_CONTATOS = path.join(dir, 'contatos.jsonl');
+process.env.ADMIN_SENHA = 'senha-de-teste';
+delete process.env.FOCUS_NFE_TOKEN;
+delete process.env.ASAAS_API_KEY;
+
+const app = require('./server');
+const notas = require('./portal/notas');
+
+(async () => {
+  const srv = app.listen(0);
+  const base = `http://127.0.0.1:${srv.address().port}`;
+  let cookie = '';
+  const req = async (metodo, url, body, extra = {}) => {
+    const r = await fetch(base + url, { method: metodo, headers: { 'Content-Type': 'application/json', cookie, ...extra }, body: body ? JSON.stringify(body) : undefined });
+    const c = r.headers.get('set-cookie');
+    if (c) cookie = c.split(';')[0];
+    return { status: r.status, json: await r.json().catch(() => ({})) };
+  };
+  const admin = { 'x-admin-senha': 'senha-de-teste' };
+
+  // Cadastro com CNPJ de demonstração (não depende de rede)
+  let r = await req('POST', '/api/portal/cadastro', { nome: 'Maria', email: 'maria@ex.com', senha: '12345678', cnpj: '12.345.678/0001-95', telefone: '15999990000' });
+  assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+  assert.strictEqual(r.json.usuario.assinante, false);
+  assert(!('senha' in r.json.usuario), 'senha nunca vai para o navegador');
+  assert.strictEqual((await req('POST', '/api/portal/cadastro', { nome: 'X', email: 'maria@ex.com', senha: '12345678', cnpj: '12345678000195' })).status, 409);
+
+  // Sem plano: ferramentas bloqueadas
+  assert.strictEqual((await req('GET', '/api/portal/notas')).status, 402);
+  r = await req('POST', '/api/portal/assinar', { planoId: 'completo' });
+  assert.strictEqual(r.json.semPagamentoOnline, true);
+
+  // Equipe libera pelo admin
+  assert.strictEqual((await req('GET', '/api/admin/portal/assinantes')).status, 401);
+  const { assinantes } = (await req('GET', '/api/admin/portal/assinantes', null, admin)).json;
+  r = await req('POST', `/api/admin/portal/assinantes/${assinantes[0].id}/liberar`, { dias: 30 }, admin);
+  assert.strictEqual(r.json.usuario.assinante, true);
+
+  // Painel da empresa
+  r = await req('GET', '/api/portal/painel');
+  assert.strictEqual(r.status, 200);
+  assert.ok(r.json.analise.reforma, 'painel traz o plano da Reforma');
+
+  // Nota: rascunho -> confirma -> fila da equipe -> anexada
+  r = await req('POST', '/api/portal/notas', { documento: '123.456.789-09', nome: 'João', descricao: 'Consultoria contábil de novembro', valor: '1500.50' });
+  assert.strictEqual(r.json.nota.status, 'rascunho');
+  assert.strictEqual(r.json.nota.valor, 1500.5);
+  const idNota = r.json.nota.id;
+  r = await req('POST', `/api/portal/notas/${idNota}/emitir`);
+  assert.strictEqual(r.json.nota.status, 'fila');
+  r = await req('GET', '/api/admin/portal/notas', null, admin);
+  assert.strictEqual(r.json.notas.length, 1);
+  assert.strictEqual((await req('POST', `/api/admin/portal/notas/${idNota}/anexar`, { numero: '123', pdf: 'javascript:alert(1)' }, admin)).status, 400, 'só aceita link https');
+  r = await req('POST', `/api/admin/portal/notas/${idNota}/anexar`, { numero: '123', pdf: 'https://exemplo.com/nota.pdf' }, admin);
+  assert.strictEqual(r.json.nota.status, 'emitida');
+  r = await req('GET', '/api/portal/notas');
+  assert.strictEqual(r.json.usadas, 1);
+
+  // Orçamento + página pública (sem dados internos)
+  r = await req('POST', '/api/portal/orcamentos', { documento: '12345678909', nomeCliente: 'João', titulo: 'Contabilidade 2027', itens: [{ descricao: 'Abertura', quantidade: 1, valor: 690 }, { descricao: 'Mensalidade', quantidade: 12, valor: 270 }], desconto: 100, validadeDias: 10 });
+  assert.strictEqual(r.json.orcamento.total, 690 + 12 * 270 - 100);
+  const pub = await req('GET', `/api/orcamento-publico/${r.json.orcamento.token}`);
+  assert.strictEqual(pub.status, 200);
+  assert(!('usuarioId' in pub.json.orcamento) && !('token' in pub.json.orcamento));
+  assert.strictEqual((await req('GET', '/api/orcamento-publico/nao-existe')).status, 404);
+
+  // Outro usuário não vê nada do primeiro
+  const cookieMaria = cookie; cookie = '';
+  await req('POST', '/api/portal/cadastro', { nome: 'Ana', email: 'ana@ex.com', senha: '12345678', cnpj: '11222333000181' });
+  assert.strictEqual((await req('POST', `/api/portal/notas/${idNota}/emitir`)).status, 402);
+  cookie = cookieMaria;
+
+  // Login e saída
+  await req('POST', '/api/portal/sair');
+  assert.strictEqual((await req('GET', '/api/portal/eu')).status, 401);
+  assert.strictEqual((await req('POST', '/api/portal/login', { email: 'maria@ex.com', senha: 'errada' })).status, 401);
+  assert.strictEqual((await req('POST', '/api/portal/login', { email: 'maria@ex.com', senha: '12345678' })).status, 200);
+
+  // Corpo enviado à Focus (NFS-e Nacional) com os campos da documentação
+  const corpo = notas.corpoDps({ id: 'x', numeroDps: 7, descricao: 'Serviço', valor: 100, tomador: { cnpj: '11222333000181' } }, { cnpj: '43403653000124', fiscal: { codigoMunicipio: '3552205', codigoServico: '010701' }, empresa: { simples: true } });
+  assert.strictEqual(corpo.codigo_municipio_emissora, 3552205);
+  assert.strictEqual(corpo.codigo_opcao_simples_nacional, 3);
+  assert.strictEqual(corpo.numero_dps, 7);
+  assert.strictEqual(corpo.cnpj_tomador, '11222333000181');
+
+  srv.close();
+  await new Promise((ok) => setTimeout(ok, 50));
+  fs.rmSync(dir, { recursive: true, force: true });
+  console.log('ok portal');
+})().catch((e) => { console.error(e); process.exit(1); });
