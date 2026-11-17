@@ -53,6 +53,10 @@
     <p style="color:var(--suave);margin:0 0 12px">Pedidos de nota da Área do Cliente que aguardam emissão pela equipe (quando a API de notas não está ligada ou deu erro). Depois de emitir, anexe o número e o link do PDF: o cliente recebe na hora.</p>
     <div class="card tabela"><table><thead><tr><th>Pedido</th><th>Prestador</th><th>Tomador</th><th>Serviço</th><th>Valor</th><th>Situação</th><th></th></tr></thead><tbody id="filaNotas"></tbody></table></div>
 
+    <h1 style="margin:32px 0 12px">Análises de recuperação de impostos</h1>
+    <p style="color:var(--suave);margin:0 0 12px">Análises feitas pelos clientes com os XMLs das notas. Confira com os extratos do PGDAS-D e registre o resultado: o cliente recebe o aviso no painel.</p>
+    <div class="card tabela"><table><thead><tr><th>Enviada</th><th>Cliente</th><th>Notas / período</th><th>Monofásico</th><th>ICMS-ST</th><th>Potencial</th><th>Situação</th><th></th></tr></thead><tbody id="analises"></tbody></table></div>
+
     <h1 style="margin:32px 0 12px">Assinantes da Área do Cliente</h1>
     <div class="card tabela"><table><thead><tr><th>Cadastro</th><th>Nome / empresa</th><th>Contato</th><th>Plano</th><th>Acesso até</th><th></th></tr></thead><tbody id="assinantes"></tbody></table></div>
   </div>
@@ -86,7 +90,24 @@ async function apiAdmin(caminho, body) {
 }
 
 async function carregaPortal() {
-  const [{ notas }, { assinantes }] = await Promise.all([apiAdmin('/notas'), apiAdmin('/assinantes')]);
+  const [{ notas }, { assinantes }, { analises }] = await Promise.all([apiAdmin('/notas'), apiAdmin('/assinantes'), apiAdmin('/analises')]);
+  const sitAn = { em_revisao: 'Aguardando revisão', revisada: 'Revisada', em_recuperacao: 'Em recuperação', sem_credito: 'Sem crédito' };
+  $('#analises').innerHTML = analises.length ? analises.map((a) => { const r = a.relatorio || {}; return `
+    <tr>
+      <td>${a.concluidaEm ? new Date(a.concluidaEm).toLocaleString('pt-BR') : ''}</td>
+      <td>${esc(a.cliente ? a.cliente.nome : '')}<br><small>${esc(fmtCnpj(a.cliente ? a.cliente.cnpj : ''))} ${esc(a.cliente ? a.cliente.telefone || '' : '')}</small></td>
+      <td>${r.notas || 0}<br><small>${r.periodo ? esc(r.periodo.de + ' a ' + r.periodo.ate) : ''}</small></td>
+      <td>${brlA(r.pisCofins)}<br><small>vendas ${brlA(r.receitaMonofasica)}</small></td>
+      <td>${brlA(r.icms)}</td>
+      <td><b>${brlA(r.total)}</b></td>
+      <td>${sitAn[a.status] || a.status}${a.observacao ? `<br><small>${esc(a.observacao)}</small>` : ''}</td>
+      <td><select data-revisar="${a.id}"><option value="">Registrar…</option><option value="revisada">Revisada</option><option value="em_recuperacao">Em recuperação</option><option value="sem_credito">Sem crédito</option></select></td>
+    </tr>`; }).join('') : '<tr><td colspan="8" style="color:var(--suave)">Nenhuma análise enviada.</td></tr>';
+  document.querySelectorAll('[data-revisar]').forEach((s) => s.addEventListener('change', async () => {
+    if (!s.value) return;
+    const observacao = prompt('Observação para o cliente (opcional):') || '';
+    try { await apiAdmin(`/analises/${s.dataset.revisar}/revisar`, { status: s.value, observacao }); carregaPortal(); } catch (e) { alert(e.message); }
+  }));
   const situacao = { fila: 'Aguardando a equipe', processando: 'Processando', emitida: 'Emitida', erro: 'Erro', cancelada: 'Cancelada' };
   $('#filaNotas').innerHTML = notas.length ? notas.map((n) => `
     <tr>

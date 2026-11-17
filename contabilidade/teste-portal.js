@@ -146,6 +146,54 @@ const notas = require('./portal/notas');
   assert.strictEqual((await req('POST', `/api/portal/notas/${idNota}/emitir`)).status, 402);
   cookie = cookieMaria;
 
+  // Recuperar impostos: envio de XMLs (lote) e ZIP, leitura e envio ao contador
+  const { nfe, cancelamento } = require('./teste-xml-util');
+  const envia = async (id, corpo, nomeArq) => {
+    const resp = await fetch(`${base}/api/portal/analises/${id}/arquivos`, { method: 'POST', headers: { cookie, 'Content-Type': 'application/octet-stream', 'X-Nome-Arquivo': encodeURIComponent(nomeArq) }, body: corpo });
+    return { status: resp.status, json: await resp.json() };
+  };
+  r = await req('POST', '/api/portal/analises');
+  const idAn = r.json.analise.id;
+  assert.strictEqual((await req('POST', '/api/portal/analises')).json.analise.id, idAn, 'reaproveita a análise em montagem');
+  const xmls = [];
+  for (let m = 1; m <= 6; m++) xmls.push(nfe({ chave: `N${m}`, data: `2026-0${m}-10`, itens: [{ ncm: '30049099', valor: 10000, desc: 'Dipirona' }, { ncm: '19059090', valor: 20000, desc: 'Pão' }, { ncm: '22021000', valor: 5000, csosn: '500', desc: 'Refri' }] }));
+  xmls.push(nfe({ chave: 'C1', data: '2026-01-11', tpNF: 0, itens: [{ ncm: '30049099', valor: 999 }] }));
+  xmls.push(nfe({ chave: 'O1', cnpj: '99888777000166', data: '2026-01-11', itens: [{ ncm: '30049099', valor: 999 }] }));
+  let env = await envia(idAn, xmls.join('\n<!--VJ-SEP-->\n'), 'lote 1');
+  assert.strictEqual(env.status, 200, JSON.stringify(env.json));
+  assert.strictEqual(env.json.notasNovas, 6);
+  // ZIP com uma nota nova, uma repetida e o cancelamento de outra
+  {
+    const yazl = require('yazl');
+    const z = new yazl.ZipFile();
+    z.addBuffer(Buffer.from(nfe({ chave: 'N7', data: '2026-07-10', itens: [{ ncm: '33049910', valor: 8000, desc: 'Creme' }] })), 'a/n7.xml');
+    z.addBuffer(Buffer.from(xmls[0]), 'a/n1.xml');
+    z.addBuffer(Buffer.from(cancelamento('N6')), 'a/canc.xml');
+    z.end();
+    const partes = [];
+    for await (const c of z.outputStream) partes.push(c);
+    env = await envia(idAn, Buffer.concat(partes), 'notas.zip');
+    assert.strictEqual(env.json.notasNovas, 1);
+  }
+  assert.strictEqual((await envia(idAn, 'não sou xml', 'x.pdf')).status, 400);
+  const rel = env.json.analise.relatorio;
+  assert.strictEqual(rel.notas, 6, '7 notas de venda, menos 1 cancelada');
+  assert.ok(rel.categorias.Medicamentos > 0 && rel.pisCofins > 0 && rel.icms > 0);
+  assert.ok(rel.avisos.some((a) => /entrada/.test(a)) && rel.avisos.some((a) => /outra empresa/.test(a)));
+  // Outro cliente não vê a análise
+  const cookieDona = cookie; cookie = '';
+  await req('POST', '/api/portal/login', { email: 'dono@ex.com', senha: '12345678' });
+  assert.strictEqual((await req('GET', `/api/portal/analises/${idAn}`)).status, 404);
+  cookie = cookieDona;
+  r = await req('POST', `/api/portal/analises/${idAn}/concluir`);
+  assert.strictEqual(r.json.analise.status, 'em_revisao');
+  assert.strictEqual((await envia(idAn, xmls[0], 'depois.xml')).status, 409);
+  r = await req('GET', '/api/admin/portal/analises', null, admin);
+  assert.strictEqual(r.json.analises.length, 1);
+  r = await req('POST', `/api/admin/portal/analises/${idAn}/revisar`, { status: 'em_recuperacao', observacao: 'Conferido com o PGDAS-D' }, admin);
+  assert.strictEqual(r.json.analise.status, 'em_recuperacao');
+  assert.ok((await req('GET', '/api/portal/painel')).json.alertas.some((a) => /revisou sua análise/.test(a.texto)));
+
   // Login e saída
   await req('POST', '/api/portal/sair');
   assert.strictEqual((await req('GET', '/api/portal/eu')).status, 401);

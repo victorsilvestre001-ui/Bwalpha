@@ -9,6 +9,7 @@ const notas = require('./notas');
 const cnpjUtil = require('../cnpj');
 const resumo = require('./resumo');
 const canais = require('./canais');
+const analises = require('./analises');
 
 const DIA = 24 * 60 * 60 * 1000;
 const txt = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
@@ -294,6 +295,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
 
   // ---------- Admin (senha do painel) ----------
   const admin = express.Router();
+  admin.use('/analises', analises.admin());
   admin.get('/assinantes', (req, res) => {
     res.json({ assinantes: db.lista('usuarios').map((u) => ({ ...auth.publico(u), analise: undefined })).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)) });
   });
@@ -334,5 +336,6 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     res.json({ nota: db.atualiza('notas', n.id, { status: 'emitida', numero: txt(req.body.numero, 30), pdf, emitidaEm: new Date().toISOString() }) });
   });
 
+  r.use('/analises', analises.portal());
   return { portal: r, publico, admin };
 };

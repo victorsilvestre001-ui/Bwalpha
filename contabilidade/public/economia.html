@@ -55,11 +55,34 @@
 <main class="wrap sim">
   <section id="resultado" hidden></section>
 
+  <section class="card envio" id="envio">
+    <span class="etiqueta-envio">Passo 2 · Análise pelas suas notas</span>
+    <h2><svg class="i"><use href="#i-doc"/></svg> Envie os arquivos das suas notas para eu analisar</h2>
+    <p class="dica-sim">Envie os <b>XMLs das notas fiscais de venda</b> (NF-e e NFC-e) dos últimos até 5 anos, soltos ou em <b>.zip</b>. O sistema lê cada produto, separa o que é <b>monofásico</b> (remédios, cosméticos, bebidas frias, autopeças, combustíveis) e o que já teve <b>ICMS por substituição tributária</b>, e calcula mês a mês quanto pode ter sido pago a mais no DAS.</p>
+    <label class="zona-envio" id="zona">
+      <input type="file" id="arquivos" multiple accept=".xml,.zip,application/xml,text/xml,application/zip">
+      <svg class="i grande"><use href="#i-doc"/></svg>
+      <b>Arraste os arquivos aqui ou clique para escolher</b>
+      <span>.xml ou .zip · até 60 MB por arquivo · pode enviar em várias vezes</span>
+    </label>
+    <div class="progresso" id="progresso" hidden><div class="barra"><i id="barra"></i></div><span id="progressoTxt"></span></div>
+    <div id="relatorio"></div>
+    <details class="onde-baixar"><summary>Onde eu acho esses arquivos?</summary>
+      <ul>
+        <li><b>No sistema que emite suas notas</b> (ERP, sistema da loja, PDV): procure "exportar XML" ou "arquivos XML do período".</li>
+        <li><b>No portal da Secretaria da Fazenda</b> do seu estado (em SP, pelo acesso do contribuinte na Sefaz).</li>
+        <li><b>Com o seu contador atual</b>: ele costuma guardar os XMLs de todos os meses.</li>
+        <li>Envie só <b>notas de venda da sua empresa</b>. Notas de compra e de outras empresas são ignoradas automaticamente.</li>
+      </ul>
+    </details>
+    <p class="privacidade"><svg class="i"><use href="#i-escudo"/></svg> Os arquivos ficam só na sua Área do Cliente. Guardamos apenas os totais por mês e por produto, sem os dados dos seus compradores.</p>
+  </section>
+
   <section class="card">
     <h2>Como funciona, passo a passo</h2>
     <ol class="trilha">
       <li><b>1. Radar pelo CNPJ (agora, grátis)</b><span>Pela atividade e pelo regime da empresa, mostramos onde ela provavelmente paga a mais. Leva segundos.</span></li>
-      <li><b>2. Você envia as notas fiscais</b><span>Os arquivos XML das notas de venda (e de compra, quando precisar), pela Área do Cliente. Explicamos de onde baixar.</span></li>
+      <li><b>2. Você envia as notas fiscais</b><span>Os arquivos XML das notas de venda, aqui mesmo, no quadro acima. Explicamos de onde baixar.</span></li>
       <li><b>3. O sistema faz as contas</b><span>Lê cada nota, produto por produto, e refaz o cálculo dos impostos mês a mês, mostrando quanto foi pago a mais em cada mês.</span></li>
       <li><b>4. Um contador confere</b><span>Um contador da V&amp;J revisa o resultado e os casos duvidosos. Só seguimos com o que tem segurança.</span></li>
       <li><b>5. Você recebe o relatório e decide</b><span>Relatório detalhado com o valor, os meses, os produtos e a base legal. Se aprovar, fazemos as retificações e o pedido de restituição e avisamos cada etapa pelo WhatsApp.</span></li>
@@ -135,6 +158,7 @@
 </dialog>
 
 <script src="economia.js"></script>
+<script src="economia-envio.js"></script>
 <script>
 // Dentro da Área do Cliente: informa a altura para o painel ajustar o quadro
 if (document.documentElement.classList.contains('embed')) {
