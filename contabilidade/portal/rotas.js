@@ -326,19 +326,12 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     const { resultado } = await resumo.envia(u, { site });
     res.json({ resultado });
   });
-  // Carteira do contador: empresas de clientes sem login próprio
   admin.post('/empresas', express.json(), async (req, res) => {
     const cnpj = cnpjUtil.limpa(req.body.cnpj);
     if (!cnpjUtil.valido(cnpj)) return res.status(400).json({ erro: 'CNPJ inválido.' });
     const existe = db.acha('usuarios', (x) => x.cnpj === cnpj);
     if (existe) return res.status(409).json({ erro: 'Esta empresa já está na carteira.', id: existe.id });
-    let emp = null;
-    try { emp = await buscaEmpresa(cnpj); } catch { /* cadastra só com o CNPJ */ }
-    const u = db.insere('usuarios', {
-      nome: txt(req.body.nome, 120) || (emp && (emp.nomeFantasia || emp.razaoSocial)) || cnpj, cnpj, gerenciado: true,
-      telefone: txt(req.body.telefone, 20).replace(/\D/g, ''), alertas: [],
-      empresa: emp ? { razaoSocial: emp.razaoSocial, nomeFantasia: emp.nomeFantasia, regime: emp.regime, situacao: emp.situacao, municipio: emp.municipio, uf: emp.uf, cnae: emp.cnae, atividade: emp.atividade, simples: emp.simples, mei: emp.mei } : null,
-    });
+    const u = await criaEmpresaCarteira(cnpj, { nome: txt(req.body.nome, 120), telefone: txt(req.body.telefone, 20).replace(/\D/g, '') });
     res.json({ usuario: auth.publico(u) });
   });
   const empresaDe = (req, res) => {
@@ -369,6 +362,16 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (pdf && !/^https:\/\//.test(pdf)) return res.status(400).json({ erro: 'O link do PDF precisa começar com https://' });
     res.json({ nota: db.atualiza('notas', n.id, { status: 'emitida', numero: txt(req.body.numero, 30), pdf, emitidaEm: new Date().toISOString() }) });
   });
+
+  // Carteira do contador: empresas de clientes sem login próprio
+  async function criaEmpresaCarteira(cnpj, { nome = '', telefone = '' } = {}) {
+    let emp = null;
+    try { emp = await buscaEmpresa(cnpj); } catch { /* cadastra só com o CNPJ */ }
+    return db.insere('usuarios', {
+      nome: nome || (emp && (emp.nomeFantasia || emp.razaoSocial)) || cnpj, cnpj, gerenciado: true, telefone, alertas: [],
+      empresa: emp ? { razaoSocial: emp.razaoSocial, nomeFantasia: emp.nomeFantasia, regime: emp.regime, situacao: emp.situacao, municipio: emp.municipio, uf: emp.uf, cnae: emp.cnae, atividade: emp.atividade, simples: emp.simples, mei: emp.mei } : null,
+    });
+  }
 
   // ---------- Certificado digital A1: busca automática das notas ----------
   // Usado pelo próprio cliente (Área do Cliente) e pelo contador dono do site (/admin), para
@@ -404,7 +407,20 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
   const responde = (res, [status, corpo]) => res.status(status).json(corpo);
 
   r.get('/certificado', auth.exigePlano, (req, res) => res.json({ certificado: statusCert(req.usuario) }));
-  r.post('/certificado', auth.exigePlano, (req, res) => responde(res, conectaCert(req.usuario, req, 'cliente')));
+  r.post('/certificado', auth.exigePlano, async (req, res) => {
+    // O contador (dono) que envia o certificado de OUTRA empresa: vai para a carteira dele
+    if (auth.ehDono(req.usuario) && req.body.autorizo === true && certificado.ativo()) {
+      let info = null;
+      try { info = certificado.le(Buffer.from(txt(req.body.pfx, 70000), 'base64'), String(req.body.senha || '').slice(0, 200)); } catch { /* conectaCert explica o erro */ }
+      if (info && info.cnpj && info.cnpj.slice(0, 8) !== String(req.usuario.cnpj).slice(0, 8)) {
+        const alvo = db.acha('usuarios', (x) => x.cnpj === info.cnpj) || await criaEmpresaCarteira(info.cnpj);
+        const [status, corpo] = conectaCert(alvo, req, 'contador');
+        const atual = db.acha('usuarios', (x) => x.id === alvo.id);
+        return res.status(status).json({ ...corpo, carteira: status === 200 ? { id: alvo.id, nome: (atual.empresa && atual.empresa.razaoSocial) || atual.nome, cnpj: atual.cnpj } : undefined });
+      }
+    }
+    responde(res, conectaCert(req.usuario, req, 'cliente'));
+  });
   r.post('/certificado/buscar', auth.exigePlano, async (req, res) => responde(res, await buscaCert(req.usuario)));
   r.delete('/certificado', auth.exigePlano, (req, res) => responde(res, desconectaCert(req.usuario)));
   // O contador (dono) pode ver as notas de qualquer empresa da carteira: ?empresa=<id>

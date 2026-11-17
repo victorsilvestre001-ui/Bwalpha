@@ -255,6 +255,13 @@ const notas = require('./portal/notas');
     const cookieCli = cookie; cookie = '';
     await req('POST', '/api/portal/login', { email: 'dono@ex.com', senha: '12345678' });
     assert.ok((await req('GET', `/api/portal/notas-capturadas?empresa=${idCli}`)).json.notas.length > 0, 'o dono vê as notas da empresa do cliente');
+    // O dono envia pela própria Área do Cliente o certificado de outra empresa: entra na carteira
+    r = await req('POST', '/api/portal/certificado', { pfx: pfxTeste({ cnpj: '33665544000121' }).toString('base64'), senha: 'senha123', autorizo: true });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+    assert.strictEqual(r.json.carteira.cnpj, '33665544000121');
+    const naCarteira = db.acha('usuarios', (x) => x.cnpj === '33665544000121');
+    assert.ok(naCarteira.gerenciado && naCarteira.certificado.ativo && naCarteira.certificado.autorizacao.por === 'contador');
+    assert.ok(!(db.acha('usuarios', (x) => x.email === 'dono@ex.com').certificado || {}).ativo, 'o certificado do cliente não vai para a conta do dono');
     cookie = cookieCli;
     assert.strictEqual((await req('DELETE', `/api/admin/portal/empresas/${idCli}`, null, admin)).status, 200);
     assert.ok(!fs.existsSync(path.join(dir, 'certificados', `${idCli}.bin`)), 'certificado apagado junto');

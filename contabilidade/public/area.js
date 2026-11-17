@@ -407,11 +407,11 @@ async function cardCertificado() {
     return;
   }
   el.innerHTML = `${topo}
-    <p class="sub">Envie o <b>certificado A1</b> da empresa (arquivo .pfx ou .p12) e a senha. Todo dia buscamos as notas nos serviços oficiais da Receita, sem você precisar baixar nada.</p>
+    <p class="sub">Envie o <b>certificado A1</b> da empresa (arquivo .pfx ou .p12) e a senha.${eu.usuario.dono ? ' <b>Contador:</b> pode enviar aqui também o certificado de uma empresa cliente; ela entra na sua carteira automaticamente.' : ''} Todo dia buscamos as notas nos serviços oficiais da Receita, sem você precisar baixar nada.</p>
     <form id="formCert" class="grade-form">
       <label class="campo"><span>Arquivo do certificado</span><input type="file" id="certArq" accept=".pfx,.p12" required></label>
       <label class="campo"><span>Senha do certificado</span><input type="password" id="certSenha" required autocomplete="off"></label>
-      <label class="campo cheio"><span><input type="checkbox" id="certOk" required> Autorizo a ${esc(escritorio.nome || 'V&J')} a usar este certificado <b>somente para consultar as notas fiscais</b> da minha empresa. Ele fica guardado criptografado e posso desconectar e apagar quando quiser.</span></label>
+      <label class="campo cheio"><span style="display:flex;gap:10px;align-items:flex-start"><input type="checkbox" id="certOk" required style="width:auto;margin-top:4px"><span>Autorizo a ${esc(escritorio.nome || 'V&J')} a usar este certificado <b>somente para consultar as notas fiscais</b> da ${eu.usuario.dono ? 'empresa dona do certificado (a minha ou a de um cliente que me autorizou)' : 'minha empresa'}. Ele fica guardado criptografado e posso desconectar e apagar quando quiser.</span></span></label>
       <div class="cheio"><button class="btn azul">Conectar certificado</button> <span id="certMsg"></span></div>
     </form>
     <p class="sub" style="font-size:.85rem">Vem automático: notas de compra dos últimos 90 dias e todas as novas, e notas de serviço do padrão nacional. Notas de venda antigas e de loja (NFC-e) continuam pelo envio do arquivo .zip.</p>`;
@@ -422,7 +422,15 @@ async function cardCertificado() {
     if (f.size > 40000) { $('#certMsg').textContent = 'Arquivo grande demais para um certificado A1.'; return; }
     $('#certMsg').textContent = 'Conferindo o certificado…';
     const b64 = await new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.readAsDataURL(f); });
-    try { await api('/certificado', { method: 'POST', body: { pfx: b64, senha: $('#certSenha').value, autorizo: $('#certOk').checked } }); cardCertificado(); } catch (err) { $('#certMsg').textContent = err.message; }
+    try {
+      const r = await api('/certificado', { method: 'POST', body: { pfx: b64, senha: $('#certSenha').value, autorizo: $('#certOk').checked } });
+      if (r.carteira) {
+        $('#formCert').reset();
+        $('#certMsg').innerHTML = `✅ Certificado de <b>${esc(r.carteira.nome)}</b> (${docFmt(r.carteira.cnpj)}) conectado na sua carteira de clientes. Acompanhe em <a href="/admin">Admin › Meus clientes</a>.`;
+        return;
+      }
+      cardCertificado();
+    } catch (err) { $('#certMsg').textContent = err.message; }
   });
 }
 
