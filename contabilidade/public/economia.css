@@ -1,0 +1,40 @@
+.busca-economia { display: flex; gap: 10px; max-width: 640px; margin: 28px auto 0; flex-wrap: wrap; }
+.busca-economia input { flex: 1 1 260px; padding: 16px 18px; font: inherit; font-size: 1.05rem; border: 0; border-radius: 14px; }
+.busca-economia input:focus { outline: 3px solid var(--destaque); }
+.sim > section, .sim > .cta-final { margin-bottom: 20px; }
+.trilha { list-style: none; padding: 0; margin: 14px 0 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; counter-reset: t; }
+.trilha li { background: var(--bg); border-radius: 14px; padding: 16px; border-top: 4px solid var(--destaque); }
+.trilha b { display: block; color: var(--marca); margin-bottom: 6px; }
+.trilha span { color: var(--suave); font-size: .9rem; }
+.op-detalhe { display: grid; grid-template-columns: 160px 1fr; gap: 8px 16px; margin: 4px 0 18px; }
+.op-detalhe dt { color: var(--suave); font-weight: 700; font-size: .85rem; }
+.op-detalhe dd { margin: 0; }
+.op-detalhe ul { margin: 0; padding-left: 18px; }
+.selo-seg { display: inline-block; font-size: .72rem; font-weight: 800; padding: 3px 10px; border-radius: 999px; text-transform: uppercase; letter-spacing: .3px; margin-right: 6px; }
+.selo-seg.consolidado { background: var(--ok-bg); color: var(--ok); }
+.selo-seg.boa { background: var(--rotina-bg); color: var(--rotina); }
+.chance { font-size: .72rem; font-weight: 800; padding: 3px 10px; border-radius: 999px; text-transform: uppercase; }
+.chance.alta { background: var(--destaque); color: #1b1606; }
+.chance.media { background: var(--atencao-bg); color: var(--atencao); }
+.achado { border: 2px solid var(--borda); border-radius: 16px; padding: 20px; margin-top: 14px; }
+.achado.alta { border-color: var(--destaque); background: var(--destaque-claro); }
+.achado h3 { color: var(--marca); margin: 8px 0 6px; font-size: 1.1rem; }
+.achado .motivo { color: var(--marca); font-weight: 600; margin: 0 0 8px; }
+.achado p { margin: 0 0 8px; color: var(--texto); }
+.achado details summary { cursor: pointer; color: var(--marca-2); font-weight: 700; margin-top: 6px; }
+.resultado-topo { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: center; }
+.resultado-topo h2 { margin: 0; }
+.duas-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.duas-col div { background: var(--bg); border-radius: 14px; padding: 18px; }
+.legal h3 { color: var(--marca); font-size: 1.02rem; margin: 0 0 6px; }
+.niveis { list-style: none; padding: 0; display: grid; gap: 10px; }
+.custo { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.custo div { border: 1px solid var(--borda); border-radius: 14px; padding: 18px; }
+.custo b { display: block; color: var(--marca); margin-bottom: 4px; }
+.custo span { color: var(--suave); }
+@media (max-width: 900px) {
+  .trilha { grid-template-columns: 1fr 1fr; }
+  .duas-col, .custo { grid-template-columns: 1fr; }
+  .op-detalhe { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) { .trilha { grid-template-columns: 1fr; } .busca-economia .btn { width: 100%; } }

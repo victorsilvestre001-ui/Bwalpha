@@ -168,7 +168,17 @@ function cardReforma(r, cnpj) {
     </section>`;
 }
 
-function render({ empresa: e, orcamento: o, escritorio, reforma }) {
+function cardRadar(radar, cnpj) {
+  const fortes = (radar || []).filter((a) => a.id !== 'reforma');
+  if (!fortes.length) return '';
+  return `
+    <section class="card cta-simulador cta-radar">
+      <div><b>💰 Sua empresa pode estar pagando imposto a mais</b><br><span>${fortes.map((a) => esc(a.titulo)).join(' · ')}</span></div>
+      <a class="btn" href="/economia?cnpj=${esc(cnpj)}">Ver quanto dá para recuperar ${icone('seta')}</a>
+    </section>`;
+}
+
+function render({ empresa: e, orcamento: o, escritorio, reforma, radar }) {
   const conta = (g) => o.itens.filter((i) => i.gravidade === g).length;
   const ativa = e.situacao === 'ATIVA';
   const itens = o.itens.map((i, n) => `
@@ -212,6 +222,7 @@ function render({ empresa: e, orcamento: o, escritorio, reforma }) {
       <p style="color:var(--suave);margin-top:-6px;font-size:.9rem">Marque o que quer resolver. O valor do pacote atualiza na hora.</p>
       ${itens}
     </section>
+    ${cardRadar(radar, e.cnpj)}
     ${cardReforma(reforma, e.cnpj)}
     <section class="card cta-simulador">
       <div><b>Será que sua empresa está pagando imposto demais?</b><br><span>Compare Simples, Lucro Presumido e Lucro Real com o que muda na Reforma Tributária.</span></div>

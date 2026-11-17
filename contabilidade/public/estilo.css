@@ -384,3 +384,5 @@ html.js .entra { animation: entra .9s cubic-bezier(.22,1,.36,1) var(--atraso, 0s
   .linha-acoes li::before { left: 1px; }
   .reforma-cta .btn { width: 100%; }
 }
+
+.cta-radar { background: var(--destaque-claro); }

@@ -10,6 +10,7 @@ const { buscaEmpresa } = require('./consulta');
 const { diagnostico, orcamento } = require('./diagnostico');
 const assistente = require('./assistente');
 const { planoReforma } = require('./reforma');
+const { radar, OPORTUNIDADES } = require('./radar');
 const pgfn = require('./pgfn/busca');
 const { trimestreMaisRecente } = require('./pgfn/atualiza');
 const rotasPortal = require('./portal/rotas');
@@ -49,6 +50,7 @@ async function analisa(doc) {
     empresa: { ...dados, cnpjFormatado: cnpj.formata(c), regime },
     orcamento: orcamento(itens, tabela),
     reforma: planoReforma(dados),
+    radar: radar(dados),
     escritorio: tabela.escritorio,
     servicos: tabela.servicos,
   };
@@ -77,6 +79,8 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: '50kb' }));
 app.use('/api/', rateLimit({ windowMs: 60 * 1000, limit: 120 }));
 app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
+
+app.get('/api/oportunidades', (req, res) => res.json({ oportunidades: OPORTUNIDADES }));
 
 app.get('/api/config', (req, res) => {
   const { escritorio, servicos } = tabelaPrecos();

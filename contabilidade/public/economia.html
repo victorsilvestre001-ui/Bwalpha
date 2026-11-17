@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recuperar impostos pagos a mais · V&amp;J Assessoria Contábil</title>
+<meta name="description" content="Descubra se sua empresa paga imposto a mais e quanto pode recuperar dos últimos 5 anos. Análise inicial grátis, só com o CNPJ.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="estilo.css">
+<link rel="stylesheet" href="planejamento.css">
+<link rel="stylesheet" href="economia.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-seta" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-busca" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-moeda" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .9-3 2s1.3 1.7 3 2 3 .9 3 2-1.3 2-3 2c-1.4 0-2.5-.5-3-1.5M12 6v2M12 16v2"/></symbol>
+  <symbol id="i-escudo" viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24"><path d="M3 21l1.7-5A9 9 0 1 1 8 19.3z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 1c-1-.5-1.5-1-2-2l1-1-1-2z"/></symbol>
+  <symbol id="i-alerta" viewBox="0 0 24 24"><path d="M12 3 2 21h20zM12 10v5M12 18h.01"/></symbol>
+</svg>
+
+<nav class="menu">
+  <div class="wrap">
+    <a href="/" class="logo" data-logo></a>
+    <div class="links" id="links">
+      <a href="/#legalizacao">Abertura e baixa</a>
+      <a href="/#servicos">Serviços</a>
+      <a href="/planejamento">Simulador de impostos</a>
+      <a href="/economia">Recuperar impostos</a>
+      <a class="btn pequeno" href="/area">Área do Cliente</a>
+    </div>
+  </div>
+</nav>
+
+<header class="sim-topo">
+  <div class="wrap">
+    <span class="selo-topo"><svg class="i"><use href="#i-moeda"/></svg>Análise inicial <b>grátis</b></span>
+    <h1>Sua empresa pode estar <em>pagando imposto a mais</em></h1>
+    <p>Muitas empresas pagam tributos em dobro sem saber, e a lei permite recuperar os <b>últimos 5 anos</b>, corrigidos pela Selic. Digite o CNPJ e veja onde está o dinheiro.</p>
+    <form class="busca-economia" id="formCnpj">
+      <input id="cnpj" placeholder="CNPJ da empresa: 00.000.000/0000-00" maxlength="18" autocomplete="off" aria-label="CNPJ">
+      <button class="btn">Procurar dinheiro esquecido <svg class="i"><use href="#i-seta"/></svg></button>
+    </form>
+  </div>
+</header>
+
+<main class="wrap sim">
+  <section id="resultado" hidden></section>
+
+  <section class="card">
+    <h2>Como funciona, passo a passo</h2>
+    <ol class="trilha">
+      <li><b>1. Radar pelo CNPJ (agora, grátis)</b><span>Pela atividade e pelo regime da empresa, mostramos onde ela provavelmente paga a mais. Leva segundos.</span></li>
+      <li><b>2. Você envia as notas fiscais</b><span>Os arquivos XML das notas de venda (e de compra, quando precisar), pela Área do Cliente. Explicamos de onde baixar.</span></li>
+      <li><b>3. O sistema faz as contas</b><span>Lê cada nota, produto por produto, e refaz o cálculo dos impostos mês a mês, mostrando quanto foi pago a mais em cada mês.</span></li>
+      <li><b>4. Um contador confere</b><span>Um contador da V&amp;J revisa o resultado e os casos duvidosos. Só seguimos com o que tem segurança.</span></li>
+      <li><b>5. Você recebe o relatório e decide</b><span>Relatório detalhado com o valor, os meses, os produtos e a base legal. Se aprovar, fazemos as retificações e o pedido de restituição e avisamos cada etapa pelo WhatsApp.</span></li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h2>Onde mais se encontra dinheiro</h2>
+    <p class="dica-sim">Clique em cada caso para ver o que é, quem tem direito, a base legal e os documentos necessários.</p>
+    <div id="listaOportunidades" class="faq"></div>
+  </section>
+
+  <section class="card legal">
+    <h2><svg class="i"><use href="#i-escudo"/></svg> É legal? Tem risco?</h2>
+    <div class="duas-col">
+      <div><h3>✅ O que fazemos: planejamento e recuperação</h3><p>Usamos o que a lei e os tribunais garantem: separar receitas que a lei manda separar, aproveitar créditos permitidos e pedir de volta o que foi pago a mais. É direito do contribuinte e é feito com documentos.</p></div>
+      <div><h3>❌ O que não fazemos: sonegação</h3><p>Esconder faturamento, criar crédito sem nota ou declarar o que não aconteceu é crime, para o empresário e para o contador. Nenhuma análise da V&amp;J segue por esse caminho.</p></div>
+    </div>
+    <h3>Os níveis de segurança que mostramos</h3>
+    <ul class="niveis">
+      <li><span class="selo-seg consolidado">Consolidado</span> Está na lei ou foi decidido de forma definitiva por tribunal superior. Risco muito baixo quando os documentos comprovam.</li>
+      <li><span class="selo-seg boa">Boa segurança</span> Entendimento majoritário, mas depende de a empresa se enquadrar direitinho. O contador confere cada requisito antes.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>Quanto custa?</h2>
+    <div class="custo">
+      <div><b>Radar pelo CNPJ</b><span>Grátis, nesta página.</span></div>
+      <div><b>Análise das notas e relatório</b><span>Grátis para conhecer o valor antes de decidir.</span></div>
+      <div><b>Recuperação</b><span id="textoHonorario">Honorário só se houver recuperação: um percentual combinado sobre o valor recuperado. Se não recuperar, não paga.</span></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Perguntas frequentes</h2>
+    <div class="faq">
+      <details><summary>Como o dinheiro volta para a empresa?</summary><p>Depende do imposto. No Simples Nacional, retificamos as declarações (PGDAS-D) e pedimos a restituição, ou usamos o valor para abater guias futuras. Nos outros regimes, usamos a restituição ou a compensação com outros tributos federais.</p></details>
+      <details><summary>Quanto tempo demora?</summary><p>O radar é imediato. A análise das notas leva poucos dias depois de recebermos os arquivos. A restituição depende da Receita: compensar em guias futuras costuma ser mais rápido do que receber o dinheiro em conta.</p></details>
+      <details><summary>Corro risco de cair na malha fina por pedir?</summary><p>Pedir o que é seu, com documentos, é um direito. Por isso todo caso passa por um contador e só seguimos com o que está comprovado nas notas e na lei.</p></details>
+      <details><summary>Preciso trocar de contador?</summary><p>Não. Fazemos a análise e a recuperação mesmo que outra empresa cuide da sua contabilidade do dia a dia.</p></details>
+      <details><summary>De onde baixo os arquivos XML das notas?</summary><p>Do sistema que emite suas notas (ERP ou sistema da loja) ou do portal da Secretaria da Fazenda do seu estado. Se precisar, nossa equipe ajuda a baixar.</p></details>
+      <details><summary>Até quantos anos para trás dá para recuperar?</summary><p>Até 5 anos, contados da data do pagamento, sempre com correção pela taxa Selic.</p></details>
+    </div>
+  </section>
+
+  <div class="cta-final">
+    <div><b>Quer saber quanto sua empresa pode recuperar?</b><br><span style="color:var(--suave)">A análise inicial é grátis e sem compromisso.</span></div>
+    <button class="btn" data-quero>Quero a análise <svg class="i"><use href="#i-seta"/></svg></button>
+  </div>
+</main>
+
+<footer class="rodape">
+  <div class="wrap">
+    <div class="base" style="border:0;margin:0;padding:0"><span>© <span id="ano"></span> <span data-e="nome"></span> · CNPJ <span data-e="cnpj"></span></span><span>O radar indica oportunidades prováveis. O valor exato depende da análise dos documentos.</span></div>
+  </div>
+</footer>
+
+<a class="zap" data-link="whatsapp" target="_blank" rel="noopener" aria-label="WhatsApp"><svg class="i"><use href="#i-zap"/></svg></a>
+
+<dialog id="dlg">
+  <form id="formLead" method="dialog">
+    <h2>Análise de recuperação</h2>
+    <p style="color:var(--suave);margin:6px 0 0">Deixe seu contato. Vamos abrir o WhatsApp com o resumo do radar para combinar o envio das notas.</p>
+    <div class="campo"><label for="lNome">Seu nome</label><input id="lNome" required maxlength="120"></div>
+    <div class="campo"><label for="lTel">WhatsApp</label><input id="lTel" required inputmode="tel" placeholder="(15) 99999-9999" maxlength="20"></div>
+    <div class="campo"><label for="lCnpj">CNPJ da empresa</label><input id="lCnpj" maxlength="18"></div>
+    <div class="linha-btns">
+      <button type="button" class="sec" id="lCancelar">Cancelar</button>
+      <button class="btn azul">Enviar</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="economia.js"></script>
+</body>
+</html>

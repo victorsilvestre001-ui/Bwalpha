@@ -9,7 +9,8 @@
     "logoUrl": "",
     "descontoPacotePct": 15,
     "corDestaque": "#c9a227",
-    "fundacao": "2021"
+    "fundacao": "2021",
+    "recuperacaoHonorario": "Honorário só se houver recuperação: um percentual combinado sobre o valor recuperado. Se não recuperar, não paga."
   },
   "servicos": {
     "abertura_empresa": {

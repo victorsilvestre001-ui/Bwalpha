@@ -115,3 +115,16 @@ const planoExcl = planoReforma({ cnae: '8219999', simples: true, dataExclusaoSim
 assert.strictEqual(planoExcl.impacto.nivel, 'alto');
 assert.strictEqual(planoExcl.acoes[0].quando, 'Urgente');
 console.log('ok reforma');
+
+// Radar de economia
+const { radar } = require('./radar');
+const idsRadar = (e) => radar(e).map((a) => a.id);
+assert(idsRadar({ cnae: '4771701', simples: true }).includes('monofasico'), 'farmácia no Simples: monofásicos');
+assert(idsRadar({ cnae: '6201501', simples: true }).includes('fatorR'), 'software no Simples: Fator R');
+assert(!idsRadar({ cnae: '6201501', simples: false }).includes('fatorR'), 'Fator R só no Simples');
+assert(idsRadar({ cnae: '4930202', simples: false, uf: 'SP' }).includes('creditoOutorgadoSP'));
+assert(!idsRadar({ cnae: '4930202', simples: true, uf: 'SP' }).includes('creditoOutorgadoSP'), 'crédito outorgado não vale no Simples');
+assert(idsRadar({ cnae: '8630503', simples: false }).includes('equiparacaoHospitalar'));
+assert.deepStrictEqual(idsRadar({ cnae: '4771701', mei: true, simples: true }), ['reforma'], 'MEI não tem essas recuperações');
+for (const a of radar({ cnae: '4771701', simples: true })) assert(a.baseLegal && a.documentos.length && a.seguranca, 'toda oportunidade explica base legal, documentos e segurança');
+console.log('ok radar');
