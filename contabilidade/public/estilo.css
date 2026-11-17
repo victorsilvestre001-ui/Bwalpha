@@ -356,3 +356,31 @@ html.js .entra { animation: entra .9s cubic-bezier(.22,1,.36,1) var(--atraso, 0s
 .cta-simulador b { color: var(--marca); font-size: 1.05rem; }
 .cta-simulador span { color: var(--suave); }
 @media (max-width: 620px) { .cta-simulador .btn { width: 100%; } }
+
+/* Plano da Reforma no resultado do CNPJ */
+.reforma-card { border-top: 4px solid var(--destaque); }
+.reforma-topo { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.reforma-topo .rotulo { color: var(--destaque); font-weight: 800; font-size: .78rem; letter-spacing: 1.5px; text-transform: uppercase; }
+.reforma-topo h2 { margin: 4px 0 6px; }
+.reforma-topo p { margin: 0; color: var(--suave); }
+.nivel { font-weight: 800; font-size: .8rem; padding: 6px 14px; border-radius: 999px; white-space: nowrap; }
+.nivel-alto { background: var(--urgente-bg); color: var(--urgente); }
+.nivel-medio { background: var(--atencao-bg); color: var(--atencao); }
+.nivel-baixo { background: var(--ok-bg); color: var(--ok); }
+.impacto-texto { background: var(--bg); border-radius: 12px; padding: 14px 16px; margin: 16px 0 6px; }
+.linha-acoes { list-style: none; padding: 0; margin: 10px 0 0; position: relative; }
+.linha-acoes::before { content: ""; position: absolute; left: 92px; top: 8px; bottom: 8px; width: 2px; background: var(--borda); }
+.linha-acoes li { display: grid; grid-template-columns: 82px 1fr; gap: 26px; padding: 12px 0; position: relative; }
+.linha-acoes li::before { content: ""; position: absolute; left: 87px; top: 18px; width: 12px; height: 12px; border-radius: 50%; background: var(--destaque); box-shadow: 0 0 0 4px var(--card); }
+.linha-acoes .quando { font-weight: 800; color: var(--marca); font-size: .8rem; line-height: 1.3; padding-top: 2px; }
+.linha-acoes b { color: var(--marca); }
+.linha-acoes p { margin: 2px 0 0; color: var(--suave); font-size: .93rem; }
+.linha-acoes a { color: var(--marca-2); font-weight: 700; font-size: .88rem; }
+.reforma-cta { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--borda); }
+.reforma-cta span { color: var(--marca); font-weight: 600; }
+@media (max-width: 620px) {
+  .linha-acoes::before { left: 6px; }
+  .linha-acoes li { grid-template-columns: 1fr; gap: 2px; padding-left: 24px; }
+  .linha-acoes li::before { left: 1px; }
+  .reforma-cta .btn { width: 100%; }
+}

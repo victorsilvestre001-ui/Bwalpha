@@ -146,7 +146,29 @@ async function consultar() {
   }
 }
 
-function render({ empresa: e, orcamento: o, escritorio }) {
+const NIVEL = { alto: 'Impacto alto', medio: 'Impacto médio', baixo: 'Impacto baixo' };
+
+// Plano da Reforma Tributária montado no servidor a partir do CNPJ (reforma.js)
+function cardReforma(r, cnpj) {
+  if (!r) return '';
+  return `
+    <section class="card reforma-card">
+      <div class="reforma-topo">
+        <div><span class="rotulo">Reforma Tributária</span><h2>O que sua empresa precisa fazer</h2><p>${esc(r.resumo)}</p></div>
+        <span class="nivel nivel-${r.impacto.nivel}">${NIVEL[r.impacto.nivel]}</span>
+      </div>
+      <p class="impacto-texto">${esc(r.impacto.texto)}</p>
+      <ol class="linha-acoes">
+        ${r.acoes.map((a) => `<li><span class="quando">${esc(a.quando)}</span><div><b>${esc(a.titulo)}</b><p>${esc(a.texto)}</p>${a.simulador ? `<a href="/planejamento?cnpj=${esc(cnpj)}">Simular com os números da empresa →</a>` : ''}</div></li>`).join('')}
+      </ol>
+      <div class="reforma-cta">
+        <span>Quer um plano de adequação completo, com os números da sua empresa?</span>
+        <a class="btn" target="_blank" rel="noopener" href="${linkZap('Olá! Consultei meu CNPJ no site e quero ajuda para adequar minha empresa à Reforma Tributária.')}">Falar com um contador ${icone('seta')}</a>
+      </div>
+    </section>`;
+}
+
+function render({ empresa: e, orcamento: o, escritorio, reforma }) {
   const conta = (g) => o.itens.filter((i) => i.gravidade === g).length;
   const ativa = e.situacao === 'ATIVA';
   const itens = o.itens.map((i, n) => `
@@ -190,6 +212,7 @@ function render({ empresa: e, orcamento: o, escritorio }) {
       <p style="color:var(--suave);margin-top:-6px;font-size:.9rem">Marque o que quer resolver. O valor do pacote atualiza na hora.</p>
       ${itens}
     </section>
+    ${cardReforma(reforma, e.cnpj)}
     <section class="card cta-simulador">
       <div><b>Será que sua empresa está pagando imposto demais?</b><br><span>Compare Simples, Lucro Presumido e Lucro Real com o que muda na Reforma Tributária.</span></div>
       <a class="btn azul" href="/planejamento?cnpj=${esc(e.cnpj)}">Descobrir o regime mais barato ${icone('seta')}</a>

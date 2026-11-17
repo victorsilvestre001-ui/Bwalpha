@@ -9,6 +9,7 @@ const cnpj = require('./cnpj');
 const { buscaEmpresa } = require('./consulta');
 const { diagnostico, orcamento } = require('./diagnostico');
 const assistente = require('./assistente');
+const { planoReforma } = require('./reforma');
 const pgfn = require('./pgfn/busca');
 const { trimestreMaisRecente } = require('./pgfn/atualiza');
 
@@ -45,6 +46,7 @@ async function analisa(doc) {
   return {
     empresa: { ...dados, cnpjFormatado: cnpj.formata(c), regime },
     orcamento: orcamento(itens, tabela),
+    reforma: planoReforma(dados),
     escritorio: tabela.escritorio,
     servicos: tabela.servicos,
   };

@@ -37,7 +37,7 @@ Tabela de preços completa do escritório (o escritório também faz abertura, a
 ${tabela}`;
 }
 
-function contexto(empresa, orcamento) {
+function contexto(empresa, orcamento, reforma) {
   const e = empresa;
   const linhas = [
     `Razão social: ${e.razaoSocial}${e.nomeFantasia ? ` (${e.nomeFantasia})` : ''}`,
@@ -57,7 +57,10 @@ function contexto(empresa, orcamento) {
 
   return `<empresa>\n${linhas.join('\n')}\n</empresa>\n\n<diagnostico>\n${itens.join('\n')}\n</diagnostico>\n\n`
     + `<pacote>Todos os serviços avulsos: ${brl(orcamento.totalAvulso)}; no pacote com ${orcamento.descontoPct}% de desconto: ${brl(orcamento.totalPacote)}.`
-    + `${orcamento.mensalidade ? ` Acompanhamento recomendado: ${orcamento.mensalidade.nome}, ${brl(orcamento.mensalidade.valor)}/mês.` : ''}</pacote>`;
+    + `${orcamento.mensalidade ? ` Acompanhamento recomendado: ${orcamento.mensalidade.nome}, ${brl(orcamento.mensalidade.valor)}/mês.` : ''}</pacote>`
+    + (reforma ? `\n\n<reforma_tributaria>\nImpacto: ${reforma.impacto.nivel}. ${reforma.impacto.texto}\n${reforma.resumo}\n`
+      + reforma.acoes.map((a) => `- [${a.quando}] ${a.titulo}: ${a.texto}`).join('\n')
+      + '\nPara comparar regimes com números, indique o simulador de impostos do site (/planejamento).\n</reforma_tributaria>' : '');
 }
 
 // Aceita só {role, content: string} alternando user/assistant, começando e terminando em user.
@@ -74,7 +77,7 @@ function limpaMensagens(mensagens) {
 }
 
 // Transmite a resposta aos poucos: onTexto é chamado a cada pedaço de texto.
-async function responde({ empresa, orcamento, escritorio, servicos, mensagens }, onTexto) {
+async function responde({ empresa, orcamento, escritorio, servicos, reforma, mensagens }, onTexto) {
   const stream = client.beta.messages.stream({
     model: MODELO,
     max_tokens: 8000,
@@ -83,7 +86,7 @@ async function responde({ empresa, orcamento, escritorio, servicos, mensagens },
     output_config: { effort: 'low' },
     system: [
       { type: 'text', text: instrucoes(escritorio, servicos), cache_control: { type: 'ephemeral' } },
-      { type: 'text', text: contexto(empresa, orcamento) },
+      { type: 'text', text: contexto(empresa, orcamento, reforma) },
     ],
     messages: mensagens,
   });

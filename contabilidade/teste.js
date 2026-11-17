@@ -101,3 +101,17 @@ assert(!grande.opcoes.some((o) => o.regime === 'simples'), 'acima de 4,8 mi não
 const fatorR = T.simula({ setor: 'servicos', faturamento: 600000, folha: 180000, prolabore: 0 });
 assert.strictEqual(fatorR.opcoes.find((o) => o.regime === 'simples').anexo, 'III', 'Fator R >= 28%');
 console.log('ok simulador');
+
+// Plano da Reforma Tributária
+const { planoReforma } = require('./reforma');
+const planoTr = planoReforma({ cnae: '4930202', simples: true, mei: false, atividade: 'Transporte' });
+assert.strictEqual(planoTr.clientes, 'empresas');
+assert(planoTr.acoes.some((x) => /dentro ou fora do DAS/.test(x.titulo)), 'Simples com clientes empresas recebe a escolha do DAS');
+assert(planoTr.acoes.some((x) => /diesel/.test(x.titulo)));
+const planoMed = planoReforma({ cnae: '8630503', simples: false, mei: false });
+assert.strictEqual(planoMed.reducao.pct, 60);
+assert(planoMed.acoes.some((x) => /CBS/.test(x.titulo)), 'regime normal recebe a troca de PIS/Cofins pela CBS');
+const planoExcl = planoReforma({ cnae: '8219999', simples: true, dataExclusaoSimples: '2099-12-31' });
+assert.strictEqual(planoExcl.impacto.nivel, 'alto');
+assert.strictEqual(planoExcl.acoes[0].quando, 'Urgente');
+console.log('ok reforma');
