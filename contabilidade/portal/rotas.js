@@ -959,6 +959,36 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
 
   // Conferir com a Receita: o que foi declarado no PGDAS-D x o faturamento das notas
   // 1 consulta por ano (declarou? DAS pago?) + 1 por mês declarado (valores lidos do PDF da declaração)
+  // Movimento de todas as empresas do Simples: uma consulta por ano (CONSDECLARACAO13) diz se o
+  // mês foi declarado e se gerou DAS. Declarado sem DAS = sem movimento; com DAS = com movimento.
+  admin.post('/escritorio/movimento', async (req, res) => {
+    if (!integra.situacao().ativo) return res.status(409).json({ erro: 'O Integra Contador ainda não está ligado.' });
+    const qtd = Math.min(24, Math.max(1, Number(req.query.meses) || 12));
+    const atual = new Date().toISOString().slice(0, 7);
+    const comps = [];
+    for (let i = 1; i <= qtd; i++) { const d = new Date(Date.UTC(+atual.slice(0, 4), +atual.slice(5, 7) - 1 - i, 1)); comps.push(d.toISOString().slice(0, 7)); }
+    const anos = [...new Set(comps.map((c) => c.slice(0, 4)))];
+    const ver = naCarteira(req);
+    const empresas = [];
+    let consultas = 0;
+    for (const u of db.lista('usuarios', (x) => doSimples(x) && ver(x))) {
+      const abertura = String((u.empresa && u.empresa.abertura) || '').slice(0, 7);
+      const linha = { id: u.id, nome: (u.empresa && u.empresa.razaoSocial) || u.nome, cnpj: u.cnpj, meses: [] };
+      try {
+        const porMes = {};
+        for (const ano of anos) { consultas++; Object.assign(porMes, await integra.declaracoesDoAno(u.cnpj, ano)); }
+        for (const c of comps) {
+          const p = porMes[c];
+          const antesAbertura = abertura && c < abertura;
+          const situacao = antesAbertura ? 'antes_abertura' : !p || !p.declarada ? 'nao_declarada' : p.das.length ? 'com_movimento' : 'sem_movimento';
+          linha.meses.push({ competencia: c, situacao, retificada: !!(p && p.retificada), das: p ? p.das.length : 0, dasPago: !!(p && p.dasPago) });
+        }
+      } catch (err) { linha.erro = err.message; }
+      empresas.push(linha);
+    }
+    res.json({ competencias: comps, empresas: empresas.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')), consultas });
+  });
+
   admin.post('/escritorio/empresas/:id/conferir', async (req, res) => {
     const u = empresaDe(req, res);
     if (!u) return;

@@ -607,6 +607,22 @@ const notas = require('./portal/notas');
       assert.ok(JSON.parse(pedidos[0].body.pedidoDados.dados).dataConsolidacao, 'vencida pede consolidação');
       assert.strictEqual((await fetch(base + new URL(r.json.das.pdf).pathname)).status, 200, 'PDF da guia puxada abre pelo link');
       assert.strictEqual((await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-07/puxar`, null, admin)).status, 409, 'competência concluída não puxa de novo');
+      // Movimento de todas as empresas: declarado com DAS / sem DAS / não declarado
+      integra._setTransporte(async ({ body }) => {
+        const ano = JSON.parse(body.pedidoDados.dados).anoCalendario;
+        const op = (n, das) => [{ tipoOperacao: 'Declaração Original', indiceDeclaracao: { numeroDeclaracao: `0${n}`, dataHoraTransmissao: '20260101' } }, ...(das ? [{ indiceDas: { numeroDas: `9${n}`, datahoraEmissaoDas: '20260101', dasPago: true } }] : [])];
+        const periodos = ano === '2026' ? [{ periodoApuracao: 202609, operacoes: op(9, true) }, { periodoApuracao: 202608, operacoes: op(8, false) }] : [];
+        return { status: 200, json: { status: 200, mensagens: [], dados: JSON.stringify({ periodos }) } };
+      });
+      r = await req('POST', '/api/admin/portal/escritorio/movimento?meses=3', null, admin);
+      assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+      const mv = r.json.empresas.find((x) => x.id === idAp);
+      assert.ok(mv && !mv.erro, JSON.stringify(mv));
+      const sit = Object.fromEntries(mv.meses.map((m) => [m.competencia, m.situacao]));
+      assert.strictEqual(sit['2026-09'], 'com_movimento');
+      assert.strictEqual(sit['2026-08'], 'sem_movimento');
+      assert.strictEqual(sit['2026-10'], 'nao_declarada');
+      console.log('ok movimento');
       integra._setTransporte(null);
       delete process.env.INTEGRA_TRIAL;
     }
