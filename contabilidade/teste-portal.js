@@ -462,6 +462,32 @@ const notas = require('./portal/notas');
       await req('DELETE', `/api/admin/portal/escritorio/empresas/${idMaria}/notas/${r.json.nota.id}`, null, admin);
       await req('DELETE', `${baseCli}/${idCliT}`, null, admin);
       assert.ok(!(await req('GET', baseCli, null, admin)).json.clientes.some((c) => c.id === idCliT));
+
+      // Obra: código de construção exige o endereço da obra (rejeição E0370 da Receita)
+      const obraUtil = require('./portal/obra');
+      obraUtil._setBusca(async (cep) => (cep === '18035000' ? { logradouro: 'Avenida Teste', bairro: 'Centro', localidade: 'Sorocaba', uf: 'SP', ibge: '3552205' } : { erro: true }));
+      const fiscalAntes = (await req('GET', `/api/admin/portal/escritorio/empresas/${idMaria}`, null, admin)).json.empresa.fiscal;
+      await req('POST', `/api/admin/portal/assinantes/${idMaria}/fiscal`, { ...fiscalAntes, codigoServico: '070202' }, admin);
+      assert.strictEqual((await req('GET', `/api/admin/portal/escritorio/empresas/${idMaria}`, null, admin)).json.empresa.exigeObra, true);
+      const notaObra = (obra) => req('POST', `/api/admin/portal/escritorio/empresas/${idMaria}/notas`, { documento: '12345678909', nome: 'João', descricao: 'Reforma elétrica', valor: '900', obra }, admin);
+      assert.strictEqual((await notaObra()).status, 400, 'sem obra não cria');
+      assert.strictEqual((await notaObra({ cep: '18035-000' })).status, 400, 'falta o número');
+      assert.match((await notaObra({ cep: '99999-999', numero: '10' })).json.erro, /CEP/);
+      r = await notaObra({ cep: '18035-000', numero: '120', complemento: 'Galpão 2' });
+      assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+      assert.deepStrictEqual([r.json.nota.obra.logradouro, r.json.nota.obra.codigoMunicipio, r.json.nota.obra.numero], ['Avenida Teste', '3552205', '120']);
+      assert.strictEqual((await req('GET', '/api/admin/portal/escritorio/cep/18035000', null, admin)).json.municipio, 'Sorocaba');
+      const nacionalT = require('./portal/nfse-nacional');
+      const prest = { cnpj: '12345678000195', fiscal: { ...fiscalAntes, codigoServico: '070202', codigoMunicipio: '3550308' }, empresa: { simples: true } };
+      assert.throws(() => nacionalT.montaDps({ descricao: 'x', valor: 10, numeroDps: 1, tomador: { cpf: '12345678909', nome: 'J' } }, prest), /obra/);
+      const xmlObra = nacionalT.montaDps({ ...r.json.nota, numeroDps: 7 }, prest).xml;
+      assert.match(xmlObra, /<cLocPrestacao>3552205<\/cLocPrestacao>/, 'ISS no município da obra');
+      assert.match(xmlObra, /<\/cServ><obra><end><CEP>18035000<\/CEP><xLgr>Avenida Teste<\/xLgr><nro>120<\/nro><xCpl>Galpão 2<\/xCpl><xBairro>Centro<\/xBairro><\/end><\/obra><\/serv>/);
+      r = await notaObra({ cep: '18035-000', numero: 'S/N', cno: '123456789012' });
+      assert.match(nacionalT.montaDps({ ...r.json.nota, numeroDps: 8 }, prest).xml, /<obra><cObra>123456789012<\/cObra><\/obra>/);
+      for (const n of (await req('GET', `/api/admin/portal/escritorio/empresas/${idMaria}`, null, admin)).json.notas) if (n.obra && n.status === 'rascunho') await req('DELETE', `/api/admin/portal/escritorio/empresas/${idMaria}/notas/${n.id}`, null, admin);
+      await req('POST', `/api/admin/portal/assinantes/${idMaria}/fiscal`, fiscalAntes, admin);
+      console.log('ok obra');
       nacional._setTransporte(null);
     }
     await new Promise((ok) => setTimeout(ok, 200));

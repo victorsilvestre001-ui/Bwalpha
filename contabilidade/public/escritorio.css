@@ -237,3 +237,4 @@ input:focus, select:focus, textarea:focus { border-color: var(--marca-2); box-sh
 .escolha-lista small { color: var(--suave); font-size: .76rem; }
 .emp-equipe { display: flex !important; align-items: center; gap: 4px; color: var(--marca-2); font-weight: 600; }
 .emp-equipe svg.i { width: 13px; height: 13px; }
+.form-obra { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }

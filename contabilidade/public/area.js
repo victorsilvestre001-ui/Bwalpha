@@ -246,6 +246,15 @@ async function abaNotas(mensagem) {
             <label class="campo"><span>O que foi feito? (descrição do serviço)</span>
               <textarea id="nDesc" required maxlength="2000" rows="3" placeholder="Ex.: Manutenção do ar-condicionado da sala comercial, realizada em 15/11/2026"></textarea></label>
           </div>
+          ${eu.exigeObra ? `<div class="passo">
+            <b class="num">4</b>
+            <div class="grade-form">
+              <label class="campo"><span>CEP da obra</span><input id="oCep" inputmode="numeric" maxlength="9" placeholder="00000-000" autocomplete="off"></label>
+              <label class="campo"><span>Número</span><input id="oNum" maxlength="60" placeholder="123 ou S/N"></label>
+              <label class="campo"><span>Complemento (opcional)</span><input id="oCpl" maxlength="156"></label>
+            </div>
+            <div id="obraInfo" class="tomador-info" hidden></div>
+          </div>` : ''}
           <div class="linha-botoes"><button class="btn azul" id="btnRevisar">Revisar pedido ${icone('seta')}</button></div>
         </form>
         <div id="previewNota"></div>
@@ -272,6 +281,7 @@ async function abaNotas(mensagem) {
       e.preventDefault();
       const x = n.notas.find((y) => y.id === a.dataset.repetir);
       if (x) preencheNota({ documento: x.tomador.cnpj || x.tomador.cpf, nome: x.tomador.nome, email: x.tomador.email, descricao: x.descricao, valor: x.valor });
+      if (x && x.obra && $('#oCep')) { $('#oCep').value = x.obra.cep.replace(/^(\d{5})(\d)/, '$1-$2'); $('#oNum').value = x.obra.numero || ''; $('#oCpl').value = x.obra.complemento || ''; buscaObra(); }
     }));
     $$('[data-cancelar]').forEach((a) => a.addEventListener('click', async (e) => {
       e.preventDefault();
@@ -327,7 +337,25 @@ function atualizaTomador() {
   }, 350);
 }
 
+// Endereço da obra pelo CEP (empresas de construção: a Receita exige)
+let timerObra = null;
+function buscaObra() {
+  const c = $('#oCep').value.replace(/\D/g, '');
+  const info = $('#obraInfo');
+  clearTimeout(timerObra);
+  if (c.length !== 8) { info.hidden = true; return; }
+  info.hidden = false; info.className = 'tomador-info carregando'; info.textContent = 'Buscando o endereço da obra…';
+  timerObra = setTimeout(async () => {
+    try {
+      const o = await api('/cep/' + c);
+      info.className = 'tomador-info ok';
+      info.innerHTML = `${icone('check')} <span><b>${esc(o.logradouro || 'Endereço do CEP')}</b><br><small>${esc([o.bairro, `${o.municipio}/${o.uf}`].filter(Boolean).join(' · '))}</small></span>`;
+    } catch (err) { info.className = 'tomador-info erro'; info.textContent = err.message; }
+  }, 300);
+}
+
 function ligaFormNota() {
+  if ($('#oCep')) $('#oCep').addEventListener('input', (e) => { const c = e.target.value.replace(/\D/g, '').slice(0, 8); e.target.value = c.replace(/^(\d{5})(\d)/, '$1-$2'); buscaObra(); });
   $('#nDoc').addEventListener('input', (e) => { e.target.value = mascaraDoc(e.target.value); atualizaTomador(); });
   $('#nValor').addEventListener('input', (e) => { e.target.value = mascaraValor(e.target.value); });
   $('#formNota').addEventListener('submit', geraRascunho);
@@ -342,10 +370,16 @@ async function geraRascunho(ev) {
   if (doc.length === 11 && !$('#nNome').value.trim()) { msgNota('Passo 1: para CPF, informe o nome do cliente.', 'erro'); $('#nNome').focus(); return; }
   if (!(valor > 0)) { msgNota('Passo 2: informe o valor da nota.', 'erro'); $('#nValor').focus(); return; }
   if (descricao.length < 5) { msgNota('Passo 3: descreva o serviço que foi feito.', 'erro'); $('#nDesc').focus(); return; }
+  let obra;
+  if ($('#oCep')) {
+    if ($('#oCep').value.replace(/\D/g, '').length !== 8) { msgNota('Passo 4: informe o CEP do local da obra.', 'erro'); $('#oCep').focus(); return; }
+    if (!$('#oNum').value.trim()) { msgNota('Passo 4: informe o número do local da obra (ou S/N).', 'erro'); $('#oNum').focus(); return; }
+    obra = { cep: $('#oCep').value, numero: $('#oNum').value, complemento: $('#oCpl').value };
+  }
   msgNota('');
   const botao = $('#btnRevisar'); botao.disabled = true;
   try {
-    const { nota } = await api('/notas', { method: 'POST', body: { documento: doc, valor: String(valor), descricao, nome: $('#nNome').value, email: $('#nEmail').value } });
+    const { nota } = await api('/notas', { method: 'POST', body: { documento: doc, valor: String(valor), descricao, nome: $('#nNome').value, email: $('#nEmail').value, obra } });
     const u = eu.usuario;
     $('#formNota').hidden = true;
     $('#previewNota').innerHTML = `
@@ -355,6 +389,7 @@ async function geraRascunho(ev) {
           <dt>Sua empresa</dt><dd>${esc(u.empresa ? u.empresa.razaoSocial : u.nome)} · ${docFmt(u.cnpj)}</dd>
           <dt>Para quem</dt><dd>${esc(nota.tomador.nome || '—')} · ${docFmt(nota.tomador.cnpj || nota.tomador.cpf)}${nota.tomador.municipio ? ` · ${esc(nota.tomador.municipio)}/${esc(nota.tomador.uf)}` : ''}</dd>
           <dt>O quê</dt><dd>${esc(nota.descricao)}</dd>
+          ${nota.obra ? `<dt>Obra</dt><dd>${esc(nota.obra.logradouro)}, ${esc(nota.obra.numero)} · ${esc(nota.obra.bairro)} · ${esc(nota.obra.municipio)}/${esc(nota.obra.uf)}</dd>` : ''}
           <dt>Quanto</dt><dd class="valor">${brl(nota.valor)}</dd>
         </dl>
         <p class="sub">Depois de emitida, a nota não pode ser apagada, só cancelada.</p>

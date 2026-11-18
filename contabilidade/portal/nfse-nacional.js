@@ -14,6 +14,7 @@ const https = require('https');
 const zlib = require('zlib');
 const crypto = require('crypto');
 const forge = require('node-forge');
+const { exige: exigeObra } = require('./obra');
 
 const NS = 'http://www.sped.fazenda.gov.br/nfse';
 const NS_DS = 'http://www.w3.org/2000/09/xmldsig#';
@@ -93,6 +94,19 @@ function montaDps(nota, prestador, { agora = new Date(), ambiente = 1 } = {}) {
     el('xNome', limpa(t.nome, 300) || null),
     el('email', limpa(t.email, 80) || null),
   ]) : '';
+  // Obra (construção civil): endereço ou CNO da obra, e o ISS vai para o município da obra
+  const ob = nota.obra;
+  if (exigeObra(f.codigoServico) && !ob) throw new ErroNfse('O código de serviço desta empresa é de obra: informe o CEP e o número da obra na nota.');
+  const localPrestacao = ob && /^\d{7}$/.test(String(ob.codigoMunicipio || '')) ? String(ob.codigoMunicipio) : String(f.codigoMunicipio);
+  const grupoObra = ob ? el('obra', [
+    ob.cno ? el('cObra', String(ob.cno)) : el('end', [
+      el('CEP', String(ob.cep)),
+      el('xLgr', limpa(ob.logradouro, 255)),
+      el('nro', limpa(ob.numero, 60)),
+      el('xCpl', limpa(ob.complemento, 156) || null),
+      el('xBairro', limpa(ob.bairro, 60)),
+    ]),
+  ]) : '';
   const infDps = [
     el('tpAmb', String(ambiente)),
     el('dhEmi', dh),
@@ -113,12 +127,13 @@ function montaDps(nota, prestador, { agora = new Date(), ambiente = 1 } = {}) {
     ]),
     toma,
     el('serv', [
-      el('locPrest', [el('cLocPrestacao', String(f.codigoMunicipio))]),
+      el('locPrest', [el('cLocPrestacao', localPrestacao)]),
       el('cServ', [
         el('cTribNac', String(f.codigoServico)),
         el('cNBS', f.codigoNbs && /^\d{9}$/.test(f.codigoNbs) ? f.codigoNbs : null),
         el('xDescServ', limpa(nota.descricao, 2000)),
       ]),
+      grupoObra,
     ]),
     el('valores', [
       el('vServPrest', [el('vServ', dec2(nota.valor))]),

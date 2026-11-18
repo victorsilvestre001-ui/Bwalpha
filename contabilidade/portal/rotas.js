@@ -16,6 +16,7 @@ const apuracao = require('./apuracao');
 const nacional = require('./nfse-nacional');
 const integra = require('./integra');
 const servicos = require('./servicos');
+const obraUtil = require('./obra');
 const fs = require('fs');
 const path = require('path');
 const { DADOS_DIR } = require('../pgfn/formato');
@@ -85,7 +86,12 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
 
   r.post('/sair', (req, res) => { auth.encerraSessao(req, res); res.json({ ok: true }); });
 
-  r.get('/eu', auth.exigeLogin, (req, res) => res.json({ usuario: auth.publico(req.usuario), plano: planoDo(req.usuario), focusAtivo: notas.ativo(), ia: assistente.ativo() }));
+  r.get('/eu', auth.exigeLogin, (req, res) => res.json({ usuario: auth.publico(req.usuario), plano: planoDo(req.usuario), focusAtivo: notas.ativo(), ia: assistente.ativo(), exigeObra: obraUtil.exige(req.usuario.fiscal && req.usuario.fiscal.codigoServico) }));
+  r.get('/cep/:cep', auth.exigeLogin, async (req, res) => {
+    const c = await obraUtil.buscaCep(req.params.cep);
+    if (!c) return res.status(404).json({ erro: 'CEP não encontrado.' });
+    res.json(c);
+  });
 
   r.post('/assinar', auth.exigeLogin, async (req, res) => {
     const plano = planos().find((p) => p.id === req.body.planoId);
@@ -304,7 +310,14 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     } else {
       return { status: 400, erro: 'Informe o CNPJ (14 dígitos) ou CPF (11 dígitos) do cliente.' };
     }
-    return { nota: db.insere('notas', { usuarioId: u.id, status: 'rascunho', tomador, descricao, valor, ...(body.pedidoPor ? { pedidoPor: body.pedidoPor } : {}) }) };
+    // Empresa de obra: a nota precisa do endereço (ou CNO) da obra
+    let obra = null;
+    if (obraUtil.exige(u.fiscal && u.fiscal.codigoServico)) {
+      const r = await obraUtil.normaliza(body.obra);
+      if (r.erro) return { status: 400, erro: r.erro };
+      obra = r.obra;
+    }
+    return { nota: db.insere('notas', { usuarioId: u.id, status: 'rascunho', tomador, descricao, valor, ...(obra ? { obra } : {}), ...(body.pedidoPor ? { pedidoPor: body.pedidoPor } : {}) }) };
   }
 
   // Envia um rascunho: direto na Receita (NFS-e Nacional), pela Focus ou para a fila da equipe
@@ -620,7 +633,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       regime: u.empresa ? (u.empresa.mei ? 'MEI' : u.empresa.simples ? 'Simples Nacional' : (u.empresa.regime || 'Outro')) : '—',
       situacao: (u.empresa && u.empresa.situacao) || '', gerenciado: !!u.gerenciado, dono: auth.ehDono(u),
       certificado: c.ativo ? { ativo: true, validoAte: c.validoAte, titular: c.titular } : { ativo: false },
-      fiscal: u.fiscal || {}, proximoDps: u.proximoDps || 1, emissao: ambienteDe(u), fiscalOk: notas.configFiscalCompleta(u),
+      fiscal: u.fiscal || {}, proximoDps: u.proximoDps || 1, emissao: ambienteDe(u), fiscalOk: notas.configFiscalCompleta(u), exigeObra: obraUtil.exige(u.fiscal && u.fiscal.codigoServico),
       notasMes: { quantidade: doMes.filter((n) => n.status !== 'erro').length, valor: doMes.filter((n) => ['emitida', 'fila', 'processando'].includes(n.status)).reduce((t, n) => t + n.valor, 0) },
       pendentes: db.lista('notas', (n) => n.usuarioId === u.id && ['fila', 'erro'].includes(n.status) && !n.teste).length,
       das: das && { competencia: das.competencia, valor: das.das ? das.das.valor : das.valor, status: das.status, vencimento: (das.das && das.das.vencimento) || das.vencimento },
@@ -690,6 +703,13 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     const r = await preencheFiscal(u, { forcar: true });
     res.json({ fiscal: r.usuario.fiscal, preenchidos: r.preenchidos, servico: r.servico, atividade: r.atividade, cnae: r.cnae });
   });
+  // Endereço da obra pelo CEP (para a tela de emissão)
+  const respondeCep = async (req, res) => {
+    const r = await obraUtil.buscaCep(req.params.cep);
+    if (!r) return res.status(404).json({ erro: 'CEP não encontrado.' });
+    res.json(r);
+  };
+  admin.get('/escritorio/cep/:cep', respondeCep);
   admin.get('/escritorio/servicos', (req, res) => res.json({ servicos: servicos.buscaServicos(String(req.query.q || '').slice(0, 80)) }));
 
   // ---- Clientes (tomadores) de cada empresa ----

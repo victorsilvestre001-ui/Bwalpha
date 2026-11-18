@@ -263,6 +263,18 @@ function abaNotas(d) {
           <div class="passo"><span class="n">3</span><div>
             <label class="campo"><span>O que foi feito?</span><textarea id="nDesc" rows="4" maxlength="2000" placeholder="Ex.: Manutenção corretiva do motor elétrico da linha 2, em 15/11/2026"></textarea></label>
           </div></div>
+          ${e.exigeObra ? `<div class="passo"><span class="n">4</span><div>
+            <span class="rotulo">Onde foi a obra? <small class="suave">(exigido pela Receita para este serviço)</small></span>
+            <div class="form-obra">
+              <label class="campo"><span>CEP</span><input id="oCep" inputmode="numeric" placeholder="00000-000" autocomplete="off"></label>
+              <label class="campo"><span>Número</span><input id="oNum" maxlength="60" placeholder="123 ou S/N"></label>
+            </div>
+            <div id="oEnd" class="tomador" hidden></div>
+            <div id="oManual" hidden><label class="campo"><span>Rua</span><input id="oRua" maxlength="255"></label><label class="campo"><span>Bairro</span><input id="oBairro" maxlength="60"></label></div>
+            <div class="form-obra">
+              <label class="campo"><span>Complemento <small>(opcional)</small></span><input id="oCpl" maxlength="156"></label>
+              <label class="campo"><span>CNO da obra <small>(opcional)</small></span><input id="oCno" inputmode="numeric" maxlength="18"></label>
+            </div>          </div></div>` : ''}
           <button class="btn primario largo">Conferir e emitir ${icone('seta')}</button>
           <p id="nMsg" class="msg erro" hidden></p>
         </form>
@@ -330,7 +342,37 @@ function ligaFormNota(d) {
       if (i < 0) $('#nDoc').focus();
     }
   } catch { /* ok */ }
-  $$('[data-repetir]').forEach((b) => b.addEventListener('click', () => { const n = d.notas.find((x) => x.id === b.dataset.repetir); preenche({ documento: n.tomador.cnpj || n.tomador.cpf, nome: n.tomador.nome, descricao: n.descricao, valor: n.valor }); window.scrollTo({ top: 0, behavior: 'smooth' }); }));
+  // ----- Endereço da obra (só para empresa com código de obra) -----
+  let obraAchada = null;
+  const preencheObra = (o) => {
+    if (!e.exigeObra || !o) return;
+    $('#oCep').value = String(o.cep || '').replace(/^(\d{5})(\d)/, '$1-$2'); $('#oNum').value = o.numero || ''; $('#oCpl').value = o.complemento || ''; $('#oCno').value = o.cno || '';
+    $('#oRua').value = o.logradouro || ''; $('#oBairro').value = o.bairro || '';
+    obraAchada = o.codigoMunicipio ? { cep: o.cep, logradouro: o.logradouro, bairro: o.bairro, municipio: o.municipio, uf: o.uf, codigoMunicipio: o.codigoMunicipio } : null;
+    mostraEnd();
+  };
+  const mostraEnd = () => {
+    const box = $('#oEnd');
+    if (!obraAchada) { box.hidden = true; return; }
+    box.hidden = false; box.className = 'tomador ok';
+    box.innerHTML = `${icone('check')}<span><b>${esc(obraAchada.logradouro || 'Rua não informada pelo CEP')}</b><br><small>${esc([obraAchada.bairro, `${obraAchada.municipio}/${obraAchada.uf}`].filter(Boolean).join(' · '))}</small></span>`;
+    $('#oManual').hidden = !!(obraAchada.logradouro && obraAchada.bairro);
+  };
+  if (e.exigeObra) {
+    let tCep;
+    $('#oCep').addEventListener('input', (ev) => {
+      const c = ev.target.value.replace(/\D/g, '').slice(0, 8);
+      ev.target.value = c.replace(/^(\d{5})(\d)/, '$1-$2');
+      obraAchada = null; $('#oEnd').hidden = true; $('#oManual').hidden = true;
+      clearTimeout(tCep);
+      if (c.length !== 8) return;
+      $('#oEnd').hidden = false; $('#oEnd').className = 'tomador carregando'; $('#oEnd').textContent = 'Buscando o endereço…';
+      tCep = setTimeout(async () => {
+        try { obraAchada = await api('/escritorio/cep/' + c); $('#oRua').value = obraAchada.logradouro; $('#oBairro').value = obraAchada.bairro; mostraEnd(); $('#oNum').focus(); } catch (err) { $('#oEnd').className = 'tomador erro'; $('#oEnd').textContent = err.message; }
+      }, 250);
+    });
+  }
+  $$('[data-repetir]').forEach((b) => b.addEventListener('click', () => { const n = d.notas.find((x) => x.id === b.dataset.repetir); preenche({ documento: n.tomador.cnpj || n.tomador.cpf, nome: n.tomador.nome, descricao: n.descricao, valor: n.valor }); preencheObra(n.obra); window.scrollTo({ top: 0, behavior: 'smooth' }); }));
   $$('[data-cancelar]').forEach((b) => b.addEventListener('click', () => cancelaNota(e, d.notas.find((x) => x.id === b.dataset.cancelar))));
   $('#formNota').addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -339,15 +381,23 @@ function ligaFormNota(d) {
     if (c.length !== 11 && c.length !== 14) return msg('Informe o CNPJ ou CPF do tomador.');
     if (!(numValor($('#nValor').value) > 0)) return msg('Informe o valor da nota.');
     if ($('#nDesc').value.trim().length < 5) return msg('Descreva o serviço prestado.');
+    let obra;
+    if (e.exigeObra) {
+      if ($('#oCep').value.replace(/\D/g, '').length !== 8) return msg('Informe o CEP da obra.');
+      if (!$('#oNum').value.trim()) return msg('Informe o número da obra (use S/N se não tiver).');
+      obra = { ...(obraAchada || {}), cep: $('#oCep').value, numero: $('#oNum').value, complemento: $('#oCpl').value, cno: $('#oCno').value, logradouro: $('#oRua').value || (obraAchada && obraAchada.logradouro), bairro: $('#oBairro').value || (obraAchada && obraAchada.bairro) };
+    }
     msg('');
     let rasc;
-    try { rasc = (await api(`/escritorio/empresas/${e.id}/notas`, { body: { documento: c, valor: String(numValor($('#nValor').value)), descricao: $('#nDesc').value, nome: $('#nNome').value, email: $('#nEmail').value, salvarCliente: !$('#nSalvarBox').hidden && $('#nSalvar').checked } })).nota; } catch (err) { return msg(err.message); }
+    try { rasc = (await api(`/escritorio/empresas/${e.id}/notas`, { body: { documento: c, valor: String(numValor($('#nValor').value)), descricao: $('#nDesc').value, nome: $('#nNome').value, email: $('#nEmail').value, obra, salvarCliente: !$('#nSalvarBox').hidden && $('#nSalvar').checked } })).nota; } catch (err) { return msg(err.message); }
     const destino = { producao: 'A nota será emitida <b>agora</b> na Receita, com valor fiscal.', homologacao: 'A nota irá para a <b>homologação</b> da Receita (teste, sem valor fiscal).' }[e.emissao] || 'O pedido irá para a <b>fila da equipe</b>, para emissão no Emissor Nacional.';
     const r = await dialogo({
       titulo: 'Conferir nota fiscal', sub: destino,
       corpo: `<dl class="confere"><dt>Prestador</dt><dd><b>${esc(e.nome)}</b><br><small>${doc(e.cnpj)}</small></dd>
         <dt>Tomador</dt><dd><b>${esc(rasc.tomador.nome || '—')}</b><br><small>${doc(rasc.tomador.cnpj || rasc.tomador.cpf)}${rasc.tomador.municipio ? ` · ${esc(rasc.tomador.municipio)}/${esc(rasc.tomador.uf)}` : ''}</small></dd>
-        <dt>Serviço</dt><dd>${esc(rasc.descricao)}</dd><dt>Valor</dt><dd class="valor">${brl(rasc.valor)}</dd></dl>`,
+        <dt>Serviço</dt><dd>${esc(rasc.descricao)}</dd>
+        ${rasc.obra ? `<dt>Obra</dt><dd>${esc(rasc.obra.logradouro)}, ${esc(rasc.obra.numero)}${rasc.obra.complemento ? ` · ${esc(rasc.obra.complemento)}` : ''}<br><small>${esc(rasc.obra.bairro)} · ${esc(rasc.obra.municipio)}/${esc(rasc.obra.uf)}${rasc.obra.cno ? ` · CNO ${esc(rasc.obra.cno)}` : ''}</small>${rasc.obra.codigoMunicipio !== String(e.fiscal.codigoMunicipio) ? '<br><small style="color:var(--atencao)">ISS devido no município da obra</small>' : ''}</dd>` : ''}
+        <dt>Valor</dt><dd class="valor">${brl(rasc.valor)}</dd></dl>`,
       botoes: [{ texto: 'Voltar e corrigir', valor: 'voltar' }, { texto: `${e.emissao === 'producao' ? 'Emitir nota' : 'Enviar'} ${icone('seta')}`, classe: 'ouro', acao: async () => (await api(`/escritorio/empresas/${e.id}/notas/${rasc.id}/emitir`, { method: 'POST' })).nota }],
     });
     if (!r || r === 'voltar') { await api(`/escritorio/empresas/${e.id}/notas/${rasc.id}`, { method: 'DELETE' }).catch(() => {}); return; }
