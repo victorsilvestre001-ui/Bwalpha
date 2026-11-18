@@ -1014,6 +1014,22 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     res.json({ competencias: comps, empresas: empresas.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')), consultas });
   });
 
+  // Opção pelo regime de apuração do ano (exigida antes de entregar o PGDAS-D do ano, MSG_ISN_013)
+  admin.post('/escritorio/empresas/:id/regime', express.json(), async (req, res) => {
+    const u = empresaDe(req, res);
+    if (!u) return;
+    if (!integra.situacao().ativo) return res.status(409).json({ erro: 'O Integra Contador ainda não está ligado.' });
+    const ano = Number(req.body.ano);
+    if (!(ano >= 2018 && ano <= 2100)) return res.status(400).json({ erro: 'Informe o ano da opção.' });
+    const regime = req.body.regime === 'CAIXA' ? 'CAIXA' : 'COMPETENCIA';
+    try {
+      const r = await integra.opcaoRegime(u.cnpj, ano, regime);
+      const regimes = { ...((u.fiscal && u.fiscal.regimes) || {}), [ano]: r.regime };
+      db.atualiza('usuarios', u.id, { fiscal: { ...(u.fiscal || {}), regimes } });
+      res.json({ regime: r.regime, ano, jaFeita: !!r.jaFeita, mensagens: r.mensagens });
+    } catch (err) { res.status(502).json({ erro: `A Receita não aceitou a opção: ${err.message}` }); }
+  });
+
   admin.post('/escritorio/empresas/:id/conferir', async (req, res) => {
     const u = empresaDe(req, res);
     if (!u) return;

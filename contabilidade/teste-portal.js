@@ -676,6 +676,20 @@ const notas = require('./portal/notas');
       assert.strictEqual(r.status, 200, JSON.stringify(r.json));
       assert.ok(r.json.entrega && r.json.entrega.idDeclaracao, 'transmitiu o mês só marcado');
       console.log('ok entrega sem movimento');
+      // Opção pelo regime de apuração: se o código não combinar com o texto, a Receita recusa e tenta o outro
+      const regs = [];
+      integra._setTransporte(async ({ url, body }) => {
+        const dd = JSON.parse(body.pedidoDados.dados);
+        regs.push({ url, sis: body.pedidoDados.idSistema, srv: body.pedidoDados.idServico, dd });
+        if (dd.tipoRegime === 0) return { status: 400, json: { status: 400, mensagens: [{ codigo: 'EntradaIncorreta-REGIME-MSG_ISN_053', texto: 'Descritivo não confere com o tipo.' }] } };
+        return { status: 200, json: { status: 200, mensagens: [{ codigo: 'Sucesso-REGIME-MSG_ISN_054', texto: 'Opção efetuada.' }], dados: JSON.stringify({ anoCalendario: 2026, regimeEscolhido: 'COMPETENCIA', dataHoraOpcao: 20261118120000 }) } };
+      });
+      r = await req('POST', `/api/admin/portal/escritorio/empresas/${idAp}/regime`, { ano: 2026, regime: 'COMPETENCIA' }, admin);
+      assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+      assert.strictEqual(r.json.regime, 'COMPETENCIA');
+      assert.deepStrictEqual(regs.map((x) => [x.sis, x.srv, x.dd.tipoRegime, x.dd.descritivoRegime, x.dd.deAcordoResolucao]), [['REGIMEAPURACAO', 'EFETUAROPCAOREGIME101', 0, 'COMPETENCIA', true], ['REGIMEAPURACAO', 'EFETUAROPCAOREGIME101', 1, 'COMPETENCIA', true]]);
+      assert.ok(regs[0].url.endsWith('/Declarar'));
+      console.log('ok regime de apuração');
       integra._setTransporte(null);
       delete process.env.INTEGRA_TRIAL;
     }

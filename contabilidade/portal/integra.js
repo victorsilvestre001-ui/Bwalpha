@@ -69,13 +69,13 @@ async function autentica() {
 
 const mensagens = (j) => ((j && j.mensagens) || []).map((m) => [m.codigo, m.texto].filter(Boolean).join(' ')).join(' | ');
 
-async function chama(verbo, cnpjContribuinte, idServico, dados) {
+async function chama(verbo, cnpjContribuinte, idServico, dados, idSistema = 'PGDASD') {
   const t = await autentica();
   const contr = trial() ? '00000000000100' : cnpjContratante();
   const body = {
     contratante: { numero: contr, tipo: 2 }, autorPedidoDados: { numero: contr, tipo: 2 },
     contribuinte: { numero: trial() ? '00000000000100' : cnpjContribuinte, tipo: 2 },
-    pedidoDados: { idSistema: 'PGDASD', idServico, versaoSistema: '1.0', dados: JSON.stringify(dados) },
+    pedidoDados: { idSistema, idServico, versaoSistema: '1.0', dados: JSON.stringify(dados) },
   };
   const headers = { Authorization: `Bearer ${t.access}`, 'Content-Type': 'application/json', accept: 'text/plain' };
   if (t.jwt) headers.jwt_token = t.jwt;
@@ -145,6 +145,27 @@ async function entregaSemMovimento(cnpj, competencia, { transmitir = true } = {}
   };
 }
 
+// Opção pelo regime de apuração do ano (REGIMEAPURACAO / EFETUAROPCAOREGIME101). Irretratável no ano.
+// A Receita exige que o texto (COMPETENCIA/CAIXA) combine com o código; se o código não bater,
+// ela recusa (MSG_ISN_053) e tentamos o outro — nunca grava o regime errado.
+async function opcaoRegime(cnpj, ano, regime = 'COMPETENCIA') {
+  const descritivo = regime === 'CAIXA' ? 'CAIXA' : 'COMPETENCIA';
+  const tentativas = descritivo === 'COMPETENCIA' ? [0, 1] : [1, 0];
+  let ultimoErro;
+  for (const tipoRegime of tentativas) {
+    try {
+      const { dados, mensagens: msgs } = await chama('Declarar', cnpj, 'EFETUAROPCAOREGIME101', { anoOpcao: Number(ano), tipoRegime, descritivoRegime: descritivo, deAcordoResolucao: true }, 'REGIMEAPURACAO');
+      const d = Array.isArray(dados) ? dados[0] : dados;
+      return { regime: (d && d.regimeEscolhido) || descritivo, ano: Number(ano), em: d && d.dataHoraOpcao ? String(d.dataHoraOpcao) : '', demonstrativo: d && d.demonstrativoPdf ? Buffer.from(d.demonstrativoPdf, 'base64') : null, mensagens: msgs };
+    } catch (err) {
+      ultimoErro = err;
+      if (/MSG_ISN_052/.test(err.message)) return { regime: descritivo, ano: Number(ano), jaFeita: true, mensagens: err.message };
+      if (!/MSG_ISN_053|MSG_ISN_060/.test(err.message)) throw err;
+    }
+  }
+  throw ultimoErro;
+}
+
 // ---------- Conferência: o que foi declarado no PGDAS-D ----------
 const dinheiroBr = (s) => Number(String(s || '0').replace(/\./g, '').replace(',', '.')) || 0;
 
@@ -202,4 +223,4 @@ async function declaracaoDoMes(cnpj, competencia) {
   return { numero: dados.numeroDeclaracao || '', ...lido };
 }
 
-module.exports = { situacao, geraDas, entregaSemMovimento, declaracoesDoAno, declaracaoDoMes, lePdfDeclaracao, ID_CERT, trial, ErroIntegra, _setTransporte: (t) => { transporte = t || requisicao; token = null; } };
+module.exports = { situacao, geraDas, entregaSemMovimento, opcaoRegime, declaracoesDoAno, declaracaoDoMes, lePdfDeclaracao, ID_CERT, trial, ErroIntegra, _setTransporte: (t) => { transporte = t || requisicao; token = null; } };
