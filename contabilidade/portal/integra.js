@@ -166,6 +166,30 @@ async function opcaoRegime(cnpj, ano, regime = 'COMPETENCIA') {
   throw ultimoErro;
 }
 
+// DEFIS do ano (DEFIS / TRANSDECLARACAO141) de empresa sem movimento: tudo zerado, com os sócios
+// (CPF e % do capital, soma 100%). Devolve { idDefis, declaracao, recibo, mensagens }.
+async function entregaDefis(cnpj, ano, { socios = [], saldoCaixaInicial = 0, saldoCaixaFinal = 0, empregadosInicio = 0, empregadosFim = 0 } = {}) {
+  const lista = socios.map((s) => ({ cpf: String(s.cpf || '').replace(/\D/g, ''), rendimentosIsentos: 0, rendimentosTributaveis: 0, participacaoCapitalSocial: Number(s.participacao), irRetidoFonte: 0 }));
+  if (!lista.length || lista.some((s) => s.cpf.length !== 11)) throw new ErroIntegra('Informe o CPF (11 dígitos) de cada sócio.');
+  const soma = Math.round(lista.reduce((t, s) => t + s.participacaoCapitalSocial, 0) * 100) / 100;
+  if (soma !== 100) throw new ErroIntegra(`A participação dos sócios precisa somar 100% (está ${soma}%).`);
+  const dados = {
+    ano: Number(ano),
+    empresa: {
+      ganhoCapital: 0, qtdEmpregadoInicial: Number(empregadosInicio) || 0, qtdEmpregadoFinal: Number(empregadosFim) || 0, receitaExportacaoDireta: 0, ganhoRendaVariavel: 0,
+      socios: lista,
+      estabelecimentos: [{
+        cnpjCompleto: cnpj, estoqueInicial: 0, estoqueFinal: 0, saldoCaixaInicial: Number(saldoCaixaInicial) || 0, saldoCaixaFinal: Number(saldoCaixaFinal) || 0,
+        aquisicoesMercadoInterno: 0, importacoes: 0, totalEntradasPorTransferencia: 0, totalSaidasPorTransferencia: 0, totalDevolucoesVendas: 0, totalEntradas: 0, totalDevolucoesCompras: 0, totalDespesas: 0,
+      }],
+    },
+  };
+  const { dados: d0, mensagens: msgs } = await chama('Declarar', cnpj, 'TRANSDECLARACAO141', dados, 'DEFIS');
+  const d = Array.isArray(d0) ? d0[0] : d0;
+  if (!d || !d.idDefis) throw new ErroIntegra(`A Receita não confirmou a DEFIS${msgs ? `: ${msgs}` : '.'}`);
+  return { idDefis: d.idDefis, declaracao: d.declaracaoPdf ? Buffer.from(d.declaracaoPdf, 'base64') : null, recibo: d.reciboPdf ? Buffer.from(d.reciboPdf, 'base64') : null, mensagens: msgs };
+}
+
 // ---------- Conferência: o que foi declarado no PGDAS-D ----------
 const dinheiroBr = (s) => Number(String(s || '0').replace(/\./g, '').replace(',', '.')) || 0;
 
@@ -223,4 +247,4 @@ async function declaracaoDoMes(cnpj, competencia) {
   return { numero: dados.numeroDeclaracao || '', ...lido };
 }
 
-module.exports = { situacao, geraDas, entregaSemMovimento, opcaoRegime, declaracoesDoAno, declaracaoDoMes, lePdfDeclaracao, ID_CERT, trial, ErroIntegra, _setTransporte: (t) => { transporte = t || requisicao; token = null; } };
+module.exports = { situacao, geraDas, entregaSemMovimento, opcaoRegime, entregaDefis, declaracoesDoAno, declaracaoDoMes, lePdfDeclaracao, ID_CERT, trial, ErroIntegra, _setTransporte: (t) => { transporte = t || requisicao; token = null; } };

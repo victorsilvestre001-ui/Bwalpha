@@ -690,6 +690,20 @@ const notas = require('./portal/notas');
       assert.deepStrictEqual(regs.map((x) => [x.sis, x.srv, x.dd.tipoRegime, x.dd.descritivoRegime, x.dd.deAcordoResolucao]), [['REGIMEAPURACAO', 'EFETUAROPCAOREGIME101', 0, 'COMPETENCIA', true], ['REGIMEAPURACAO', 'EFETUAROPCAOREGIME101', 1, 'COMPETENCIA', true]]);
       assert.ok(regs[0].url.endsWith('/Declarar'));
       console.log('ok regime de apuração');
+      // DEFIS de empresa sem movimento
+      let defisEnviada;
+      integra._setTransporte(async ({ url, body }) => {
+        defisEnviada = { url, sis: body.pedidoDados.idSistema, srv: body.pedidoDados.idServico, dd: JSON.parse(body.pedidoDados.dados) };
+        return { status: 200, json: { status: 200, mensagens: [{ codigo: 'Sucesso-DEFIS', texto: 'ok' }], dados: JSON.stringify({ idDefis: '516497222025001', declaracaoPdf: pdfB64, reciboPdf: pdfB64 }) } };
+      });
+      assert.strictEqual((await req('POST', `/api/admin/portal/escritorio/empresas/${idAp}/defis`, { ano: 2025, socios: [{ cpf: '123', participacao: 100 }] }, admin)).status, 502, 'CPF inválido');
+      assert.strictEqual((await req('POST', `/api/admin/portal/escritorio/empresas/${idAp}/defis`, { ano: 2025, socios: [{ cpf: '12345678909', participacao: 60 }] }, admin)).status, 502, 'soma diferente de 100%');
+      r = await req('POST', `/api/admin/portal/escritorio/empresas/${idAp}/defis`, { ano: 2025, socios: [{ cpf: '123.456.789-09', participacao: 100 }] }, admin);
+      assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+      assert.strictEqual(r.json.defis.idDefis, '516497222025001');
+      assert.deepStrictEqual([defisEnviada.sis, defisEnviada.srv, defisEnviada.dd.ano, defisEnviada.dd.empresa.socios[0].cpf, defisEnviada.dd.empresa.socios[0].participacaoCapitalSocial, defisEnviada.dd.empresa.estabelecimentos[0].totalEntradas], ['DEFIS', 'TRANSDECLARACAO141', 2025, '12345678909', 100, 0]);
+      assert.ok(!JSON.stringify(require('./portal/db').acha('usuarios', (x) => x.id === idAp)).includes('12345678909'), 'CPF do sócio não fica guardado');
+      console.log('ok DEFIS');
       integra._setTransporte(null);
       delete process.env.INTEGRA_TRIAL;
     }

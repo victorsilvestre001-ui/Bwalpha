@@ -1030,6 +1030,23 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     } catch (err) { res.status(502).json({ erro: `A Receita não aceitou a opção: ${err.message}` }); }
   });
 
+  // DEFIS do ano para empresa sem movimento (o CPF dos sócios vai só para a Receita, não fica guardado)
+  admin.post('/escritorio/empresas/:id/defis', express.json(), async (req, res) => {
+    const u = empresaDe(req, res);
+    if (!u) return;
+    if (!integra.situacao().ativo) return res.status(409).json({ erro: 'O Integra Contador ainda não está ligado.' });
+    const ano = Number(req.body.ano);
+    if (!(ano >= 2018 && ano < new Date().getFullYear() + 1)) return res.status(400).json({ erro: 'Informe o ano-calendário da DEFIS.' });
+    try {
+      const r = await integra.entregaDefis(u.cnpj, ano, { socios: Array.isArray(req.body.socios) ? req.body.socios : [], saldoCaixaInicial: req.body.saldoCaixaInicial, saldoCaixaFinal: req.body.saldoCaixaFinal });
+      fs.mkdirSync(path.join(DADOS_DIR, 'das'), { recursive: true });
+      const guarda = (buf) => { if (!buf) return ''; const t = crypto.randomBytes(12).toString('base64url'); fs.writeFileSync(path.join(DADOS_DIR, 'das', `${t}.pdf`), buf); return `${site}/das/${t}`; };
+      const info = { idDefis: r.idDefis, em: new Date().toISOString(), declaracao: guarda(r.declaracao), recibo: guarda(r.recibo), mensagens: r.mensagens };
+      db.atualiza('usuarios', u.id, { fiscal: { ...(u.fiscal || {}), defis: { ...((u.fiscal && u.fiscal.defis) || {}), [ano]: info } } });
+      res.json({ defis: info });
+    } catch (err) { res.status(502).json({ erro: `A Receita não aceitou a DEFIS: ${err.message}` }); }
+  });
+
   admin.post('/escritorio/empresas/:id/conferir', async (req, res) => {
     const u = empresaDe(req, res);
     if (!u) return;
