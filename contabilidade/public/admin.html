@@ -76,7 +76,7 @@
         <p id="certEmpresa" style="margin:0;color:var(--suave)"></p>
         <label>Arquivo (.pfx ou .p12)<br><input type="file" id="cArq" accept=".pfx,.p12" required></label>
         <label>Senha do certificado<br><input type="password" id="cSenha" required autocomplete="off" style="width:100%"></label>
-        <label style="font-size:.9rem"><input type="checkbox" id="cOk" required> Tenho autorização do cliente (contrato ou procuração) para usar este certificado <b>somente para consultar as notas fiscais</b> da empresa dele.</label>
+        <label style="font-size:.9rem"><input type="checkbox" id="cOk" required> Tenho autorização do cliente (contrato ou procuração) para usar este certificado <b>somente para consultar e emitir as notas fiscais</b> da empresa dele.</label>
         <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" id="cCancelar">Cancelar</button><button id="cEnviar">Conectar</button></div>
         <div id="cMsg" style="color:#c0392b"></div>
       </form>
@@ -258,16 +258,32 @@ async function carregaPortal() {
       <td>${esc(u.email || '')}<br><small>${esc(u.telefone || '')}</small></td>
       <td>${u.gerenciado ? '<small>Carteira do contador<br>(sem login)</small>' : `${esc(u.planoId || '—')}${u.pedidoPlanoEm ? '<br><small>pediu pelo site</small>' : ''}<br><small>${u.assinante ? 'até ' + new Date(u.planoAte).toLocaleDateString('pt-BR') : '<span style="color:#c0392b">Inativo</span>'}</small>`}</td>
       <td>${certCelula(u)}</td>
-      <td>${u.dono ? '<b>Dono do site</b><br>' : ''}<a href="/planejamento?cnpj=${esc(u.cnpj)}&empresa=${u.id}" target="_blank" rel="noopener">Simulador</a> · <button data-fiscal="${u.id}" data-mun="${esc((u.fiscal && u.fiscal.codigoMunicipio) || '')}" data-serv="${esc((u.fiscal && u.fiscal.codigoServico) || '')}" data-dps="${esc(u.proximoDps || 1)}">${u.fiscal && u.fiscal.codigoServico ? 'Dados da nota ✅' : 'Dados da nota'}</button>${u.gerenciado ? ` · <button data-remover="${u.id}">Remover</button>` : `<br><button data-liberar="${u.id}" data-dias="30">+30 dias</button> <button data-liberar="${u.id}" data-dias="-1">Bloquear</button><br><button data-previa="${u.id}">Ver resumo do dia</button> <button data-enviar="${u.id}">Enviar resumo agora</button>`}</td>
+      <td>${u.dono ? '<b>Dono do site</b><br>' : ''}<a href="/planejamento?cnpj=${esc(u.cnpj)}&empresa=${u.id}" target="_blank" rel="noopener">Simulador</a> · <button data-fiscal="${u.id}" data-mun="${esc((u.fiscal && u.fiscal.codigoMunicipio) || '')}" data-serv="${esc((u.fiscal && u.fiscal.codigoServico) || '')}" data-dps="${esc(u.proximoDps || 1)}" data-serie="${esc((u.fiscal && u.fiscal.serieDps) || 1)}" data-emissao="${esc((u.fiscal && u.fiscal.emissao) || 'desligada')}">${u.fiscal && u.fiscal.codigoServico ? 'Dados da nota ✅' : 'Dados da nota'}</button><br><small>Emissão automática: <b>${({ desligada: 'desligada', homologacao: 'TESTE (homologação)', producao: 'LIGADA (produção)' })[(u.fiscal && u.fiscal.emissao) || 'desligada']}</b></small>${u.fiscal && u.fiscal.emissao === 'homologacao' ? ` <button data-notateste="${u.id}">Testar emissão (R$ 1,00)</button>` : ''}${u.gerenciado ? ` · <button data-remover="${u.id}">Remover</button>` : `<br><button data-liberar="${u.id}" data-dias="30">+30 dias</button> <button data-liberar="${u.id}" data-dias="-1">Bloquear</button><br><button data-previa="${u.id}">Ver resumo do dia</button> <button data-enviar="${u.id}">Enviar resumo agora</button>`}</td>
     </tr>`).join('') : '<tr><td colspan="6" style="color:var(--suave)">Nenhum cadastro ainda.</td></tr>';
   document.querySelectorAll('[data-fiscal]').forEach((b) => b.addEventListener('click', async () => {
     const codigoMunicipio = prompt('Código IBGE do município do prestador (7 dígitos). Sorocaba: 3552205', b.dataset.mun || '');
     if (codigoMunicipio === null) return;
     const codigoServico = prompt('Código de tributação nacional do serviço (6 dígitos, ex.: 010701):', b.dataset.serv || '');
     if (codigoServico === null) return;
-    const proximoDps = prompt('Próximo número da DPS (continua a numeração do Emissor Nacional):', b.dataset.dps || '1');
+    const serieDps = prompt('Série da DPS usada pelo site (use uma série só do site, ex.: 900, para não colidir com notas feitas no Emissor Nacional pela web):', b.dataset.serie || '900');
+    if (serieDps === null) return;
+    const proximoDps = prompt('Próximo número da DPS nessa série:', b.dataset.dps || '1');
     if (proximoDps === null) return;
-    try { await apiAdmin(`/assinantes/${b.dataset.fiscal}/fiscal`, { codigoMunicipio, codigoServico, proximoDps }); carregaPortal(); } catch (e) { alert(e.message); }
+    const op = prompt('Emissão automática pela Receita (NFS-e Nacional, com o certificado A1):\n1 = desligada (pedidos vão para a fila da equipe)\n2 = teste (homologação, sem valor fiscal)\n3 = ligada (produção, nota de verdade)', { desligada: '1', homologacao: '2', producao: '3' }[b.dataset.emissao] || '1');
+    if (op === null) return;
+    const emissao = { 1: 'desligada', 2: 'homologacao', 3: 'producao' }[String(op).trim()];
+    if (!emissao) return alert('Escolha 1, 2 ou 3.');
+    try { await apiAdmin(`/assinantes/${b.dataset.fiscal}/fiscal`, { codigoMunicipio, codigoServico, serieDps, proximoDps, emissao }); carregaPortal(); } catch (e) { alert(e.message); }
+  }));
+  document.querySelectorAll('[data-notateste]').forEach((b) => b.addEventListener('click', async () => {
+    b.disabled = true; b.textContent = 'Enviando para a Receita…';
+    try {
+      const { nota } = await apiAdmin(`/assinantes/${b.dataset.notateste}/nota-teste`, {});
+      alert(nota.status === 'emitida'
+        ? `Deu certo! A Receita (homologação) gerou a nota ${nota.numero || ''}.\nChave: ${nota.chaveAcesso}\nPDF: ${nota.pdf}`
+        : nota.status === 'processando' ? 'A Receita não respondeu a tempo. A nota foi registrada como "processando" e será conferida.' : `A Receita recusou:\n${nota.erro}`);
+    } catch (e) { alert(e.message); }
+    carregaPortal();
   }));
   document.querySelectorAll('[data-previa]').forEach((b) => b.addEventListener('click', async () => {
     const r = await fetch(`/api/admin/portal/assinantes/${b.dataset.previa}/resumo`, { headers: { 'x-admin-senha': senha } });

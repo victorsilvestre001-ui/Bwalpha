@@ -549,7 +549,7 @@ async function cardCertificado() {
     <form id="formCert" class="grade-form">
       <label class="campo"><span>Arquivo do certificado</span><input type="file" id="certArq" accept=".pfx,.p12" required></label>
       <label class="campo"><span>Senha do certificado</span><input type="password" id="certSenha" required autocomplete="off"></label>
-      <label class="campo cheio"><span style="display:flex;gap:10px;align-items:flex-start"><input type="checkbox" id="certOk" required style="width:auto;margin-top:4px"><span>Autorizo a ${esc(escritorio.nome || 'V&J')} a usar este certificado <b>somente para consultar as notas fiscais</b> da ${eu.usuario.dono ? 'empresa dona do certificado (a minha ou a de um cliente que me autorizou)' : 'minha empresa'}. Ele fica guardado criptografado e posso desconectar e apagar quando quiser.</span></span></label>
+      <label class="campo cheio"><span style="display:flex;gap:10px;align-items:flex-start"><input type="checkbox" id="certOk" required style="width:auto;margin-top:4px"><span>Autorizo a ${esc(escritorio.nome || 'V&J')} a usar este certificado <b>somente para consultar e emitir as notas fiscais</b> da ${eu.usuario.dono ? 'empresa dona do certificado (a minha ou a de um cliente que me autorizou)' : 'minha empresa'}. Ele fica guardado criptografado e posso desconectar e apagar quando quiser.</span></span></label>
       <div class="cheio"><button class="btn azul">Conectar certificado</button> <span id="certMsg"></span></div>
     </form>
     <p class="sub" style="font-size:.85rem">Vem automático: notas de compra dos últimos 90 dias e todas as novas, e notas de serviço do padrão nacional. Notas de venda antigas e de loja (NFC-e) continuam pelo envio do arquivo .zip.</p>`;

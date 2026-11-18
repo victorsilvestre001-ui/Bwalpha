@@ -20,9 +20,10 @@ const NS_DS = 'http://www.w3.org/2000/09/xmldsig#';
 const VERSAO = '1.01';
 const VER_APLIC = 'VJ-Portal-1.0';
 
+// Ambiente padrão (variáveis); cada empresa pode ter o seu em fiscal.emissao (desligada | homologacao | producao)
 const homologacao = () => process.env.NFSE_AMBIENTE === 'homologacao';
 const ligado = () => process.env.NFSE_NACIONAL === '1';
-const URLS = () => (homologacao()
+const URLS = (homolog) => (homolog
   ? { sefin: 'https://sefin.producaorestrita.nfse.gov.br/SefinNacional', adn: 'https://adn.producaorestrita.nfse.gov.br' }
   : { sefin: 'https://sefin.nfse.gov.br/SefinNacional', adn: 'https://adn.nfse.gov.br' });
 
@@ -69,7 +70,7 @@ function opSimpNac(empresa) {
 }
 
 // Monta o XML da DPS (sem assinatura). Devolve { xml, id }.
-function montaDps(nota, prestador, { agora = new Date(), ambiente = homologacao() ? 2 : 1 } = {}) {
+function montaDps(nota, prestador, { agora = new Date(), ambiente = 1 } = {}) {
   const f = prestador.fiscal || {};
   if (!/^\d{7}$/.test(String(f.codigoMunicipio || ''))) throw new ErroNfse('Falta o código IBGE do município da empresa (Dados da nota no /admin).');
   if (!/^\d{6}$/.test(String(f.codigoServico || ''))) throw new ErroNfse('Falta o código de tributação nacional do serviço (Dados da nota no /admin).');
@@ -208,11 +209,11 @@ function mensagensErro(json) {
 // ---------- Operações ----------
 let transporte = requisicao; // trocado nos testes
 
-async function emite(nota, prestador, { pfx, senha }) {
+async function emite(nota, prestador, { pfx, senha }, { homolog = false } = {}) {
   const cert = abreCertificado(pfx, senha);
-  const { id, xml } = montaDps(nota, prestador);
+  const { id, xml } = montaDps(nota, prestador, { ambiente: homolog ? 2 : 1 });
   const assinado = assina(`<?xml version="1.0" encoding="UTF-8"?>${xml}`, { tag: 'infDPS', idRef: id, ...cert });
-  const r = await transporte({ url: `${URLS().sefin}/nfse`, method: 'POST', body: { dpsXmlGZipB64: gz64(assinado) }, pfx, senha });
+  const r = await transporte({ url: `${URLS(homolog).sefin}/nfse`, method: 'POST', body: { dpsXmlGZipB64: gz64(assinado) }, pfx, senha });
   if ((r.status === 200 || r.status === 201) && r.json && r.json.chaveAcesso) {
     return { status: 'emitida', idDps: id, chaveAcesso: r.json.chaveAcesso, numero: numeroDaNfse(r.json.nfseXmlGZipB64) || '', nfseXml: r.json.nfseXmlGZipB64 || '', alertas: mensagensErro({ erros: r.json.alertas || [] }), emitidaEm: new Date().toISOString() };
   }
@@ -228,19 +229,19 @@ function numeroDaNfse(b64) {
 }
 
 // Retoma uma emissão interrompida (sem resposta): pergunta à Receita se a DPS virou nota
-async function consultaDps(idDps, { pfx, senha }) {
-  const r = await transporte({ url: `${URLS().sefin}/dps/${idDps}`, pfx, senha });
+async function consultaDps(idDps, { pfx, senha }, { homolog = false } = {}) {
+  const r = await transporte({ url: `${URLS(homolog).sefin}/dps/${idDps}`, pfx, senha });
   if (r.status === 200 && r.json && r.json.chaveAcesso) return { chaveAcesso: r.json.chaveAcesso };
   return null;
 }
 
-async function danfse(chave, { pfx, senha }) {
-  const r = await transporte({ url: `${URLS().adn}/danfse/${chave}`, pfx, senha, binario: true });
+async function danfse(chave, { pfx, senha }, { homolog = false } = {}) {
+  const r = await transporte({ url: `${URLS(homolog).adn}/danfse/${chave}`, pfx, senha, binario: true });
   if (r.status === 200 && r.buf && r.buf.length > 500 && r.buf.subarray(0, 4).toString() === '%PDF') return r.buf;
   throw new ErroNfse(`DANFSe indisponível (${r.status}).`);
 }
 
-function montaCancelamento({ chave, cnpjAutor, codigo = '9', motivo, agora = new Date(), ambiente = homologacao() ? 2 : 1 }) {
+function montaCancelamento({ chave, cnpjAutor, codigo = '9', motivo, agora = new Date(), ambiente = 1 }) {
   if (!/^\d{50}$/.test(String(chave))) throw new ErroNfse('Chave de acesso inválida.');
   const m = limpa(motivo, 255);
   if (m.length < 15) throw new ErroNfse('O motivo do cancelamento precisa ter pelo menos 15 caracteres.');
@@ -256,11 +257,11 @@ function montaCancelamento({ chave, cnpjAutor, codigo = '9', motivo, agora = new
   return { id, xml: `<pedRegEvento xmlns="${NS}" versao="${VERSAO}"><infPedReg Id="${id}">${inf}</infPedReg></pedRegEvento>` };
 }
 
-async function cancela(nota, prestador, justificativa, { pfx, senha }) {
+async function cancela(nota, prestador, justificativa, { pfx, senha }, { homolog = false } = {}) {
   const cert = abreCertificado(pfx, senha);
-  const { id, xml } = montaCancelamento({ chave: nota.chaveAcesso, cnpjAutor: prestador.cnpj, motivo: justificativa });
+  const { id, xml } = montaCancelamento({ chave: nota.chaveAcesso, cnpjAutor: prestador.cnpj, motivo: justificativa, ambiente: homolog ? 2 : 1 });
   const assinado = assina(`<?xml version="1.0" encoding="UTF-8"?>${xml}`, { tag: 'infPedReg', idRef: id, ...cert });
-  const r = await transporte({ url: `${URLS().sefin}/nfse/${nota.chaveAcesso}/eventos`, method: 'POST', body: { pedidoRegistroEventoXmlGZipB64: gz64(assinado) }, pfx, senha });
+  const r = await transporte({ url: `${URLS(homolog).sefin}/nfse/${nota.chaveAcesso}/eventos`, method: 'POST', body: { pedidoRegistroEventoXmlGZipB64: gz64(assinado) }, pfx, senha });
   if (r.status === 200 || r.status === 201) return { status: 'cancelada', canceladaEm: new Date().toISOString() };
   throw new ErroNfse(mensagensErro(r.json).join('; ') || `A Receita respondeu ${r.status}.`, { status: r.status });
 }

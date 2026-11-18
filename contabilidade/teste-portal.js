@@ -310,8 +310,27 @@ const notas = require('./portal/notas');
       const retomada = (await req('GET', '/api/portal/notas')).json.notas.find((x) => x.id === r.json.nota.id);
       assert.strictEqual(retomada.status, 'emitida', 'retomada pela DPS');
       assert.match(retomada.pdf, /ConsultaPublica/, 'sem DANFSe, cai no link da consulta pública');
-      nacional._setTransporte(null);
+      // Emissão escolhida por empresa no /admin (sem a variável geral): homologação + nota de teste
       delete process.env.NFSE_NACIONAL;
+      const idMaria = (await req('GET', '/api/admin/portal/assinantes', null, admin)).json.assinantes.find((x) => x.cnpj === '12345678000195').id;
+      assert.strictEqual((await req('POST', `/api/admin/portal/assinantes/${idMaria}/nota-teste`, {}, admin)).status, 409, 'só testa em homologação');
+      await req('PUT', '/api/portal/fiscal', { codigoMunicipio: '3552205', codigoServico: '010701', emissao: 'producao' });
+      assert.strictEqual((await req('GET', '/api/admin/portal/assinantes', null, admin)).json.assinantes.find((x) => x.id === idMaria).fiscal.emissao, undefined, 'cliente não liga a emissão sozinho');
+      assert.strictEqual((await req('POST', `/api/admin/portal/assinantes/${idMaria}/fiscal`, { codigoMunicipio: '3552205', codigoServico: '010701', serieDps: 900, proximoDps: 1, emissao: 'qualquer' }, admin)).status, 400);
+      r = await req('POST', `/api/admin/portal/assinantes/${idMaria}/fiscal`, { codigoMunicipio: '3552205', codigoServico: '010701', serieDps: 900, proximoDps: 1, emissao: 'homologacao' }, admin);
+      assert.strictEqual(r.json.usuario.fiscal.emissao, 'homologacao');
+      const urls = [];
+      nacional._setTransporte(async ({ url, method, body, binario }) => {
+        urls.push(url);
+        if (method === 'POST') { const x = nacional.desgz64(body.dpsXmlGZipB64); assert.ok(x.includes('<tpAmb>2</tpAmb>') && x.includes('<finNFSe>0</finNFSe>') && x.includes('<serie>900</serie>')); return { status: 201, json: { chaveAcesso: chave } }; }
+        if (binario) return { status: 200, buf: Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.alloc(600, 32)]) };
+        return { status: 404, json: {} };
+      });
+      r = await req('POST', `/api/admin/portal/assinantes/${idMaria}/nota-teste`, {}, admin);
+      assert.strictEqual(r.json.nota.status, 'emitida', JSON.stringify(r.json));
+      assert.strictEqual(r.json.nota.ambiente, 'homologacao');
+      assert.ok(urls.every((u) => u.includes('producaorestrita')), 'homologação usa a produção restrita');
+      nacional._setTransporte(null);
     }
     await new Promise((ok) => setTimeout(ok, 200));
     r = await req('GET', '/api/portal/notas-capturadas');

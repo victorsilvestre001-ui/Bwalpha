@@ -106,7 +106,8 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
   });
 
   // Configuração fiscal da empresa (vai em todas as notas). Usada pelo /admin e, por compatibilidade, pelo cliente.
-  function salvaFiscal(u, body, res) {
+  // A emissão automática (desligada | homologacao | producao) só o contador muda, pelo /admin.
+  function salvaFiscal(u, body, res, { contador = false } = {}) {
     const f = {
       ...(u.fiscal || {}),
       codigoMunicipio: txt(body.codigoMunicipio, 7).replace(/\D/g, ''),
@@ -114,6 +115,10 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       serieDps: Number(body.serieDps) || 1,
       regimeEspecial: Number(body.regimeEspecial) || 0,
     };
+    if (contador && body.emissao !== undefined) {
+      if (!['desligada', 'homologacao', 'producao'].includes(body.emissao)) return res.status(400).json({ erro: 'Emissão automática: use desligada, homologacao ou producao.' });
+      f.emissao = body.emissao;
+    }
     if (f.codigoMunicipio.length !== 7) return res.status(400).json({ erro: 'O código do município (IBGE) tem 7 dígitos.' });
     if (f.codigoServico.length !== 6) return res.status(400).json({ erro: 'O código de tributação nacional do serviço tem 6 dígitos (ex.: 010701).' });
     const patch = { fiscal: f };
@@ -155,7 +160,10 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
   // ---------- NFS-e Nacional (direto na Receita, com o certificado A1 da empresa) ----------
   const PASTA_NFSE = path.join(DADOS_DIR, 'nfse');
   const arqNota = (n, ext) => path.join(PASTA_NFSE, `${String(n.id).replace(/[^\w-]/g, '')}.${ext}`);
-  const usaNacional = (u) => nacional.ligado() && certificado.ativo() && notas.configFiscalCompleta(u) && !!certificado.carrega(u.id);
+  // Ambiente de emissão da empresa: o escolhido no /admin ou, sem escolha, o padrão das variáveis
+  const ambienteDe = (u) => (u.fiscal && u.fiscal.emissao) || (nacional.ligado() ? (nacional.homologacao() ? 'homologacao' : 'producao') : 'desligada');
+  const opcoesAmb = (amb) => ({ homolog: amb === 'homologacao' });
+  const usaNacional = (u) => ambienteDe(u) !== 'desligada' && certificado.ativo() && notas.configFiscalCompleta(u) && !!certificado.carrega(u.id);
 
   // Guarda XML e PDF da nota e cria o link público do PDF (para o cliente mandar ao tomador)
   async function guardaArquivosNacional(u, n, r, cert) {
@@ -164,7 +172,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     const token = n.token || crypto.randomBytes(12).toString('base64url');
     let pdf = '';
     try {
-      fs.writeFileSync(arqNota(n, 'pdf'), await nacional.danfse(r.chaveAcesso, cert));
+      fs.writeFileSync(arqNota(n, 'pdf'), await nacional.danfse(r.chaveAcesso, cert, opcoesAmb(n.ambiente)));
       pdf = `${site}/nf/${token}`;
     } catch (err) {
       console.warn('[nfse] danfse', n.id, err.message);
@@ -178,10 +186,11 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     const numeroDps = u.proximoDps || 1;
     db.atualiza('usuarios', u.id, { proximoDps: numeroDps + 1 });
     const cert = certificado.carrega(u.id);
-    const base = { via: 'nacional', numeroDps, enviadaEm: agora, idDps: nacional.idDps({ codigoMunicipio: u.fiscal.codigoMunicipio, cnpj: u.cnpj, serie: Number(u.fiscal.serieDps || 1), numero: numeroDps }) };
+    const ambiente = ambienteDe(u);
+    const base = { via: 'nacional', ambiente, numeroDps, enviadaEm: agora, idDps: nacional.idDps({ codigoMunicipio: u.fiscal.codigoMunicipio, cnpj: u.cnpj, serie: Number(u.fiscal.serieDps || 1), numero: numeroDps }) };
     db.atualiza('notas', n.id, { ...base, status: 'processando' });
     try {
-      const r = await nacional.emite({ ...n, numeroDps }, u, cert);
+      const r = await nacional.emite({ ...n, numeroDps }, u, cert, opcoesAmb(ambiente));
       return guardaArquivosNacional(u, { ...n, ...base }, r, cert);
     } catch (err) {
       // Sem resposta da Receita: fica "processando" e é conferida pela DPS na próxima abertura
@@ -194,7 +203,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
   async function retomaNacional(u, n) {
     const cert = certificado.carrega(u.id);
     if (!cert || !n.idDps) return;
-    const achou = await nacional.consultaDps(n.idDps, cert);
+    const achou = await nacional.consultaDps(n.idDps, cert, opcoesAmb(n.ambiente));
     if (achou) await guardaArquivosNacional(u, n, { status: 'emitida', chaveAcesso: achou.chaveAcesso, emitidaEm: new Date().toISOString() }, cert);
     else if (Date.now() - Date.parse(n.enviadaEm) > 30 * 60 * 1000) db.atualiza('notas', n.id, { status: 'erro', erro: 'A Receita não confirmou a emissão. Peça a nota de novo ou fale com a equipe V&J.' });
   }
@@ -293,7 +302,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (n.via === 'nacional' && n.chaveAcesso) {
       const cert = certificado.carrega(req.usuario.id);
       if (!cert) return res.status(409).json({ erro: 'O certificado da empresa não está conectado. Fale com a equipe V&J.' });
-      try { return res.json({ nota: db.atualiza('notas', n.id, { ...(await nacional.cancela(n, req.usuario, justificativa, cert)), cancelamentoPedido: justificativa }) }); } catch (err) { return res.status(502).json({ erro: err.message }); }
+      try { return res.json({ nota: db.atualiza('notas', n.id, { ...(await nacional.cancela(n, req.usuario, justificativa, cert, opcoesAmb(n.ambiente))), cancelamentoPedido: justificativa }) }); } catch (err) { return res.status(502).json({ erro: err.message }); }
     }
     if (!notas.ativo()) return res.json({ nota: db.atualiza('notas', n.id, { cancelamentoPedido: justificativa }) });
     try {
@@ -431,7 +440,18 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (!u) res.status(404).json({ erro: 'Empresa não encontrada.' });
     return u;
   };
-  admin.post('/assinantes/:id/fiscal', express.json(), (req, res) => { const u = empresaDe(req, res); if (u) salvaFiscal(u, req.body || {}, res); });
+  admin.post('/assinantes/:id/fiscal', express.json(), (req, res) => { const u = empresaDe(req, res); if (u) salvaFiscal(u, req.body || {}, res, { contador: true }); });
+  // Nota de R$ 1,00 na produção restrita (homologação), com o certificado já conectado, para conferir a integração
+  admin.post('/assinantes/:id/nota-teste', async (req, res) => {
+    const u = empresaDe(req, res);
+    if (!u) return;
+    if (ambienteDe(u) !== 'homologacao') return res.status(409).json({ erro: 'Coloque a emissão automática desta empresa em "homologacao" antes de testar.' });
+    if (!notas.configFiscalCompleta(u)) return res.status(409).json({ erro: 'Preencha os Dados da nota (município e código do serviço).' });
+    if (!certificado.carrega(u.id)) return res.status(409).json({ erro: 'Conecte o certificado A1 desta empresa primeiro.' });
+    const tomador = { cnpj: '43403653000124', nome: 'V&J ASSESSORIA ADMINISTRATIVA LTDA' };
+    const n = db.insere('notas', { usuarioId: u.id, status: 'rascunho', tomador, descricao: 'Nota de teste da integração com a NFS-e Nacional (homologação, sem valor fiscal)', valor: 1, teste: true });
+    res.json({ nota: await emiteNacional(u, n, new Date().toISOString()) });
+  });
   admin.post('/assinantes/:id/certificado', express.json({ limit: '100kb' }), (req, res) => { const u = empresaDe(req, res); if (u) responde(res, conectaCert(u, req, 'contador')); });
   admin.get('/assinantes/:id/notas-capturadas', (req, res) => { const u = empresaDe(req, res); if (u) res.json(captura.notasDe(u.id)); });
   admin.post('/assinantes/:id/certificado/buscar', async (req, res) => { const u = empresaDe(req, res); if (u) responde(res, await buscaCert(u)); });

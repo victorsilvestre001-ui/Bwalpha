@@ -1,6 +1,7 @@
 // Certificado digital A1 do cliente: leitura, conferência e guarda criptografada.
 // O arquivo e a senha ficam cifrados (AES-256-GCM) no volume; a chave vem de CERT_CHAVE
-// (variável do Railway), nunca do código. Usado só para CONSULTAR notas da empresa.
+// (variável do Railway), nunca do código. Usado para consultar as notas da empresa e, com
+// NFSE_NACIONAL=1, para emitir NFS-e no Padrão Nacional (portal/nfse-nacional.js).
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
