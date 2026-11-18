@@ -84,7 +84,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--marca-2); box-sh
 .pedido { margin-bottom: 18px; border: 1.5px solid var(--destaque); }
 .pedido textarea { border: 0; box-shadow: none !important; font-size: 1.05rem; resize: vertical; padding: 4px 2px; }
 .pedido-pe { display: flex; gap: 12px; align-items: flex-end; justify-content: space-between; border-top: 1px solid var(--linha); padding-top: 12px; margin-top: 8px; }
-.pedido-pe .chips-freq { margin: 0; }
+.atalhos { display: flex; gap: 8px; flex-wrap: wrap; }
 .hist { list-style: none; margin: 0; padding: 0; }
 .hist .ped { padding: 12px 0; border-bottom: 1px solid var(--linha); display: grid; gap: 6px; }
 .hist .ped:last-child { border-bottom: 0; }

@@ -497,7 +497,8 @@ const gravaHist = (h) => { try { localStorage.setItem(HIST, JSON.stringify(h.sli
 
 function telaAssistente() {
   const el = $('#conteudo');
-  const exemplos = ['puxar guia da AGEN', 'puxar DAS de outubro da LH Motos', 'emitir nota da AGEN para VIMARI de 2.750,00 manutenção dos motores', 'cadastrar empresa 00.000.000/0000-00'];
+  // Atalhos: começam o pedido e você completa com a empresa
+  const atalhos = [['Puxar guia', 'Puxar guia da ', 'calc'], ['Emitir NF', 'Emitir NF da ', 'nota'], ['Cadastrar empresa', 'Cadastrar empresa ', 'predio']];
   const desenha = () => {
     const h = leHist();
     $('#histPedidos').innerHTML = h.length ? h.map((p) => `<li class="ped ${p.ok ? 'ok' : 'erro'}"><div class="ped-q">${esc(p.pedido)}<small>${new Date(p.em).toLocaleString('pt-BR')}</small></div><div class="ped-r">${p.ok ? icone('check') : '⚠'} <span>${esc(p.resposta)}</span>${p.link ? ` <a href="${esc(p.link)}">Abrir</a>` : ''}</div></li>`).join('') : '<li class="vazio">Seus pedidos aparecem aqui.</li>';
@@ -505,11 +506,11 @@ function telaAssistente() {
   el.innerHTML = `
     <div class="cab"><div><h1>Pedidos</h1><p>Escreva o que precisa, como numa mensagem. O painel faz.</p></div></div>
     <form class="card pedido" id="formPedido">
-      <textarea id="pedido" rows="3" placeholder="Ex.: puxar guia da AGEN"></textarea>
-      <div class="pedido-pe"><div class="chips-freq">${exemplos.map((x) => `<button type="button" data-ex="${esc(x)}">${esc(x)}</button>`).join('')}</div><button class="btn ouro">${icone('raio')} Fazer</button></div>
+      <textarea id="pedido" rows="3" placeholder="O que você precisa?"></textarea>
+      <div class="pedido-pe"><div class="atalhos">${atalhos.map(([rotulo, inicio, ic]) => `<button type="button" class="btn pequeno" data-ex="${esc(inicio)}">${icone(ic)} ${rotulo}</button>`).join('')}</div><button class="btn ouro">${icone('raio')} Fazer</button></div>
     </form>
     <div class="card"><h2>Histórico</h2><ul class="hist" id="histPedidos"></ul></div>`;
-  $$('[data-ex]').forEach((b) => b.addEventListener('click', () => { $('#pedido').value = b.dataset.ex; $('#pedido').focus(); }));
+  $$('[data-ex]').forEach((b) => b.addEventListener('click', () => { const p = $('#pedido'); p.value = b.dataset.ex; p.focus(); p.setSelectionRange(p.value.length, p.value.length); }));
   $('#pedido').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); $('#formPedido').requestSubmit(); } });
   $('#formPedido').addEventListener('submit', async (ev) => {
     ev.preventDefault();
