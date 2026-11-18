@@ -78,6 +78,22 @@ const notas = require('./portal/notas');
   assert.strictEqual(r.json.nota.status, 'emitida');
   r = await req('GET', '/api/portal/notas');
   assert.strictEqual(r.json.usadas, 1);
+  assert.strictEqual(r.json.tomadores.length, 1, 'cliente frequente aparece para repetir a nota');
+  assert.strictEqual(r.json.tomadores[0].documento, '12345678909');
+  assert.strictEqual(r.json.tomadores[0].ultimoValor, 1500.5);
+
+  // Nome do tomador na hora (CNPJ de demonstração, sem rede)
+  r = await req('GET', '/api/portal/tomador/11222333000181');
+  assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+  assert.ok(r.json.nome, 'devolve a razão social');
+  assert.strictEqual((await req('GET', '/api/portal/tomador/11222333000100')).status, 400, 'CNPJ inválido');
+
+  // Configuração fiscal feita pelo contador no /admin
+  assert.strictEqual((await req('POST', `/api/admin/portal/assinantes/${assinantes[0].id}/fiscal`, { codigoMunicipio: '123', codigoServico: '010701' }, admin)).status, 400);
+  r = await req('POST', `/api/admin/portal/assinantes/${assinantes[0].id}/fiscal`, { codigoMunicipio: '3552205', codigoServico: '010701', proximoDps: 5 }, admin);
+  assert.strictEqual(r.json.usuario.fiscal.codigoMunicipio, '3552205');
+  assert.strictEqual(r.json.usuario.proximoDps, 5);
+  assert.strictEqual((await req('GET', '/api/portal/notas')).json.fiscalOk, true);
 
   // Orçamento + página pública (sem dados internos)
   r = await req('POST', '/api/portal/orcamentos', { documento: '12345678909', nomeCliente: 'João', titulo: 'Contabilidade 2027', itens: [{ descricao: 'Abertura', quantidade: 1, valor: 690 }, { descricao: 'Mensalidade', quantidade: 12, valor: 270 }], desconto: 100, validadeDias: 10 });

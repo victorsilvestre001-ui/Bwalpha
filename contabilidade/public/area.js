@@ -180,94 +180,194 @@ function cardResumo({ resumo: r, canais, preferencias }) {
 }
 
 // ----- Notas fiscais -----
-async function abaNotas() {
+// Pedido em 3 passos: para quem (CNPJ/CPF, o nome aparece na hora), quanto e o quê.
+const STATUS_NOTA = { emitida: 'Emitida', processando: 'Processando', fila: 'Com a equipe', erro: 'Erro', cancelada: 'Cancelada' };
+let notasCache = null;
+
+function mascaraDoc(v) {
+  const c = String(v || '').replace(/\D/g, '').slice(0, 14);
+  if (c.length <= 11) return c.replace(/^(\d{3})(\d)/, '$1.$2').replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d{1,2})$/, '.$1-$2');
+  return c.replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d)/, '$1-$2');
+}
+function mascaraValor(v) {
+  const c = String(v || '').replace(/\D/g, '').replace(/^0+/, '');
+  if (!c) return '';
+  const n = Number(c) / 100;
+  return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+const valorNumero = (v) => Number(String(v || '').replace(/\./g, '').replace(',', '.')) || 0;
+
+function msgNota(texto, tipo = 'ok') {
+  const el = $('#msgNota');
+  if (!el) return;
+  el.className = tipo === 'ok' ? 'ok-form' : 'erro-form';
+  el.innerHTML = texto;
+  el.hidden = !texto;
+  if (texto) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function abaNotas(mensagem) {
   const el = $('#abaNotas');
   el.innerHTML = '<p class="vazio">Carregando notas…</p>';
   try {
     const n = await api('/notas');
-    const f = eu.usuario.fiscal || {};
+    notasCache = n;
+    const enviadas = n.notas.filter((x) => x.status !== 'rascunho');
     el.innerHTML = `
-      <h1>Notas fiscais de serviço</h1>
-      <p class="sub">Informe só o CNPJ (ou CPF) do cliente, a descrição e o valor. Você confere o rascunho e confirma. Este mês: <b>${n.usadas} de ${n.limite}</b> notas.</p>
+      <h1>Pedir nota fiscal</h1>
+      <p class="sub">É só dizer <b>para quem</b>, <b>quanto</b> e <b>o quê</b>. Você confere antes de enviar. Este mês: <b>${n.usadas} de ${n.limite}</b> notas.</p>
       ${n.limite ? '' : `<div class="card aviso-sim">A emissão de notas faz parte do plano Completo. <a href="#" id="irConta">Ver planos</a></div>`}
+      <p id="msgNota" hidden></p>
       <section class="card">
-        <form id="formNota" class="grade-form">
-          <label class="campo"><span>CNPJ ou CPF do cliente</span><input id="nDoc" required maxlength="18" placeholder="Somente números"></label>
-          <label class="campo"><span>Valor da nota (R$)</span><input id="nValor" required inputmode="decimal" placeholder="Ex.: 1500,00"></label>
-          <label class="campo cheio"><span>Descrição do serviço</span><textarea id="nDesc" required maxlength="2000" rows="3" placeholder="Ex.: Frete de Sorocaba/SP para Campinas/SP, carga de 12 toneladas, em 15/11/2026"></textarea></label>
-          <label class="campo"><span>Nome do cliente (se for CPF)</span><input id="nNome" maxlength="160"></label>
-          <label class="campo"><span>E-mail do cliente (opcional)</span><input id="nEmail" type="email" maxlength="160"></label>
-          <div class="cheio"><button class="btn azul">Gerar rascunho da nota</button></div>
+        ${n.tomadores && n.tomadores.length ? `
+        <div class="frequentes">
+          <span>Clientes frequentes</span>
+          <div>${n.tomadores.map((t, i) => `<button type="button" class="chip" data-freq="${i}" title="${esc(docFmt(t.documento))}">${esc((t.nome || docFmt(t.documento)).slice(0, 40))}</button>`).join('')}</div>
+        </div>` : ''}
+        <form id="formNota" class="passos-nota" novalidate>
+          <div class="passo">
+            <b class="num">1</b>
+            <label class="campo"><span>Para quem é a nota? (CNPJ ou CPF do seu cliente)</span>
+              <input id="nDoc" required inputmode="numeric" maxlength="18" placeholder="00.000.000/0000-00" autocomplete="off"></label>
+            <div id="tomadorInfo" class="tomador-info" hidden></div>
+            <div id="camposCpf" class="grade-form" hidden>
+              <label class="campo"><span>Nome do cliente</span><input id="nNome" maxlength="160" placeholder="Nome completo"></label>
+              <label class="campo"><span>E-mail do cliente (opcional)</span><input id="nEmail" type="email" maxlength="160" placeholder="para receber a nota"></label>
+            </div>
+          </div>
+          <div class="passo">
+            <b class="num">2</b>
+            <label class="campo"><span>Quanto? (valor da nota)</span>
+              <div class="campo-valor"><i>R$</i><input id="nValor" required inputmode="numeric" placeholder="0,00" autocomplete="off"></div></label>
+          </div>
+          <div class="passo">
+            <b class="num">3</b>
+            <label class="campo"><span>O que foi feito? (descrição do serviço)</span>
+              <textarea id="nDesc" required maxlength="2000" rows="3" placeholder="Ex.: Manutenção do ar-condicionado da sala comercial, realizada em 15/11/2026"></textarea></label>
+          </div>
+          <div class="linha-botoes"><button class="btn azul" id="btnRevisar">Revisar pedido ${icone('seta')}</button></div>
         </form>
         <div id="previewNota"></div>
       </section>
       <section class="card">
-        <h2>Notas enviadas</h2>
-        ${n.notas.filter((x) => x.status !== 'rascunho').length ? `<table class="lista-docs"><thead><tr><th>Data</th><th>Cliente</th><th class="ocultar-cel">Descrição</th><th>Valor</th><th>Situação</th><th></th></tr></thead><tbody>
-          ${n.notas.filter((x) => x.status !== 'rascunho').map((x) => `<tr>
+        <h2>Minhas notas</h2>
+        ${enviadas.length ? `<table class="lista-docs"><thead><tr><th>Data</th><th>Cliente</th><th class="ocultar-cel">Descrição</th><th>Valor</th><th>Situação</th><th></th></tr></thead><tbody>
+          ${enviadas.map((x) => `<tr>
             <td>${data(x.enviadaEm)}${x.numero ? `<br><small>Nº ${esc(x.numero)}</small>` : ''}</td>
             <td>${esc(x.tomador.nome)}<br><small>${docFmt(x.tomador.cnpj || x.tomador.cpf)}</small></td>
             <td class="ocultar-cel">${esc(x.descricao.slice(0, 80))}${x.descricao.length > 80 ? '…' : ''}</td>
             <td>${brl(x.valor)}</td>
-            <td><span class="status st-${x.status}">${{ emitida: 'Emitida', processando: 'Processando', fila: 'Com a equipe', erro: 'Erro', cancelada: 'Cancelada' }[x.status] || x.status}</span>${x.erro ? `<br><small style="color:var(--urgente)">${esc(x.erro)}</small>` : ''}</td>
-            <td class="acoes">${x.pdf ? `<a href="${esc(x.pdf)}" target="_blank" rel="noopener">PDF</a><a target="_blank" rel="noopener" href="${linkZap(`Olá! Segue a nota fiscal${x.numero ? ` nº ${x.numero}` : ''} no valor de ${brl(x.valor)}: ${x.pdf}`, '')}">Enviar</a>` : ''}</td>
-          </tr>`).join('')}</tbody></table>` : '<p class="vazio">Nenhuma nota enviada ainda.</p>'}
-      </section>
-      <details class="card config-fiscal" ${n.fiscalOk ? '' : 'open'}>
-        <summary>Configuração fiscal da sua empresa ${n.fiscalOk ? '✅' : '(preencha uma vez)'}</summary>
-        <p class="sub">Esses dados vão em todas as notas. Na dúvida, a equipe V&amp;J preenche para você.</p>
-        <form id="formFiscal" class="grade-form">
-          <label class="campo"><span>Código IBGE do município (7 dígitos)</span><input id="fMun" maxlength="7" value="${esc(f.codigoMunicipio || '')}" placeholder="Sorocaba: 3552205"></label>
-          <label class="campo"><span>Código de tributação nacional do serviço (6 dígitos)</span><input id="fServ" maxlength="6" value="${esc(f.codigoServico || '')}" placeholder="Ex.: 010701"></label>
-          <label class="campo"><span>Série da DPS</span><input id="fSerie" type="number" min="1" value="${esc(f.serieDps || 1)}"></label>
-          <label class="campo"><span>Próximo número da DPS</span><input id="fNum" type="number" min="1" value="${esc(eu.usuario.proximoDps || 1)}"></label>
-          <div class="cheio"><button class="btn azul">Salvar configuração</button> <span id="okFiscal"></span></div>
-        </form>
-      </details>`;
+            <td><span class="status st-${x.status}">${STATUS_NOTA[x.status] || x.status}</span>${x.erro ? `<br><small style="color:var(--urgente)">${esc(x.erro)}</small>` : ''}</td>
+            <td class="acoes">${x.pdf ? `<a href="${esc(x.pdf)}" target="_blank" rel="noopener">PDF</a><a target="_blank" rel="noopener" href="${linkZap(`Olá! Segue a nota fiscal${x.numero ? ` nº ${x.numero}` : ''} no valor de ${brl(x.valor)}: ${x.pdf}`, '')}">Enviar</a>` : ''}<a href="#" data-repetir="${esc(x.id)}">Repetir</a></td>
+          </tr>`).join('')}</tbody></table>` : '<p class="vazio">Nenhuma nota ainda. Peça a primeira aqui em cima.</p>'}
+      </section>`;
     if ($('#irConta')) $('#irConta').addEventListener('click', (e) => { e.preventDefault(); abre('conta'); });
-    $('#formNota').addEventListener('submit', geraRascunho);
-    $('#formFiscal').addEventListener('submit', salvaFiscal);
+    ligaFormNota();
+    $$('[data-freq]').forEach((b) => b.addEventListener('click', () => {
+      const t = n.tomadores[Number(b.dataset.freq)];
+      preencheNota({ documento: t.documento, nome: t.nome, email: t.email, descricao: t.ultimaDescricao });
+    }));
+    $$('[data-repetir]').forEach((a) => a.addEventListener('click', (e) => {
+      e.preventDefault();
+      const x = n.notas.find((y) => y.id === a.dataset.repetir);
+      if (x) preencheNota({ documento: x.tomador.cnpj || x.tomador.cpf, nome: x.tomador.nome, email: x.tomador.email, descricao: x.descricao, valor: x.valor });
+    }));
+    if (mensagem) msgNota(mensagem.texto, mensagem.tipo);
   } catch (err) { trataErro(err, el); }
+}
+
+function preencheNota({ documento, nome, email, descricao, valor }) {
+  $('#nDoc').value = mascaraDoc(documento);
+  $('#nNome').value = nome || '';
+  $('#nEmail').value = email || '';
+  $('#nDesc').value = descricao || '';
+  $('#nValor').value = valor ? mascaraValor(Math.round(valor * 100)) : '';
+  $('#previewNota').innerHTML = '';
+  $('#formNota').hidden = false;
+  atualizaTomador();
+  $('#formNota').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  (valor ? $('#nDesc') : $('#nValor')).focus();
+}
+
+let timerTomador = null;
+let tomadorAtual = null; // { cnpj, nome, ... } quando o CNPJ foi encontrado
+function atualizaTomador() {
+  const doc = $('#nDoc').value.replace(/\D/g, '');
+  const info = $('#tomadorInfo');
+  $('#camposCpf').hidden = doc.length !== 11;
+  tomadorAtual = null;
+  clearTimeout(timerTomador);
+  if (doc.length === 11) { info.hidden = true; return; }
+  if (doc.length !== 14) { info.hidden = true; return; }
+  info.hidden = false;
+  info.className = 'tomador-info carregando';
+  info.textContent = 'Buscando o cliente na Receita…';
+  timerTomador = setTimeout(async () => {
+    try {
+      const t = await api('/tomador/' + doc);
+      if ($('#nDoc').value.replace(/\D/g, '') !== doc) return;
+      tomadorAtual = t;
+      info.className = 'tomador-info ok';
+      info.innerHTML = `${icone('check')} <span><b>${esc(t.nome)}</b>${t.fantasia ? ` <small>(${esc(t.fantasia)})</small>` : ''}<br><small>${esc([t.municipio, t.uf].filter(Boolean).join('/'))}${t.situacao && t.situacao !== 'ATIVA' ? ` · <b style="color:var(--urgente)">Atenção: situação ${esc(t.situacao)} na Receita</b>` : ''}</small></span>`;
+    } catch (err) {
+      info.className = 'tomador-info erro';
+      info.textContent = err.message;
+    }
+  }, 350);
+}
+
+function ligaFormNota() {
+  $('#nDoc').addEventListener('input', (e) => { e.target.value = mascaraDoc(e.target.value); atualizaTomador(); });
+  $('#nValor').addEventListener('input', (e) => { e.target.value = mascaraValor(e.target.value); });
+  $('#formNota').addEventListener('submit', geraRascunho);
 }
 
 async function geraRascunho(ev) {
   ev.preventDefault();
-  const botao = ev.target.querySelector('button'); botao.disabled = true;
+  const doc = $('#nDoc').value.replace(/\D/g, '');
+  const valor = valorNumero($('#nValor').value);
+  const descricao = $('#nDesc').value.trim();
+  if (doc.length !== 11 && doc.length !== 14) { msgNota('Passo 1: digite o CNPJ (14 números) ou o CPF (11 números) do seu cliente.', 'erro'); $('#nDoc').focus(); return; }
+  if (doc.length === 11 && !$('#nNome').value.trim()) { msgNota('Passo 1: para CPF, informe o nome do cliente.', 'erro'); $('#nNome').focus(); return; }
+  if (!(valor > 0)) { msgNota('Passo 2: informe o valor da nota.', 'erro'); $('#nValor').focus(); return; }
+  if (descricao.length < 5) { msgNota('Passo 3: descreva o serviço que foi feito.', 'erro'); $('#nDesc').focus(); return; }
+  msgNota('');
+  const botao = $('#btnRevisar'); botao.disabled = true;
   try {
-    const { nota } = await api('/notas', { method: 'POST', body: { documento: $('#nDoc').value, valor: String($('#nValor').value).replace(/\./g, '').replace(',', '.'), descricao: $('#nDesc').value, nome: $('#nNome').value, email: $('#nEmail').value } });
+    const { nota } = await api('/notas', { method: 'POST', body: { documento: doc, valor: String(valor), descricao, nome: $('#nNome').value, email: $('#nEmail').value } });
     const u = eu.usuario;
+    $('#formNota').hidden = true;
     $('#previewNota').innerHTML = `
       <div class="preview-nota">
-        <b>Confira antes de emitir</b>
+        <b>Confira o pedido</b>
         <dl>
-          <dt>Prestador</dt><dd>${esc(u.empresa ? u.empresa.razaoSocial : u.nome)} · ${docFmt(u.cnpj)}</dd>
-          <dt>Cliente</dt><dd>${esc(nota.tomador.nome || '—')} · ${docFmt(nota.tomador.cnpj || nota.tomador.cpf)}${nota.tomador.municipio ? ` · ${esc(nota.tomador.municipio)}/${esc(nota.tomador.uf)}` : ''}</dd>
-          <dt>Serviço</dt><dd>${esc(nota.descricao)}</dd>
-          <dt>Valor</dt><dd class="valor">${brl(nota.valor)}</dd>
+          <dt>Sua empresa</dt><dd>${esc(u.empresa ? u.empresa.razaoSocial : u.nome)} · ${docFmt(u.cnpj)}</dd>
+          <dt>Para quem</dt><dd>${esc(nota.tomador.nome || '—')} · ${docFmt(nota.tomador.cnpj || nota.tomador.cpf)}${nota.tomador.municipio ? ` · ${esc(nota.tomador.municipio)}/${esc(nota.tomador.uf)}` : ''}</dd>
+          <dt>O quê</dt><dd>${esc(nota.descricao)}</dd>
+          <dt>Quanto</dt><dd class="valor">${brl(nota.valor)}</dd>
         </dl>
-        <p class="sub">Nota emitida não pode ser apagada, só cancelada. Confira o CNPJ, a descrição e o valor.</p>
-        <div class="linha-botoes"><button class="btn" id="confirmaNota">Confirmar e emitir ${icone('seta')}</button><button class="sec" id="descartaNota">${icone('lixo')} Descartar</button></div>
+        <p class="sub">Depois de emitida, a nota não pode ser apagada, só cancelada.</p>
+        <div class="linha-botoes"><button class="btn" id="confirmaNota">Está certo, pedir a nota ${icone('seta')}</button><button class="sec" id="voltaNota">Corrigir</button><button class="sec" id="descartaNota">${icone('lixo')} Descartar</button></div>
       </div>`;
+    $('#previewNota').scrollIntoView({ behavior: 'smooth', block: 'center' });
     $('#confirmaNota').addEventListener('click', async () => {
       $('#confirmaNota').disabled = true;
       try {
         const r = await api(`/notas/${nota.id}/emitir`, { method: 'POST' });
-        const msg = { fila: 'Nota enviada para a equipe V&J. Você recebe o PDF aqui assim que for emitida.', processando: 'Nota enviada para a prefeitura/Receita. Em instantes ela aparece como emitida.', erro: `Não foi possível emitir: ${r.nota.erro || ''}` }[r.nota.status] || 'Nota enviada.';
-        alert(msg);
-        abaNotas();
-      } catch (err) { alert(err.message); $('#confirmaNota').disabled = false; }
+        const st = r.nota.status;
+        const texto = {
+          fila: `${icone('check')} <b>Pedido enviado!</b> A equipe V&amp;J emite a nota e o PDF aparece aqui em "Minhas notas".`,
+          processando: `${icone('check')} <b>Nota enviada para a prefeitura.</b> Em instantes ela aparece como emitida, com o PDF.`,
+          emitida: `${icone('check')} <b>Nota emitida!</b> O PDF está em "Minhas notas".`,
+          erro: `Não foi possível emitir: ${esc(r.nota.erro || '')}. A equipe V&amp;J foi avisada.`,
+        }[st] || 'Pedido enviado.';
+        abaNotas({ texto, tipo: st === 'erro' ? 'erro' : 'ok' });
+      } catch (err) { msgNota(esc(err.message), 'erro'); $('#confirmaNota').disabled = false; }
     });
-    $('#descartaNota').addEventListener('click', async () => { await api(`/notas/${nota.id}`, { method: 'DELETE' }); $('#previewNota').innerHTML = ''; });
-  } catch (err) { alert(err.message); } finally { botao.disabled = false; }
-}
-
-async function salvaFiscal(ev) {
-  ev.preventDefault();
-  try {
-    const r = await api('/fiscal', { method: 'PUT', body: { codigoMunicipio: $('#fMun').value, codigoServico: $('#fServ').value, serieDps: $('#fSerie').value, proximoDps: $('#fNum').value } });
-    eu.usuario = r.usuario;
-    $('#okFiscal').textContent = 'Salvo ✅';
-  } catch (err) { $('#okFiscal').textContent = err.message; }
+    const descarta = async () => { await api(`/notas/${nota.id}`, { method: 'DELETE' }).catch(() => {}); };
+    $('#voltaNota').addEventListener('click', async () => { await descarta(); $('#previewNota').innerHTML = ''; $('#formNota').hidden = false; });
+    $('#descartaNota').addEventListener('click', async () => { await descarta(); abaNotas(); });
+  } catch (err) { msgNota(esc(err.message), 'erro'); } finally { botao.disabled = false; }
 }
 
 // ----- Orçamentos -----

@@ -101,20 +101,22 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     res.json({ empresa: u.empresa, analise: u.analise, alertas: u.alertas || [] });
   });
 
-  r.put('/fiscal', auth.exigePlano, (req, res) => {
+  // Configuração fiscal da empresa (vai em todas as notas). Usada pelo /admin e, por compatibilidade, pelo cliente.
+  function salvaFiscal(u, body, res) {
     const f = {
-      codigoMunicipio: txt(req.body.codigoMunicipio, 7).replace(/\D/g, ''),
-      codigoServico: txt(req.body.codigoServico, 9).replace(/\D/g, ''),
-      serieDps: Number(req.body.serieDps) || 1,
-      regimeEspecial: Number(req.body.regimeEspecial) || 0,
+      ...(u.fiscal || {}),
+      codigoMunicipio: txt(body.codigoMunicipio, 7).replace(/\D/g, ''),
+      codigoServico: txt(body.codigoServico, 9).replace(/\D/g, ''),
+      serieDps: Number(body.serieDps) || 1,
+      regimeEspecial: Number(body.regimeEspecial) || 0,
     };
     if (f.codigoMunicipio.length !== 7) return res.status(400).json({ erro: 'O código do município (IBGE) tem 7 dígitos.' });
     if (f.codigoServico.length !== 6) return res.status(400).json({ erro: 'O código de tributação nacional do serviço tem 6 dígitos (ex.: 010701).' });
     const patch = { fiscal: f };
-    if (req.body.proximoDps) patch.proximoDps = Math.max(1, Number(req.body.proximoDps) || 1);
-    const u = db.atualiza('usuarios', req.usuario.id, patch);
-    res.json({ usuario: auth.publico(u) });
-  });
+    if (body.proximoDps) patch.proximoDps = Math.max(1, Number(body.proximoDps) || 1);
+    res.json({ usuario: auth.publico(db.atualiza('usuarios', u.id, patch)) });
+  }
+  r.put('/fiscal', auth.exigePlano, (req, res) => salvaFiscal(req.usuario, req.body || {}, res));
 
   // ---------- Resumo diário e preferências ----------
   r.get('/resumo', auth.exigePlano, (req, res) => {
@@ -144,10 +146,33 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     }
   }
 
+  // Clientes (tomadores) para quem a empresa já emitiu, do mais recente para o mais antigo, sem repetir
+  function tomadoresFrequentes(u) {
+    const vistos = new Map();
+    for (const n of minhasNotas(u).filter((x) => x.status !== 'rascunho')) {
+      const doc = n.tomador.cnpj || n.tomador.cpf;
+      if (!doc) continue;
+      const t = vistos.get(doc) || { documento: doc, nome: n.tomador.nome, email: n.tomador.email || '', ultimaDescricao: n.descricao, ultimoValor: n.valor, notas: 0 };
+      t.notas += 1;
+      vistos.set(doc, t);
+    }
+    return [...vistos.values()].slice(0, 12);
+  }
+
   r.get('/notas', auth.exigePlano, async (req, res) => {
     await atualizaProcessando(req.usuario);
     const plano = planoDo(req.usuario);
-    res.json({ notas: minhasNotas(req.usuario), usadas: usadasNoMes(req.usuario), limite: plano.notasMes || 0, fiscalOk: notas.configFiscalCompleta(req.usuario), focusAtivo: notas.ativo() });
+    res.json({ notas: minhasNotas(req.usuario), usadas: usadasNoMes(req.usuario), limite: plano.notasMes || 0, fiscalOk: notas.configFiscalCompleta(req.usuario), focusAtivo: notas.ativo(), tomadores: tomadoresFrequentes(req.usuario) });
+  });
+
+  // Nome do cliente na hora em que o CNPJ é digitado (antes de gerar o rascunho)
+  const limiteTomador = rateLimit({ windowMs: 60 * 1000, limit: 30, message: { erro: 'Muitas consultas seguidas. Espere um minuto.' } });
+  r.get('/tomador/:doc', auth.exigePlano, limiteTomador, async (req, res) => {
+    const doc = String(req.params.doc || '').replace(/\D/g, '');
+    if (doc.length !== 14 || !cnpjUtil.valido(doc)) return res.status(400).json({ erro: 'CNPJ inválido. Confira os números.' });
+    const e = await buscaEmpresa(doc).catch(() => null);
+    if (!e) return res.status(404).json({ erro: 'CNPJ não encontrado na Receita.' });
+    res.json({ cnpj: doc, nome: e.razaoSocial, fantasia: e.nomeFantasia || '', municipio: e.municipio || '', uf: e.uf || '', situacao: e.situacao || '' });
   });
 
   // Passo 1: só CNPJ (ou CPF), descrição e valor -> rascunho com os dados do tomador já preenchidos
@@ -340,6 +365,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (!u) res.status(404).json({ erro: 'Empresa não encontrada.' });
     return u;
   };
+  admin.post('/assinantes/:id/fiscal', express.json(), (req, res) => { const u = empresaDe(req, res); if (u) salvaFiscal(u, req.body || {}, res); });
   admin.post('/assinantes/:id/certificado', express.json({ limit: '100kb' }), (req, res) => { const u = empresaDe(req, res); if (u) responde(res, conectaCert(u, req, 'contador')); });
   admin.get('/assinantes/:id/notas-capturadas', (req, res) => { const u = empresaDe(req, res); if (u) res.json(captura.notasDe(u.id)); });
   admin.post('/assinantes/:id/certificado/buscar', async (req, res) => { const u = empresaDe(req, res); if (u) responde(res, await buscaCert(u)); });

@@ -69,6 +69,26 @@ body.area { background: var(--bg); }
 .btn-ia { background: var(--destaque-claro); color: var(--marca); font-weight: 700; padding: 8px 14px; border-radius: 999px; display: inline-flex; gap: 6px; align-items: center; margin-top: 6px; }
 .linha-botoes { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
 .config-fiscal summary { cursor: pointer; font-weight: 700; color: var(--marca); }
+/* Pedido de nota em 3 passos */
+.passos-nota .passo { display: grid; grid-template-columns: 34px 1fr; gap: 0 14px; align-items: start; padding: 4px 0 6px; }
+.passos-nota .passo > :not(.num) { grid-column: 2; }
+.passos-nota .num { grid-row: 1 / span 3; width: 30px; height: 30px; border-radius: 50%; background: var(--marca); color: #fff; display: grid; place-items: center; font-size: .95rem; margin-top: 24px; }
+.passos-nota, .passos-nota .campo > span, .frequentes { text-align: left; }
+.passos-nota input, .passos-nota textarea { width: 100%; font-size: 1.05rem; }
+.campo-valor { position: relative; }
+.campo-valor i { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-style: normal; font-weight: 700; color: var(--suave); }
+.campo-valor input { padding-left: 44px !important; font-weight: 700; }
+.tomador-info { display: flex; gap: 10px; align-items: flex-start; margin: -6px 0 14px; padding: 10px 14px; border-radius: 10px; font-size: .95rem; }
+.tomador-info.ok { background: var(--ok-bg); color: var(--texto); }
+.tomador-info.ok svg.i { color: var(--ok); flex: none; margin-top: 3px; }
+.tomador-info.carregando { background: var(--rotina-bg); color: var(--suave); }
+.tomador-info.erro { background: var(--urgente-bg); color: var(--urgente); }
+.frequentes { margin-bottom: 16px; }
+.frequentes > span { display: block; font-weight: 600; font-size: .85rem; color: var(--suave); margin-bottom: 8px; }
+.frequentes > div { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { background: var(--destaque-claro); color: var(--marca); border: 1px solid var(--borda); border-radius: 999px; padding: 7px 14px; font-weight: 700; font-size: .85rem; cursor: pointer; }
+.chip:hover { border-color: var(--destaque); }
+#msgNota svg.i { vertical-align: -3px; }
 @media (max-width: 900px) {
   .entrada { grid-template-columns: 1fr; padding: 36px 16px; gap: 28px; }
   .painel { grid-template-columns: 1fr; }

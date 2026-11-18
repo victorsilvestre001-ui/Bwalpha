@@ -223,13 +223,33 @@ async function carregaPortal() {
       <td style="max-width:280px">${esc(n.descricao)}${n.cancelamentoPedido ? `<br><b style="color:#c0392b">Pedido de cancelamento: ${esc(n.cancelamentoPedido)}</b>` : ''}</td>
       <td>${brlA(n.valor)}</td>
       <td>${situacao[n.status] || n.status}${n.numero ? `<br><small>Nº ${esc(n.numero)}</small>` : ''}${n.erro ? `<br><small style="color:#c0392b">${esc(n.erro)}</small>` : ''}</td>
-      <td>${['fila', 'erro'].includes(n.status) ? `<button data-anexar="${n.id}">Anexar nota emitida</button>` : (n.pdf ? `<a href="${esc(n.pdf)}" target="_blank" rel="noopener">PDF</a>` : '')}</td>
+      <td>${['fila', 'erro'].includes(n.status) ? `
+        <button data-copiar="${n.id}">Copiar dados</button>
+        <a href="https://www.nfse.gov.br/EmissorNacional" target="_blank" rel="noopener">Abrir Emissor Nacional</a>
+        <form data-anexar="${n.id}" style="margin-top:8px;display:grid;gap:6px;min-width:200px">
+          <input name="numero" placeholder="Nº da nota emitida" required style="padding:6px 8px">
+          <input name="pdf" placeholder="Link do PDF (https://...)" style="padding:6px 8px">
+          <button>Marcar como emitida</button>
+        </form>` : (n.pdf ? `<a href="${esc(n.pdf)}" target="_blank" rel="noopener">PDF</a>` : '')}</td>
     </tr>`).join('') : '<tr><td colspan="7" style="color:var(--suave)">Nenhum pedido de nota.</td></tr>';
-  document.querySelectorAll('[data-anexar]').forEach((b) => b.addEventListener('click', async () => {
-    const numero = prompt('Número da nota emitida:');
+  document.querySelectorAll('[data-copiar]').forEach((b) => b.addEventListener('click', async () => {
+    const n = notas.find((x) => x.id === b.dataset.copiar);
+    const t = n.tomador;
+    const texto = [
+      `Prestador: ${n.prestador ? n.prestador.nome : ''} (${fmtCnpj(n.prestador ? n.prestador.cnpj : '')})`,
+      `Tomador: ${t.nome || ''} - ${fmtCnpj(t.cnpj || t.cpf)}${t.municipio ? ` - ${t.municipio}/${t.uf}` : ''}${t.email ? ` - ${t.email}` : ''}`,
+      `Valor: ${Number(n.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+      `Descrição: ${n.descricao}`,
+      n.prestador && n.prestador.fiscal ? `Município IBGE: ${n.prestador.fiscal.codigoMunicipio} · Cód. tributação nacional: ${n.prestador.fiscal.codigoServico}` : '',
+    ].filter(Boolean).join('\n');
+    try { await navigator.clipboard.writeText(texto); b.textContent = 'Copiado ✅'; } catch { prompt('Copie os dados:', texto); }
+  }));
+  document.querySelectorAll('form[data-anexar]').forEach((f) => f.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const numero = f.numero.value.trim();
+    const pdf = f.pdf.value.trim();
     if (!numero) return;
-    const pdf = prompt('Link do PDF da nota (https://...):') || '';
-    try { await apiAdmin(`/notas/${b.dataset.anexar}/anexar`, { numero, pdf }); carregaPortal(); } catch (e) { alert(e.message); }
+    try { await apiAdmin(`/notas/${f.dataset.anexar}/anexar`, { numero, pdf }); carregaPortal(); } catch (e) { alert(e.message); }
   }));
   $('#assinantes').innerHTML = assinantes.length ? assinantes.map((u) => `
     <tr>
@@ -238,8 +258,17 @@ async function carregaPortal() {
       <td>${esc(u.email || '')}<br><small>${esc(u.telefone || '')}</small></td>
       <td>${u.gerenciado ? '<small>Carteira do contador<br>(sem login)</small>' : `${esc(u.planoId || '—')}${u.pedidoPlanoEm ? '<br><small>pediu pelo site</small>' : ''}<br><small>${u.assinante ? 'até ' + new Date(u.planoAte).toLocaleDateString('pt-BR') : '<span style="color:#c0392b">Inativo</span>'}</small>`}</td>
       <td>${certCelula(u)}</td>
-      <td>${u.dono ? '<b>Dono do site</b><br>' : ''}<a href="/planejamento?cnpj=${esc(u.cnpj)}&empresa=${u.id}" target="_blank" rel="noopener">Simulador</a>${u.gerenciado ? ` · <button data-remover="${u.id}">Remover</button>` : `<br><button data-liberar="${u.id}" data-dias="30">+30 dias</button> <button data-liberar="${u.id}" data-dias="-1">Bloquear</button><br><button data-previa="${u.id}">Ver resumo do dia</button> <button data-enviar="${u.id}">Enviar resumo agora</button>`}</td>
+      <td>${u.dono ? '<b>Dono do site</b><br>' : ''}<a href="/planejamento?cnpj=${esc(u.cnpj)}&empresa=${u.id}" target="_blank" rel="noopener">Simulador</a> · <button data-fiscal="${u.id}" data-mun="${esc((u.fiscal && u.fiscal.codigoMunicipio) || '')}" data-serv="${esc((u.fiscal && u.fiscal.codigoServico) || '')}" data-dps="${esc(u.proximoDps || 1)}">${u.fiscal && u.fiscal.codigoServico ? 'Dados da nota ✅' : 'Dados da nota'}</button>${u.gerenciado ? ` · <button data-remover="${u.id}">Remover</button>` : `<br><button data-liberar="${u.id}" data-dias="30">+30 dias</button> <button data-liberar="${u.id}" data-dias="-1">Bloquear</button><br><button data-previa="${u.id}">Ver resumo do dia</button> <button data-enviar="${u.id}">Enviar resumo agora</button>`}</td>
     </tr>`).join('') : '<tr><td colspan="6" style="color:var(--suave)">Nenhum cadastro ainda.</td></tr>';
+  document.querySelectorAll('[data-fiscal]').forEach((b) => b.addEventListener('click', async () => {
+    const codigoMunicipio = prompt('Código IBGE do município do prestador (7 dígitos). Sorocaba: 3552205', b.dataset.mun || '');
+    if (codigoMunicipio === null) return;
+    const codigoServico = prompt('Código de tributação nacional do serviço (6 dígitos, ex.: 010701):', b.dataset.serv || '');
+    if (codigoServico === null) return;
+    const proximoDps = prompt('Próximo número da DPS (continua a numeração do Emissor Nacional):', b.dataset.dps || '1');
+    if (proximoDps === null) return;
+    try { await apiAdmin(`/assinantes/${b.dataset.fiscal}/fiscal`, { codigoMunicipio, codigoServico, proximoDps }); carregaPortal(); } catch (e) { alert(e.message); }
+  }));
   document.querySelectorAll('[data-previa]').forEach((b) => b.addEventListener('click', async () => {
     const r = await fetch(`/api/admin/portal/assinantes/${b.dataset.previa}/resumo`, { headers: { 'x-admin-senha': senha } });
     const w = window.open('', '_blank'); w.document.write(await r.text()); w.document.close();
