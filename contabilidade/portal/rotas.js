@@ -829,7 +829,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       if (info.dasPago && reg.status !== 'paga') patch.status = 'paga';
       else if (situacao === 'ok' && receitaDecl === 0 && m.receita === 0 && ['calculada', 'aprovada'].includes(reg.status)) patch.status = 'entregue';
       db.atualiza('apuracoes', reg.id, patch);
-      resultado.push({ competencia: m.competencia, ...conferencia });
+      resultado.push({ competencia: m.competencia, ...conferencia, ...(decl && decl.amostra && req.query.diagnostico === '1' ? { amostra: decl.amostra } : {}) });
     }
     const problemas = resultado.filter((r) => ['divergente', 'nao_declarada'].includes(r.situacao));
     if (problemas.length) {

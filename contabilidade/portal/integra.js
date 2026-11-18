@@ -156,7 +156,12 @@ async function lePdfDeclaracao(buf) {
 async function declaracaoDoMes(cnpj, competencia) {
   const { dados } = await chama('Consultar', cnpj, 'CONSULTIMADECREC14', { periodoApuracao: competencia.replace('-', '') });
   if (!dados || !dados.declaracao || !dados.declaracao.pdf) return null;
-  const lido = await lePdfDeclaracao(Buffer.from(dados.declaracao.pdf, 'base64')).catch(() => ({ receita: null, debito: null, tipo: '' }));
+  const buf = Buffer.from(dados.declaracao.pdf, 'base64');
+  const lido = await lePdfDeclaracao(buf).catch((err) => ({ receita: null, debito: null, tipo: '', erro: err.message }));
+  // Quando não dá para ler os valores, devolve um trecho do texto (só ao escritório) para ajustar a leitura
+  if (lido.receita == null) {
+    try { const pdf = require('pdf-parse/lib/pdf-parse.js'); const { text } = await pdf(buf); lido.amostra = text.replace(/\s+\n/g, '\n').slice(0, 3000); } catch (err) { lido.amostra = `erro ao ler o PDF: ${err.message}`; }
+  }
   return { numero: dados.numeroDeclaracao || '', ...lido };
 }
 
