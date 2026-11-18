@@ -100,7 +100,12 @@ const isoDe = (s) => (/^\d{8}$/.test(String(s || '')) ? `${s.slice(0, 4)}-${s.sl
 // Devolve { pdf (Buffer), valor, principal, multa, juros, vencimento, pagarAte, numeroDocumento }.
 async function geraDas(cnpj, competencia, { vencido = false, pagarAte } = {}) {
   const dados = { periodoApuracao: competencia.replace('-', '') };
-  if (vencido) dados.dataConsolidacao = pagarAte ? pagarAte.replace(/-/g, '') : aaaammdd(new Date(Date.now() - 3 * 3600 * 1000));
+  // A Receita exige data de consolidação DEPOIS de hoje (MSG_ISN_002): padrão = amanhã (horário de Brasília)
+  if (vencido) {
+    const amanha = aaaammdd(new Date(Date.now() - 3 * 3600 * 1000 + 24 * 3600 * 1000));
+    const pedida = pagarAte ? pagarAte.replace(/-/g, '') : '';
+    dados.dataConsolidacao = pedida && pedida >= amanha ? pedida : amanha;
+  }
   const { dados: lista } = await chama('Emitir', cnpj, 'GERARDAS12', dados);
   const das = Array.isArray(lista) ? lista[0] : lista;
   if (!das || !das.pdf) throw new ErroIntegra('O SERPRO não devolveu o PDF do DAS. Confira se o PGDAS-D desta competência já foi transmitido.');
