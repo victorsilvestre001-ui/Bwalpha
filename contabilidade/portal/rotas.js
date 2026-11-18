@@ -1038,7 +1038,10 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     const u = alvoApu(req, res);
     if (!u) return;
     const reg = apuracao.registro(u, req.params.comp);
-    if (!['calculada', 'aprovada'].includes(reg.status)) return res.status(409).json({ erro: 'Esta competência já foi concluída.' });
+    // "Entregue" marcado só no site (sem recibo da Receita) ainda pode ser transmitido pelo Integra;
+    // se já houver declaração na Receita, ela mesma recusa (não duplica)
+    const soMarcada = reg.status === 'entregue' && !(reg.entrega && reg.entrega.idDeclaracao) && integra.situacao().ativo && req.query.local !== '1';
+    if (!['calculada', 'aprovada'].includes(reg.status) && !soMarcada) return res.status(409).json({ erro: 'Esta competência já foi concluída.' });
     const calc = reg.aprovado || apuracao.calcula(u, req.params.comp, apuracao.receitas(u), reg.ajuste || {});
     if (calc.valor > 0) return res.status(409).json({ erro: 'Esta competência tem DAS a pagar: use "Gerar guia".' });
     // Com o Integra ligado, transmite o PGDAS-D zerado na Receita (?validar=1 só confere, sem gravar)

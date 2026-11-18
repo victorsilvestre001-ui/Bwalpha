@@ -649,6 +649,11 @@ const notas = require('./portal/notas');
       assert.strictEqual(r.json.entrega.multa.total, 25);
       assert.strictEqual((await fetch(base + new URL(r.json.entrega.recibo).pathname)).status, 200, 'recibo abre pelo link');
       assert.strictEqual((await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-05/zerada`, null, admin)).status, 409, 'não entrega duas vezes');
+      // Marcado "entregue" só no site (sem recibo): transmite de verdade
+      assert.strictEqual((await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-04/zerada?local=1`, null, admin)).status, 200);
+      r = await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-04/zerada`, null, admin);
+      assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+      assert.ok(r.json.entrega && r.json.entrega.idDeclaracao, 'transmitiu o mês só marcado');
       console.log('ok entrega sem movimento');
       integra._setTransporte(null);
       delete process.env.INTEGRA_TRIAL;
