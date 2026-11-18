@@ -653,7 +653,7 @@ function quinzena(q) { // Q1 começa em 07/12/2026
     if (theme.grid) { const gr = new THREE.GridHelper(60, 60, theme.grid, theme.grid); gr.material.transparent = true; gr.material.opacity = 0.18; gr.position.y = -0.45; scene.add(gr); }
     if (theme.shadowFloor) { const pl = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.ShadowMaterial({ opacity: 0.12 })); pl.rotation.x = -Math.PI / 2; pl.position.y = -0.44; pl.receiveShadow = true; scene.add(pl); }
 
-    const model = buildApartment(theme);
+    const model = (opts.build || buildApartment)(theme);
     scene.add(model.root);
 
     let controls = null;
