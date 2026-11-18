@@ -151,7 +151,7 @@ async function telaEmpresas() {
   const dasPend = empresas.filter((e) => e.das && ['calculada', 'aprovada'].includes(e.das.status)).length;
   el.innerHTML = `
     <div class="cab">
-      <div><h1>Empresas</h1><p>As empresas para as quais o escritório emite notas e apura o Simples.</p></div>
+      <div><h1>${EU.gestor ? 'Empresas' : 'Minhas empresas'}</h1><p>${EU.gestor ? 'Todas as empresas do escritório e quem cuida de cada uma.' : 'As empresas que você cuida. Empresa que você cadastrar entra aqui.'}</p></div>
       <button class="btn primario" id="novaEmp">${icone('mais')} Cadastrar empresa</button>
     </div>
     <div class="kpis">
@@ -171,14 +171,14 @@ async function telaEmpresas() {
       && (filtroEmp !== 'ligada' || e.emissao === 'producao') && (filtroEmp !== 'semcert' || !e.certificado.ativo) && (filtroEmp !== 'das' || (e.das && ['calculada', 'aprovada'].includes(e.das.status))));
     $('#linhasEmp').innerHTML = lista.length ? lista.map((e) => `
       <tr class="clicavel" data-id="${e.id}">
-        <td><div class="empresa-cel"><span class="avatar">${esc(iniciais(e.fantasia || e.nome))}</span><div><b>${esc(e.nome)}</b><small>${doc(e.cnpj)}${e.municipio ? ` · ${esc(e.municipio)}/${esc(e.uf)}` : ''}</small></div></div></td>
+        <td><div class="empresa-cel"><span class="avatar">${esc(iniciais(e.fantasia || e.nome))}</span><div><b>${esc(e.nome)}</b><small>${doc(e.cnpj)}${e.municipio ? ` · ${esc(e.municipio)}/${esc(e.uf)}` : ''}</small>${EU.gestor && e.equipe ? `<small class="emp-equipe">${e.equipe.length ? `${icone('pessoas')} ${e.equipe.map((m) => esc(m.nome)).join(', ')}` : 'Sem funcionário'}</small>` : ''}</div></div></td>
         <td class="ocultar-cel">${esc(e.regime)}</td>
         <td>${chipCert(e)}</td>
         <td>${chipEmissao(e.emissao)}</td>
         <td class="num"><b>${brl(e.notasMes.valor)}</b><br><small>${e.notasMes.quantidade} nota(s)${e.pendentes ? ` · <span style="color:var(--atencao)">${e.pendentes} pendente(s)</span>` : ''}</small></td>
         <td>${e.das ? `${chipDas(e.das.status)}<br><small>${comp(e.das.competencia)} · ${brl(e.das.valor)}</small>` : '<span class="chip neutro">—</span>'}</td>
         <td class="acoes">${icone('seta')}</td>
-      </tr>`).join('') : '<tr><td colspan="7" class="vazio">Nenhuma empresa encontrada.</td></tr>';
+      </tr>`).join('') : `<tr><td colspan="7" class="vazio">${!empresas.length && !EU.gestor ? 'Você ainda não tem empresas. Clique em "Cadastrar empresa" ou peça ao responsável para passar as suas.' : 'Nenhuma empresa encontrada.'}</td></tr>`;
     $$('#linhasEmp tr[data-id]').forEach((tr) => tr.addEventListener('click', () => { location.hash = `#/empresa/${tr.dataset.id}/notas`; }));
   };
   $('#buscaEmp').addEventListener('input', desenha);
@@ -533,9 +533,16 @@ async function executaPedido(texto) {
   return { texto: `Guia de ${comp(m.competencia)} da ${e.nome} puxada e enviada ao cliente.`, link: `#/empresa/${e.id}/das` };
 }
 
+// Histórico de cada pessoa separado (o responsável herda o histórico antigo do painel)
 const HIST = 'vj-pedidos';
-const leHist = () => { try { return JSON.parse(localStorage.getItem(HIST) || '[]'); } catch { return []; } };
-const gravaHist = (h) => { try { localStorage.setItem(HIST, JSON.stringify(h.slice(0, 50))); } catch { /* ok */ } };
+const chaveHist = () => (EU.usuario ? `${HIST}-${EU.usuario.id}` : HIST);
+const leHist = () => {
+  try {
+    const meu = localStorage.getItem(chaveHist());
+    return JSON.parse(meu || (EU.gestor ? localStorage.getItem(HIST) : null) || '[]');
+  } catch { return []; }
+};
+const gravaHist = (h) => { try { localStorage.setItem(chaveHist(), JSON.stringify(h.slice(0, 50))); } catch { /* ok */ } };
 
 function telaAssistente() {
   const el = $('#conteudo');
@@ -615,47 +622,77 @@ function mostraSenhaProvisoria(m, s) {
 async function telaEquipe() {
   const el = $('#conteudo');
   el.innerHTML = '<p class="vazio">Carregando equipe…</p>';
-  const { equipe } = await api('/equipe');
+  const { equipe, empresas } = await api('/equipe');
   const ativos = equipe.filter((m) => m.ativo).length;
+  const semDono = empresas.filter((e) => !equipe.some((m) => m.ativo && m.papel === 'equipe' && m.empresas.includes(e.id))).length;
+  const carteira = (m) => (m.papel === 'dono' ? '<span class="suave">Todas</span>' : m.empresas.length ? `<b>${m.empresas.length}</b> <span class="suave">de ${empresas.length}</span>` : '<span class="chip atencao">Nenhuma</span>');
   el.innerHTML = `
     <div class="cab">
-      <div><h1>Equipe</h1><p>Quem pode entrar no painel do escritório. Cada pessoa tem o próprio e-mail e senha.</p></div>
+      <div><h1>Equipe</h1><p>Quem entra no painel e quais empresas cada funcionário cuida.</p></div>
       <button class="btn primario" id="novoMembro">${icone('mais')} Adicionar pessoa</button>
     </div>
     <div class="kpis tres">
       <div class="kpi"><span>Acessos ativos</span><b>${ativos}</b><small>${equipe.length - ativos ? `${equipe.length - ativos} desativado(s)` : 'nenhum desativado'}</small></div>
-      <div class="kpi"><span>Responsáveis</span><b>${equipe.filter((m) => m.ativo && m.papel === 'dono').length}</b><small>gerenciam a equipe</small></div>
-      <div class="kpi"><span>Funcionários</span><b>${equipe.filter((m) => m.ativo && m.papel === 'equipe').length}</b><small>emitem NF e puxam guias</small></div>
+      <div class="kpi"><span>Funcionários</span><b>${equipe.filter((m) => m.ativo && m.papel === 'equipe').length}</b><small>cada um com a sua carteira</small></div>
+      <div class="kpi"><span>Empresas sem funcionário</span><b>${semDono}</b><small>${semDono ? 'só o responsável cuida' : 'todas distribuídas'}</small></div>
     </div>
-    <div class="card sem-pad"><table class="tabela"><thead><tr><th>Pessoa</th><th>Função</th><th>Situação</th><th class="ocultar-cel">Último acesso</th><th></th></tr></thead><tbody>
+    <div class="card sem-pad"><table class="tabela"><thead><tr><th>Pessoa</th><th>Função</th><th>Empresas</th><th>Situação</th><th class="ocultar-cel">Último acesso</th><th></th></tr></thead><tbody>
       ${equipe.map((m) => `
         <tr data-id="${m.id}">
           <td><div class="empresa-cel"><span class="avatar">${esc(iniciais(m.nome))}</span><div><b>${esc(m.nome)}${EU.usuario && EU.usuario.id === m.id ? ' <small class="suave">(você)</small>' : ''}</b><small>${esc(m.email)}</small></div></div></td>
           <td>${m.papel === 'dono' ? '<span class="chip info">Responsável</span>' : '<span class="chip neutro">Funcionário</span>'}</td>
+          <td>${carteira(m)}</td>
           <td>${!m.ativo ? '<span class="chip erro">Desativado</span>' : m.trocarSenha ? '<span class="chip atencao">Aguardando 1º acesso</span>' : '<span class="chip ok">Ativo</span>'}</td>
           <td class="ocultar-cel">${m.ultimoAcesso ? data(m.ultimoAcesso) : '<span class="suave">—</span>'}</td>
           <td class="acoes">
+            ${m.papel === 'equipe' ? '<button class="btn pequeno" data-acao="carteira">Empresas</button>' : ''}
             <button class="btn pequeno" data-acao="editar">Editar</button>
             <button class="btn pequeno" data-acao="senha">Nova senha</button>
             ${EU.usuario && EU.usuario.id === m.id ? '' : `<button class="btn pequeno ${m.ativo ? 'perigo' : ''}" data-acao="ativo">${m.ativo ? 'Desativar' : 'Reativar'}</button>`}
           </td>
-        </tr>`).join('') || '<tr><td colspan="5" class="vazio">Ninguém cadastrado ainda.</td></tr>'}
+        </tr>`).join('') || '<tr><td colspan="6" class="vazio">Ninguém cadastrado ainda.</td></tr>'}
     </tbody></table></div>
     <div class="card"><h2>O que cada função pode fazer</h2>
-      <div class="linha-info"><span><b>Funcionário</b></span><span class="suave">Empresas, notas fiscais, clientes, PGDAS-D/DAS, pedidos e fila de notas.</span></div>
-      <div class="linha-info"><span><b>Responsável</b></span><span class="suave">Tudo do funcionário, mais gerenciar a equipe e as ferramentas do escritório.</span></div>
+      <div class="linha-info"><span><b>Funcionário</b></span><span class="suave">Só as empresas dele: notas fiscais, clientes, PGDAS-D/DAS e pedidos. Empresa que ele cadastrar já entra na carteira dele.</span></div>
+      <div class="linha-info"><span><b>Responsável</b></span><span class="suave">Todas as empresas, a equipe e as ferramentas do escritório.</span></div>
     </div>`;
+
+  // Lista de empresas com busca e marcar/desmarcar todas
+  const escolhaEmpresas = (marcadas = []) => `
+    <div class="escolha-emp">
+      <div class="escolha-topo"><input id="eBusca" placeholder="Buscar empresa"><span class="suave" id="eCont"></span><button type="button" class="lnk" id="eTodas">Marcar todas</button></div>
+      <div class="escolha-lista">${empresas.map((e) => `<label data-txt="${esc((e.nome + ' ' + e.cnpj).toLowerCase())}"><input type="checkbox" value="${e.id}" ${marcadas.includes(e.id) ? 'checked' : ''}><span><b>${esc(e.nome)}</b><small>${doc(e.cnpj)}</small></span></label>`).join('') || '<p class="vazio">Nenhuma empresa cadastrada.</p>'}</div>
+    </div>`;
+  const ligaEscolha = () => {
+    const caixas = () => $$('.escolha-lista input', $('#dlg'));
+    const conta = () => { $('#eCont').textContent = `${caixas().filter((c) => c.checked).length} marcada(s)`; };
+    $('#eBusca').addEventListener('input', () => { const q = $('#eBusca').value.trim().toLowerCase().replace(/[./-]/g, ''); $$('.escolha-lista label', $('#dlg')).forEach((l) => { l.hidden = !!q && !l.dataset.txt.replace(/[./-]/g, '').includes(q); }); });
+    $('#eTodas').addEventListener('click', () => { const vis = caixas().filter((c) => !c.closest('label').hidden); const todas = vis.every((c) => c.checked); vis.forEach((c) => { c.checked = !todas; }); conta(); });
+    caixas().forEach((c) => c.addEventListener('change', conta));
+    conta();
+  };
+  const marcadas = () => $$('.escolha-lista input', $('#dlg')).filter((c) => c.checked).map((c) => c.value);
   const campos = (m = {}) => `
     <label class="campo"><span>Nome</span><input id="mNome" value="${esc(m.nome || '')}" maxlength="120"></label>
     ${m.id ? '' : '<label class="campo"><span>E-mail</span><input id="mEmail" type="email" maxlength="160"></label>'}
-    <label class="campo"><span>Função</span><select id="mPapel"><option value="equipe">Funcionário</option><option value="dono" ${m.papel === 'dono' ? 'selected' : ''}>Responsável</option></select></label>`;
+    <label class="campo"><span>Função</span><select id="mPapel"><option value="equipe">Funcionário (só as empresas dele)</option><option value="dono" ${m.papel === 'dono' ? 'selected' : ''}>Responsável (vê tudo)</option></select></label>
+    ${m.id ? '' : `<div id="mCarteira"><span class="rotulo">Empresas que vai cuidar</span>${escolhaEmpresas()}</div>`}`;
+
   $('#novoMembro').addEventListener('click', async () => {
-    const r = await dialogo({ titulo: 'Adicionar pessoa', sub: 'O site cria uma senha provisória para o primeiro acesso.', corpo: campos(), botoes: [{ texto: 'Cancelar', valor: null }, { texto: 'Criar acesso', classe: 'primario', acao: () => api('/equipe', { body: { nome: $('#mNome').value, email: $('#mEmail').value, papel: $('#mPapel').value } }) }] });
+    const p = dialogo({ titulo: 'Adicionar pessoa', sub: 'O site cria uma senha provisória para o primeiro acesso.', corpo: campos(), botoes: [{ texto: 'Cancelar', valor: null }, { texto: 'Criar acesso', classe: 'primario', acao: () => api('/equipe', { body: { nome: $('#mNome').value, email: $('#mEmail').value, papel: $('#mPapel').value, empresas: $('#mPapel').value === 'equipe' ? marcadas() : [] } }) }] });
+    ligaEscolha();
+    $('#mPapel').addEventListener('change', () => { $('#mCarteira').hidden = $('#mPapel').value !== 'equipe'; });
+    const r = await p;
     if (r) { await mostraSenhaProvisoria(r.membro, r.senhaProvisoria); telaEquipe(); }
   });
   $$('[data-acao]', el).forEach((b) => b.addEventListener('click', async () => {
     const m = equipe.find((x) => x.id === b.closest('tr').dataset.id);
-    if (b.dataset.acao === 'editar') {
+    if (b.dataset.acao === 'carteira') {
+      const p = dialogo({ titulo: `Empresas de ${esc(m.nome)}`, sub: 'Marque as empresas que essa pessoa cuida. Ela só vê essas no painel.', corpo: escolhaEmpresas(m.empresas), botoes: [{ texto: 'Cancelar', valor: null }, { texto: 'Salvar', classe: 'primario', acao: () => api(`/equipe/${m.id}`, { body: { empresas: marcadas() } }) }] });
+      ligaEscolha();
+      const r = await p;
+      if (r) { aviso(`${esc(m.nome)} agora cuida de ${r.membro.empresas.length} empresa(s).`); telaEquipe(); }
+    } else if (b.dataset.acao === 'editar') {
       const r = await dialogo({ titulo: `Editar ${esc(m.nome)}`, sub: esc(m.email), corpo: campos(m), botoes: [{ texto: 'Cancelar', valor: null }, { texto: 'Salvar', classe: 'primario', acao: () => api(`/equipe/${m.id}`, { body: { nome: $('#mNome').value, papel: $('#mPapel').value } }) }] });
       if (r) { aviso('Alterações salvas.'); telaEquipe(); }
     } else if (b.dataset.acao === 'senha') {

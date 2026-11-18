@@ -167,6 +167,7 @@ app.post('/api/contato', (req, res) => {
 // Painel do escritório: lista os contatos (senha em ADMIN_SENHA).
 app.get('/api/admin/contatos', (req, res) => {
   if (!adminOk(req)) return res.status(401).json({ erro: 'Senha incorreta.' });
+  if (!req.acesso.gestor) return res.status(403).json({ erro: 'Só o responsável pelo escritório pode ver os contatos.' });
   fs.readFile(ARQ_CONTATOS, 'utf8', (err, txt) => {
     if (err && err.code !== 'ENOENT') return res.status(500).json({ erro: err.message });
     const contatos = (txt || '').split('\n').filter(Boolean).map((l) => {

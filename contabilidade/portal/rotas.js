@@ -462,8 +462,23 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (u) db.atualiza('usuarios', u.id, { ultimoAcesso: new Date().toISOString() });
     res.json({ usuario: u ? membro(u) : null, gestor: !!(req.acesso && req.acesso.gestor) });
   });
+  // Empresas da carteira (as mesmas do painel) e quem cuida de cada uma
+  const carteiraEmpresas = () => db.lista('usuarios', (u) => u.cnpj && !auth.ehDono(u));
+  const empresasDoMembro = (id) => carteiraEmpresas().filter((u) => (u.responsaveis || []).includes(id)).map((u) => u.id);
+  function defineCarteira(membroId, ids) {
+    const quer = new Set((Array.isArray(ids) ? ids : []).map(String));
+    for (const u of carteiraEmpresas()) {
+      const atual = u.responsaveis || [];
+      const tem = atual.includes(membroId);
+      if (quer.has(u.id) && !tem) db.atualiza('usuarios', u.id, { responsaveis: [...atual, membroId] });
+      if (!quer.has(u.id) && tem) db.atualiza('usuarios', u.id, { responsaveis: atual.filter((x) => x !== membroId) });
+    }
+  }
   admin.get('/equipe', soGestor, (req, res) => {
-    res.json({ equipe: db.lista('usuarios', daEquipe).map(membro).sort((a, b) => (a.papel === b.papel ? a.nome.localeCompare(b.nome) : a.papel === 'dono' ? -1 : 1)) });
+    res.json({
+      equipe: db.lista('usuarios', daEquipe).map((u) => ({ ...membro(u), empresas: empresasDoMembro(u.id) })).sort((a, b) => (a.papel === b.papel ? a.nome.localeCompare(b.nome) : a.papel === 'dono' ? -1 : 1)),
+      empresas: carteiraEmpresas().map((u) => ({ id: u.id, nome: (u.empresa && u.empresa.razaoSocial) || u.nome, cnpj: u.cnpj })).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')),
+    });
   });
   admin.post('/equipe', soGestor, express.json(), (req, res) => {
     const nome = txt(req.body.nome, 120);
@@ -473,7 +488,8 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (db.acha('usuarios', (u) => u.email === email)) return res.status(409).json({ erro: 'Já existe um acesso com este e-mail.' });
     const senha = senhaProvisoria();
     const u = db.insere('usuarios', { nome, email, papel, senha: auth.hashSenha(senha), ativo: true, trocarSenha: true, alertas: [] });
-    res.json({ membro: membro(u), senhaProvisoria: senha });
+    if (req.body.empresas) defineCarteira(u.id, req.body.empresas);
+    res.json({ membro: { ...membro(u), empresas: empresasDoMembro(u.id) }, senhaProvisoria: senha });
   });
   const achaMembro = (req, res) => {
     const u = db.acha('usuarios', (x) => x.id === req.params.id && daEquipe(x));
@@ -500,7 +516,8 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if ((patch.ativo === false || viraFuncionario) && u.papel === 'dono' && !outrosDonosAtivos(u.id)) return res.status(409).json({ erro: 'O escritório precisa de pelo menos um responsável ativo.' });
     const salvo = db.atualiza('usuarios', u.id, patch);
     if (patch.ativo === false) db.remove('sessoes', (s) => s.usuarioId === u.id);
-    res.json({ membro: membro(salvo) });
+    if (req.body.empresas !== undefined) defineCarteira(u.id, req.body.empresas);
+    res.json({ membro: { ...membro(salvo), empresas: empresasDoMembro(u.id) } });
   });
   admin.post('/equipe-minha-senha', express.json(), (req, res) => {
     const u = req.acesso && req.acesso.usuario;
@@ -512,13 +529,34 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     res.json({ ok: true });
   });
 
+  // ---------- Carteira de cada funcionário ----------
+  // O responsável vê todas as empresas; o funcionário só as que foram passadas para ele
+  const restrito = (req) => (req.acesso && !req.acesso.gestor && req.acesso.usuario ? req.acesso.usuario.id : null);
+  const naCarteira = (req) => { const m = restrito(req); return (u) => !m || (u.responsaveis || []).includes(m); };
+  admin.use((req, res, next) => {
+    const m = restrito(req);
+    if (!m) return next();
+    const p = req.path;
+    if (/^\/analises/.test(p) || /^\/escritorio\/integra\/certificado/.test(p) || /^\/assinantes\/[^/]+\/(liberar|papel)/.test(p)) return res.status(403).json({ erro: 'Só o responsável pelo escritório pode fazer isso.' });
+    let alvo = null;
+    let x = p.match(/^\/(?:assinantes|empresas|apuracoes|escritorio\/empresas)\/([^/]+)/);
+    if (x) alvo = x[1];
+    else if ((x = p.match(/^\/notas\/([^/]+)/))) { const n = db.acha('notas', (y) => y.id === x[1]); alvo = n ? n.usuarioId : '-'; }
+    if (alvo) {
+      const u = db.acha('usuarios', (y) => y.id === alvo);
+      if (!u || !naCarteira(req)(u)) return res.status(404).json({ erro: 'Empresa não encontrada.' });
+    }
+    next();
+  });
+  const nomesEquipe = () => Object.fromEntries(db.lista('usuarios', daEquipe).map((m) => [m.id, m.nome]));
+
   admin.use('/analises', analises.admin());
   admin.get('/assinantes', (req, res) => {
     // Último teste de emissão (homologação) de cada empresa, para conferir a nota gerada
     const testes = {};
     for (const n of db.lista('notas', (x) => x.teste)) if (!testes[n.usuarioId] || (n.enviadaEm || '') > (testes[n.usuarioId].enviadaEm || '')) testes[n.usuarioId] = n;
     const resumoTeste = (n) => n && { status: n.status, numero: n.numero || '', chaveAcesso: n.chaveAcesso || '', pdf: n.pdf || '', erro: n.erro || '', enviadaEm: n.enviadaEm };
-    res.json({ assinantes: db.lista('usuarios').map((u) => ({ ...auth.publico(u), analise: undefined, ultimoTeste: resumoTeste(testes[u.id]) })).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)) });
+    res.json({ assinantes: db.lista('usuarios', naCarteira(req)).map((u) => ({ ...auth.publico(u), analise: undefined, ultimoTeste: resumoTeste(testes[u.id]) })).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)) });
   });
   admin.post('/assinantes/:id/papel', soGestor, express.json(), (req, res) => {
     const u = db.acha('usuarios', (x) => x.id === req.params.id);
@@ -550,7 +588,9 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (!cnpjUtil.valido(cnpj)) return res.status(400).json({ erro: 'CNPJ inválido.' });
     const existe = db.acha('usuarios', (x) => x.cnpj === cnpj);
     if (existe) return res.status(409).json({ erro: 'Esta empresa já está na carteira.', id: existe.id });
-    const u = await criaEmpresaCarteira(cnpj, { nome: txt(req.body.nome, 120), telefone: txt(req.body.telefone, 20).replace(/\D/g, '') });
+    let u = await criaEmpresaCarteira(cnpj, { nome: txt(req.body.nome, 120), telefone: txt(req.body.telefone, 20).replace(/\D/g, '') });
+    // Empresa cadastrada pelo funcionário já entra na carteira dele
+    if (restrito(req)) u = db.atualiza('usuarios', u.id, { responsaveis: [restrito(req)] });
     // Já traz os códigos de emissão (município IBGE, código do serviço pelo CNAE e alíquota do Simples)
     const r = await preencheFiscal(u).catch(() => ({ usuario: u, preenchidos: [] }));
     res.json({ usuario: auth.publico(r.usuario), preenchidos: r.preenchidos, servico: r.servico || null });
@@ -584,7 +624,9 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
   }
   const empresasEscritorio = () => db.lista('usuarios', (u) => u.cnpj && !auth.ehDono(u));
   admin.get('/escritorio/empresas', (req, res) => {
-    res.json({ empresas: empresasEscritorio().map(resumoEmpresa).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')) });
+    const nomes = nomesEquipe();
+    const ver = naCarteira(req);
+    res.json({ empresas: empresasEscritorio().filter(ver).map((u) => ({ ...resumoEmpresa(u), equipe: (u.responsaveis || []).filter((id) => nomes[id]).map((id) => ({ id, nome: nomes[id] })) })).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')) });
   });
   admin.get('/escritorio/empresas/:id', async (req, res) => {
     let u = empresaDe(req, res);
@@ -784,7 +826,8 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
   const doSimples = (u) => u.cnpj && !auth.ehDono(u) && (u.gerenciado || !u.empresa || u.empresa.simples !== false) && !(u.empresa && u.empresa.mei);
   admin.get('/apuracoes', async (req, res) => {
     const empresas = [];
-    for (let u of db.lista('usuarios', doSimples)) {
+    const ver = naCarteira(req);
+    for (let u of db.lista('usuarios', (x) => doSimples(x) && ver(x))) {
       u = await garanteAbertura(u);
       empresas.push({ id: u.id, nome: (u.empresa && u.empresa.razaoSocial) || u.nome, cnpj: u.cnpj, abertura: u.empresa && u.empresa.abertura, anexos: apuracao.anexosDa(u), meses: apuracao.painel(u, { quantas: 4 }) });
     }
@@ -958,7 +1001,9 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
 
   admin.get('/notas', (req, res) => {
     const nomes = Object.fromEntries(db.lista('usuarios').map((u) => [u.id, { nome: u.empresa ? u.empresa.razaoSocial : u.nome, cnpj: u.cnpj, fiscal: u.fiscal }]));
-    res.json({ notas: db.lista('notas', (n) => n.status !== 'rascunho' && !n.teste).sort((a, b) => (b.enviadaEm || '').localeCompare(a.enviadaEm || '')).map((n) => ({ ...n, prestador: nomes[n.usuarioId] })) });
+    const ver = naCarteira(req);
+    const permitidas = new Set(db.lista('usuarios', ver).map((u) => u.id));
+    res.json({ notas: db.lista('notas', (n) => n.status !== 'rascunho' && !n.teste && permitidas.has(n.usuarioId)).sort((a, b) => (b.enviadaEm || '').localeCompare(a.enviadaEm || '')).map((n) => ({ ...n, prestador: nomes[n.usuarioId] })) });
   });
   admin.post('/notas/:id/anexar', express.json(), (req, res) => {
     const n = db.acha('notas', (x) => x.id === req.params.id);

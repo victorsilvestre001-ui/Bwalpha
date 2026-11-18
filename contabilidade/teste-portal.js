@@ -196,6 +196,42 @@ const notas = require('./portal/notas');
   cookie = cookieDono;
   assert.strictEqual((await req('POST', `/api/admin/portal/equipe/${idAna}`, { ativo: true, nome: 'Ana S.' })).json.membro.nome, 'Ana S.');
   assert(!(await req('GET', '/api/admin/portal/escritorio/empresas')).json.empresas.some((e) => e.id === idAna), 'funcionário não vira empresa');
+
+  // Carteira: o funcionário só vê as empresas dele e o que ele cadastra fica com ele
+  r = await req('POST', '/api/admin/portal/empresas', { cnpj: '60.701.190/0001-04' });
+  assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+  const idEmpExtra = r.json.usuario.id;
+  const empresasDono = (await req('GET', '/api/admin/portal/escritorio/empresas')).json.empresas;
+  assert(empresasDono.length >= 2);
+  const [empA, empB] = empresasDono;
+  r = await req('POST', `/api/admin/portal/equipe/${idAna}`, { empresas: [empA.id] });
+  assert.deepStrictEqual(r.json.membro.empresas, [empA.id]);
+  r = await req('POST', `/api/admin/portal/equipe/${idAna}/senha`);
+  provisoria = r.json.senhaProvisoria;
+  cookie = '';
+  await req('POST', '/api/portal/login', { email: 'func@ex.com', senha: provisoria });
+  const minhas = (await req('GET', '/api/admin/portal/escritorio/empresas')).json.empresas;
+  assert.deepStrictEqual(minhas.map((e) => e.id), [empA.id], 'vê só a empresa dele');
+  assert.strictEqual((await req('GET', `/api/admin/portal/escritorio/empresas/${empA.id}`)).status, 200);
+  assert.strictEqual((await req('GET', `/api/admin/portal/escritorio/empresas/${empB.id}`)).status, 404, 'empresa de outro some');
+  assert.strictEqual((await req('POST', `/api/admin/portal/assinantes/${empB.id}/fiscal`, { codigoMunicipio: '3552205' })).status, 404);
+  assert.strictEqual((await req('POST', `/api/admin/portal/apuracoes/${empB.id}/2026-09/pago`)).status, 404);
+  assert(!(await req('GET', '/api/admin/portal/apuracoes')).json.empresas.some((e) => e.id === empB.id));
+  assert(!(await req('GET', '/api/admin/portal/assinantes')).json.assinantes.some((e) => e.id === empB.id));
+  assert(!(await req('GET', '/api/admin/portal/notas')).json.notas.some((n) => n.usuarioId !== empA.id));
+  assert.strictEqual((await req('GET', '/api/admin/contatos')).status, 403, 'contatos só do responsável');
+  assert.strictEqual((await req('GET', '/api/admin/portal/analises')).status, 403);
+  r = await req('POST', '/api/admin/portal/empresas', { cnpj: '19.131.243/0001-97' });
+  assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+  const idNovaEmp = r.json.usuario.id;
+  assert.strictEqual((await req('GET', '/api/admin/portal/escritorio/empresas')).json.empresas.length, 2, 'cadastrou e já é dele');
+  cookie = cookieDono;
+  const vistaDono = (await req('GET', '/api/admin/portal/escritorio/empresas')).json.empresas;
+  assert.strictEqual(vistaDono.length, empresasDono.length + 1, 'responsável vê todas');
+  assert.deepStrictEqual(vistaDono.find((e) => e.id === idNovaEmp).equipe.map((m) => m.nome), ['Ana S.']);
+  assert.deepStrictEqual((await req('GET', '/api/admin/portal/equipe')).json.equipe.find((m) => m.id === idAna).empresas.sort(), [empA.id, idNovaEmp].sort());
+  await req('DELETE', `/api/admin/portal/empresas/${idNovaEmp}`);
+  await req('DELETE', `/api/admin/portal/empresas/${idEmpExtra}`);
   cookie = cookieAntesDono;
 
   // Agenda: feriado de 20/11 antecipa FGTS/INSS e adia o DAS

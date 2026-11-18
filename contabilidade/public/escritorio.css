@@ -223,3 +223,17 @@ input:focus, select:focus, textarea:focus { border-color: var(--marca-2); box-sh
 .cred span { color: var(--suave); font-size: .85rem; }
 .mono-txt { font-family: ui-monospace, Consolas, monospace; font-size: 1.05rem; letter-spacing: .04em; }
 .linha-info { gap: 16px; }
+.rotulo { display: block; font-size: .82rem; font-weight: 700; color: #334155; margin: 4px 0 6px; }
+.escolha-emp { border: 1px solid var(--borda); border-radius: 12px; overflow: hidden; }
+.escolha-topo { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--borda); background: #fafbfd; }
+.escolha-topo input { flex: 1; padding: 7px 10px; }
+.escolha-topo span { font-size: .8rem; white-space: nowrap; }
+.escolha-lista { max-height: 260px; overflow-y: auto; }
+.escolha-lista label { display: flex; gap: 10px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--linha); cursor: pointer; }
+.escolha-lista label:hover { background: #f8fafc; }
+.escolha-lista label[hidden] { display: none; }
+.escolha-lista input { width: auto; margin: 0; }
+.escolha-lista b { display: block; font-size: .88rem; }
+.escolha-lista small { color: var(--suave); font-size: .76rem; }
+.emp-equipe { display: flex !important; align-items: center; gap: 4px; color: var(--marca-2); font-weight: 600; }
+.emp-equipe svg.i { width: 13px; height: 13px; }
