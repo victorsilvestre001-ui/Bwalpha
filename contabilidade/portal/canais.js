@@ -14,12 +14,16 @@ function textoDeHtml(html) {
     .replace(/[ \t]+/g, ' ').replace(/\n\s*\n\s*/g, '\n\n').trim();
 }
 
-async function enviaEmail({ para, assunto, html, responderPara }) {
+// para: um endereço ou uma lista; anexos: [{ nome, conteudo (Buffer) }]
+async function enviaEmail({ para, assunto, html, responderPara, anexos }) {
   if (!emailAtivo()) return { ok: false, erro: 'e-mail não configurado' };
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: process.env.EMAIL_FROM || 'V&J Assessoria Contábil <contato@vmcontabil.com.br>', to: [para], subject: assunto, html, text: textoDeHtml(html), reply_to: responderPara }),
+    body: JSON.stringify({
+      from: process.env.EMAIL_FROM || 'V&J Assessoria Contábil <contato@vmcontabil.com.br>', to: Array.isArray(para) ? para : [para], subject: assunto, html, text: textoDeHtml(html), reply_to: responderPara,
+      ...(anexos && anexos.length ? { attachments: anexos.map((a) => ({ filename: a.nome, content: Buffer.from(a.conteudo).toString('base64') })) } : {}),
+    }),
     signal: AbortSignal.timeout(20000),
   });
   if (!res.ok) return { ok: false, erro: `Resend ${res.status}: ${(await res.text()).slice(0, 200)}` };

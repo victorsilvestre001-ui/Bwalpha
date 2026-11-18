@@ -76,7 +76,10 @@ function senhaOk(recebida) {
 const app = express();
 app.set('trust proxy', 1);
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(express.json({ limit: '50kb' }));
+// JSON pequeno em tudo; o anexo do PDF do DAS pelo escritório precisa de mais espaço
+const jsonPequeno = express.json({ limit: '50kb' });
+const jsonGuia = express.json({ limit: '4mb' });
+app.use((req, res, next) => (/^\/api\/admin\/portal\/apuracoes\/[^/]+\/[^/]+\/das$/.test(req.path) ? jsonGuia : jsonPequeno)(req, res, next));
 app.use('/api/', rateLimit({ windowMs: 60 * 1000, limit: 120 }));
 // Simulador de impostos e Recuperar impostos são exclusivos da Área do Cliente (plano ativo)
 const PAGINAS_ASSINANTE = new Set(['/planejamento', '/planejamento.html', '/economia', '/economia.html']);
@@ -212,5 +215,6 @@ app.use('/api/admin/portal', (req, res, next) => {
 }, portal.admin);
 app.get('/o/:token', (req, res) => res.sendFile(path.join(__dirname, 'public', 'orcamento.html')));
 app.get('/nf/:token', portal.enviaPdfNota);
+app.get('/das/:token', portal.enviaPdfDas);
 
 module.exports = app;

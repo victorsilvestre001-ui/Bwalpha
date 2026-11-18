@@ -147,6 +147,7 @@ function cardDas(meses) {
     aprovada: '<span class="tag rotina">Conferido: guia em preparação</span>',
     das_disponivel: m.das && Date.parse(m.das.vencimento) < Date.now() - 86400000 ? '<span class="tag urgente">Vencido: pague com urgência</span>' : '<span class="tag urgente">Guia disponível para pagar</span>',
     paga: '<span class="tag ok">Pago</span>',
+    entregue: '<span class="tag ok">Declarado sem movimento</span>',
   })[m.status] || '';
   return `<section class="card">
     <h2>${icone('moeda')} Seu DAS (Simples Nacional)</h2>

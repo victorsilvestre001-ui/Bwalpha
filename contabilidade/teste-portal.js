@@ -276,6 +276,7 @@ const notas = require('./portal/notas');
       assert.strictEqual(r.json.nota.chaveAcesso, chave);
       assert.strictEqual(r.json.nota.numero, '42', 'número lido do XML da NFS-e');
       assert.ok(!('nfseXml' in r.json.nota), 'XML fica em arquivo, não no banco');
+      assert.match(r.json.nota.entrega.erro, /não configurado/, 'sem e-mail configurado, registra que não enviou');
       // DPS enviada: série/número configurados, assinada, digest confere com o infDPS
       const dps = nacional.desgz64(enviados[0].body.dpsXmlGZipB64);
       assert.ok(dps.includes('<nDPS>5</nDPS>') && dps.includes('<cTribNac>010701</cTribNac>') && dps.includes('<cLocEmi>3552205</cLocEmi>'));
@@ -341,6 +342,29 @@ const notas = require('./portal/notas');
       assert.strictEqual(ut.status, 'emitida');
       assert.strictEqual(ut.chaveAcesso, chave);
       assert.ok(/\/nf\//.test(ut.pdf), 'link do PDF da nota de teste no /admin');
+
+      // Cadastro de clientes (tomadores) da empresa no painel do escritório
+      const baseCli = `/api/admin/portal/escritorio/empresas/${idMaria}/clientes`;
+      r = await req('GET', baseCli, null, admin);
+      assert.ok(r.json.clientes.some((c) => c.documento === '11222333000181' && !c.salvo && c.notas.quantidade >= 1), 'quem já recebeu nota aparece como "das notas"');
+      assert.strictEqual((await req('POST', baseCli, { documento: '123' }, admin)).status, 400);
+      r = await req('POST', baseCli, { documento: '11.222.333/0001-81', email: 'fin@padaria.com', valorPadrao: '1.250,00', descricaoPadrao: 'Consultoria mensal' }, admin);
+      assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+      assert.ok(r.json.cliente.nome, 'nome vem da Receita');
+      assert.strictEqual(r.json.cliente.valorPadrao, 1250);
+      assert.strictEqual((await req('POST', baseCli, { documento: '11222333000181' }, admin)).status, 409, 'sem duplicar');
+      const idCliT = r.json.cliente.id;
+      r = await req('PUT', `${baseCli}/${idCliT}`, { nome: 'Padaria (financeiro)', email: 'contas@padaria.com' }, admin);
+      assert.strictEqual(r.json.cliente.email, 'contas@padaria.com');
+      r = await req('GET', baseCli, null, admin);
+      assert.strictEqual(r.json.clientes.filter((c) => c.documento === '11222333000181').length, 1, 'cadastrado substitui o "das notas"');
+      // Emitir pelo escritório salvando um cliente novo
+      r = await req('POST', `/api/admin/portal/escritorio/empresas/${idMaria}/notas`, { documento: '12345678909', nome: 'João Cliente', descricao: 'Serviço avulso', valor: '50', salvarCliente: true }, admin);
+      assert.strictEqual(r.json.nota.status, 'rascunho');
+      assert.ok((await req('GET', baseCli, null, admin)).json.clientes.some((c) => c.documento === '12345678909' && c.salvo));
+      await req('DELETE', `/api/admin/portal/escritorio/empresas/${idMaria}/notas/${r.json.nota.id}`, null, admin);
+      await req('DELETE', `${baseCli}/${idCliT}`, null, admin);
+      assert.ok(!(await req('GET', baseCli, null, admin)).json.clientes.some((c) => c.id === idCliT));
       nacional._setTransporte(null);
     }
     await new Promise((ok) => setTimeout(ok, 200));
@@ -397,7 +421,17 @@ const notas = require('./portal/notas');
     assert.strictEqual(set.partes[0].anexo, 'III', 'manutenção (divisão 33) é serviço');
     assert.ok(linhas.find((l) => l.competencia === '2026-07').semMovimento);
     // Fluxo: ajuste -> aprovar -> anexar DAS -> cliente vê -> pago
-    assert.strictEqual((await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-09/das`, { linhaDigitavel: '123' }, admin)).status, 409, 'aprova antes');
+    // Mês sem faturamento: declarado sem movimento, sem guia
+    assert.strictEqual((await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-08/zerada`, null, admin)).status, 409, 'agosto tem DAS a pagar');
+    r = await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-07/zerada`, null, admin);
+    assert.strictEqual(r.json.linha.status, 'entregue');
+    // Gerar guia num passo só (aprova e anexa), com o PDF enviado do computador
+    assert.strictEqual((await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-08/das`, { pdfArquivo: Buffer.from('nao e pdf').toString('base64') }, admin)).status, 400);
+    r = await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-08/das`, { pdfArquivo: Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.alloc(200 * 1024, 32)]).toString('base64'), valor: '690,00' }, admin);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+    assert.strictEqual(r.json.linha.status, 'das_disponivel');
+    const guia = await fetch(base + new URL(r.json.linha.das.pdf).pathname);
+    assert.strictEqual(guia.status, 200, 'guia anexada abre pelo link');
     r = await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-09/ajuste`, { extra: { servicos: '1.000,00' } }, admin);
     assert.strictEqual(r.json.linha.receita, 37500);
     r = await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-09/ajuste`, {}, admin);

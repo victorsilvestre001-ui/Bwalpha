@@ -147,7 +147,7 @@ const chipCert = (e) => {
   return dias <= 30 ? `<span class="chip atencao">Vence ${data(e.certificado.validoAte)}</span>` : `<span class="chip ok">Até ${data(e.certificado.validoAte)}</span>`;
 };
 const chipEmissao = (v) => ({ producao: '<span class="chip ok">Automática</span>', homologacao: '<span class="chip info">Em teste</span>' })[v] || '<span class="chip neutro">Manual</span>';
-const chipDas = (s) => ({ calculada: '<span class="chip atencao">A conferir</span>', aprovada: '<span class="chip info">Gerar guia</span>', das_disponivel: '<span class="chip info">Guia enviada</span>', paga: '<span class="chip ok">Paga</span>' })[s] || `<span class="chip neutro">${esc(s)}</span>`;
+const chipDas = (s) => ({ calculada: '<span class="chip atencao">A declarar</span>', aprovada: '<span class="chip atencao">A declarar</span>', entregue: '<span class="chip ok">Sem movimento</span>', das_disponivel: '<span class="chip info">Guia enviada</span>', paga: '<span class="chip ok">Paga</span>' })[s] || `<span class="chip neutro">${esc(s)}</span>`;
 
 async function cadastraEmpresa() {
   const r = await dialogo({
@@ -180,11 +180,12 @@ async function telaEmpresa(id, aba) {
     </div>
     <nav class="abas">
       <a href="#/empresa/${id}/notas" class="${aba === 'notas' ? 'ativo' : ''}">${icone('nota')} Notas fiscais</a>
+      <a href="#/empresa/${id}/clientes" class="${aba === 'clientes' ? 'ativo' : ''}">${icone('pessoas')} Clientes <span class="cont-aba">${d.clientes.filter((c) => c.salvo).length}</span></a>
       <a href="#/empresa/${id}/das" class="${aba === 'das' ? 'ativo' : ''}">${icone('calc')} PGDAS-D e DAS</a>
       <a href="#/empresa/${id}/config" class="${aba === 'config' ? 'ativo' : ''}">${icone('engr')} Configuração</a>
     </nav>
     <section id="abaCorpo"></section>`;
-  ({ notas: abaNotas, das: abaDas, config: abaConfig })[aba]?.(d);
+  ({ notas: abaNotas, clientes: abaClientes, das: abaDas, config: abaConfig })[aba]?.(d);
 }
 
 // ----- Notas fiscais -----
@@ -201,12 +202,14 @@ function abaNotas(d) {
     <div class="grade-nota">
       <div class="card">
         <h2>Emitir nota fiscal</h2>
-        ${d.tomadores.length ? `<div class="chips-freq">${d.tomadores.map((t, i) => `<button type="button" data-freq="${i}">${esc((t.nome || doc(t.documento)).slice(0, 34))}</button>`).join('')}</div>` : ''}
+        <label class="campo"><span>Cliente</span><select id="nCliente"><option value="">Novo cliente (digitar CNPJ ou CPF)</option>${d.clientes.map((c, i) => `<option value="${i}">${esc(c.nome)} · ${doc(c.documento)}${c.salvo ? '' : ' (das notas)'}</option>`).join('')}</select></label>
         <form id="formNota" novalidate>
           <div class="passo"><span class="n">1</span><div>
             <label class="campo"><span>Para quem? (CNPJ ou CPF do tomador)</span><input id="nDoc" inputmode="numeric" placeholder="00.000.000/0000-00" autocomplete="off"></label>
             <div id="nTomador" class="tomador" hidden></div>
             <div id="nCpf" hidden><label class="campo"><span>Nome do tomador</span><input id="nNome" maxlength="160"></label></div>
+            <label class="campo"><span>E-mail do tomador <small>(opcional, vai na nota)</small></span><input id="nEmail" type="email" maxlength="160" placeholder="financeiro@cliente.com.br"></label>
+            <label class="check-salvar" id="nSalvarBox" hidden><input type="checkbox" id="nSalvar" checked> Salvar no cadastro de clientes desta empresa</label>
           </div></div>
           <div class="passo"><span class="n">2</span><div>
             <label class="campo"><span>Quanto?</span><div class="valor-campo"><i>R$</i><input id="nValor" inputmode="numeric" placeholder="0,00" autocomplete="off"></div></label>
@@ -245,6 +248,7 @@ function ligaFormNota(d) {
     const c = $('#nDoc').value.replace(/\D/g, '');
     const info = $('#nTomador');
     $('#nCpf').hidden = c.length !== 11;
+    $('#nSalvarBox').hidden = !(c.length === 11 || c.length === 14) || d.clientes.some((x) => x.salvo && x.documento === c);
     clearTimeout(timer);
     if (c.length !== 14) { info.hidden = true; return; }
     info.hidden = false; info.className = 'tomador carregando'; info.textContent = 'Buscando na Receita…';
@@ -257,12 +261,22 @@ function ligaFormNota(d) {
     }, 300);
   };
   const preenche = (t) => {
-    $('#nDoc').value = mascaraDoc(t.documento); $('#nNome').value = t.nome || ''; $('#nDesc').value = t.descricao || '';
+    $('#nDoc').value = mascaraDoc(t.documento); $('#nNome').value = t.nome || ''; $('#nDesc').value = t.descricao || ''; $('#nEmail').value = t.email || '';
     $('#nValor').value = t.valor ? mascaraValor(Math.round(t.valor * 100)) : ''; atualiza(); (t.valor ? $('#nDesc') : $('#nValor')).focus();
   };
   $('#nDoc').addEventListener('input', (ev) => { ev.target.value = mascaraDoc(ev.target.value); atualiza(); });
   $('#nValor').addEventListener('input', (ev) => { ev.target.value = mascaraValor(ev.target.value); });
-  $$('[data-freq]').forEach((b) => b.addEventListener('click', () => { const t = d.tomadores[+b.dataset.freq]; preenche({ documento: t.documento, nome: t.nome, descricao: t.ultimaDescricao }); }));
+  $('#nCliente').addEventListener('change', (ev) => {
+    const cl = d.clientes[+ev.target.value];
+    if (!cl) { preenche({ documento: '', nome: '', descricao: '', email: '' }); $('#nDoc').focus(); return; }
+    preenche({ documento: cl.documento, nome: cl.nome, email: cl.email, descricao: cl.descricaoPadrao, valor: cl.valorPadrao });
+  });
+  // Vindo da aba Clientes (botão Emitir nota)
+  try {
+    const pre = JSON.parse(sessionStorage.getItem('preNota') || 'null');
+    sessionStorage.removeItem('preNota');
+    if (pre && pre.empresa === e.id) { const i = d.clientes.findIndex((x) => x.documento === pre.documento); if (i >= 0) { $('#nCliente').value = String(i); $('#nCliente').dispatchEvent(new Event('change')); } }
+  } catch { /* ok */ }
   $$('[data-repetir]').forEach((b) => b.addEventListener('click', () => { const n = d.notas.find((x) => x.id === b.dataset.repetir); preenche({ documento: n.tomador.cnpj || n.tomador.cpf, nome: n.tomador.nome, descricao: n.descricao, valor: n.valor }); window.scrollTo({ top: 0, behavior: 'smooth' }); }));
   $$('[data-cancelar]').forEach((b) => b.addEventListener('click', () => cancelaNota(e, d.notas.find((x) => x.id === b.dataset.cancelar))));
   $('#formNota').addEventListener('submit', async (ev) => {
@@ -274,7 +288,7 @@ function ligaFormNota(d) {
     if ($('#nDesc').value.trim().length < 5) return msg('Descreva o serviço prestado.');
     msg('');
     let rasc;
-    try { rasc = (await api(`/escritorio/empresas/${e.id}/notas`, { body: { documento: c, valor: String(numValor($('#nValor').value)), descricao: $('#nDesc').value, nome: $('#nNome').value } })).nota; } catch (err) { return msg(err.message); }
+    try { rasc = (await api(`/escritorio/empresas/${e.id}/notas`, { body: { documento: c, valor: String(numValor($('#nValor').value)), descricao: $('#nDesc').value, nome: $('#nNome').value, email: $('#nEmail').value, salvarCliente: !$('#nSalvarBox').hidden && $('#nSalvar').checked } })).nota; } catch (err) { return msg(err.message); }
     const destino = { producao: 'A nota será emitida <b>agora</b> na Receita, com valor fiscal.', homologacao: 'A nota irá para a <b>homologação</b> da Receita (teste, sem valor fiscal).' }[e.emissao] || 'O pedido irá para a <b>fila da equipe</b>, para emissão no Emissor Nacional.';
     const r = await dialogo({
       titulo: 'Conferir nota fiscal', sub: destino,
@@ -285,7 +299,7 @@ function ligaFormNota(d) {
     });
     if (!r || r === 'voltar') { await api(`/escritorio/empresas/${e.id}/notas/${rasc.id}`, { method: 'DELETE' }).catch(() => {}); return; }
     const txt = { emitida: `Nota ${r.numero ? 'nº ' + esc(r.numero) + ' ' : ''}emitida pela Receita.`, processando: 'Enviada. A Receita ainda está processando.', fila: 'Pedido enviado para a fila da equipe.', erro: `A Receita recusou: ${esc(r.erro || '')}` }[r.status] || 'Enviada.';
-    aviso(txt, r.status === 'erro' ? 'erro' : 'ok');
+    if (r.status === 'emitida') await notaPronta(e, r); else aviso(txt, r.status === 'erro' ? 'erro' : 'ok');
     telaEmpresa(e.id, 'notas'); contaPedidos();
   });
 }
@@ -299,58 +313,187 @@ async function cancelaNota(e, n) {
   if (r) { aviso(r.status === 'cancelada' ? 'Nota cancelada na Receita.' : 'Pedido de cancelamento registrado.'); telaEmpresa(e.id, 'notas'); }
 }
 
+// Nota saiu: entrega na hora (PDF, WhatsApp, link) e mostra para quem o e-mail foi
+async function notaPronta(e, n) {
+  const texto = `Olá! Segue a nota fiscal${n.numero ? ` nº ${n.numero}` : ''} de ${e.nome} no valor de ${brl(n.valor)}: ${n.pdf}`;
+  const email = n.entrega ? (n.entrega.ok ? `<p class="msg ok">${icone('check')} Enviada por e-mail para ${esc(n.entrega.para.join(', '))}.</p>` : `<p class="msg atencao">E-mail automático não enviado (${esc(n.entrega.erro)}).</p>`) : '';
+  await dialogo({
+    titulo: `${icone('check')} Nota${n.numero ? ' nº ' + esc(n.numero) : ''} emitida`, sub: `${esc(n.tomador.nome)} · ${brl(n.valor)}`,
+    corpo: `<div style="display:grid;gap:10px">
+      <a class="btn primario largo" href="${esc(n.pdf)}" target="_blank" rel="noopener">${icone('pdf')} Abrir a nota (PDF)</a>
+      <a class="btn largo" href="https://wa.me/?text=${encodeURIComponent(texto)}" target="_blank" rel="noopener">Enviar no WhatsApp</a>
+      <button type="button" class="btn largo" id="copiaLink">${icone('link')} Copiar link da nota</button></div>${email}`,
+    botoes: [{ texto: 'Fechar', valor: true }],
+  }).then(() => {});
+}
+document.addEventListener('click', async (ev) => {
+  if (ev.target.closest('#copiaLink')) { const a = $('#dlg a.btn.primario'); try { await navigator.clipboard.writeText(a.href); aviso('Link copiado.'); } catch { aviso('Não deu para copiar.', 'erro'); } }
+});
+
+// ----- Clientes (tomadores) da empresa -----
+function abaClientes(d) {
+  const e = d.empresa;
+  const salvos = d.clientes.filter((c) => c.salvo);
+  const total = d.clientes.reduce((t, c) => t + c.notas.total, 0);
+  $('#abaCorpo').innerHTML = `
+    <div class="kpis">
+      <div class="kpi"><span>Clientes cadastrados</span><b>${salvos.length}</b><small>${d.clientes.length - salvos.length ? `+ ${d.clientes.length - salvos.length} só nas notas` : 'todos cadastrados'}</small></div>
+      <div class="kpi"><span>Faturado para clientes</span><b>${brl(total)}</b><small>notas emitidas e na fila</small></div>
+      <div class="kpi"><span>Maior cliente</span><b style="font-size:1.05rem">${esc((d.clientes.slice().sort((a, b) => b.notas.total - a.notas.total)[0] || {}).nome || '—')}</b><small>${brl((d.clientes.slice().sort((a, b) => b.notas.total - a.notas.total)[0] || { notas: { total: 0 } }).notas.total)}</small></div>
+      <div class="kpi"><span>Ticket médio</span><b>${brl(total / Math.max(1, d.clientes.reduce((t, c) => t + c.notas.quantidade, 0)))}</b><small>por nota</small></div>
+    </div>
+    <div class="ferramentas">
+      <div class="busca">${icone('busca')}<input id="buscaCli" placeholder="Buscar cliente por nome, CNPJ ou cidade"></div>
+      <button class="btn primario" id="novoCli" style="margin-left:auto">${icone('mais')} Novo cliente</button>
+    </div>
+    <div class="card sem-pad"><table class="tabela"><thead><tr><th>Cliente</th><th class="ocultar-cel">Cidade</th><th class="ocultar-cel">Contato</th><th class="num">Notas</th><th class="num">Faturado</th><th class="ocultar-cel">Última nota</th><th></th></tr></thead><tbody id="linhasCli"></tbody></table></div>`;
+  const desenha = () => {
+    const q = $('#buscaCli').value.trim().toLowerCase().replace(/[./-]/g, '');
+    const lista = d.clientes.filter((c) => !q || `${c.nome} ${c.fantasia || ''} ${c.municipio || ''}`.toLowerCase().includes(q) || c.documento.includes(q));
+    $('#linhasCli').innerHTML = lista.length ? lista.map((c) => `<tr>
+      <td><div class="empresa-cel"><span class="avatar">${esc(iniciais(c.fantasia || c.nome))}</span><div><b class="trunca" style="max-width:220px" title="${esc(c.nome)}">${esc(c.nome)}</b><small>${doc(c.documento)}${c.salvo ? '' : ' · <span class="chip neutro" style="padding:1px 7px">só nas notas</span>'}</small></div></div></td>
+      <td class="ocultar-cel">${esc([c.municipio, c.uf].filter(Boolean).join('/') || '—')}</td>
+      <td class="ocultar-cel"><small class="trunca" style="max-width:170px" title="${esc(c.email || '')}">${esc(c.email || '—')}</small><small>${esc(c.telefone || '')}</small></td>
+      <td class="num">${c.notas.quantidade}</td>
+      <td class="num"><b>${brl(c.notas.total)}</b></td>
+      <td class="ocultar-cel">${data(c.notas.ultima)}</td>
+      <td class="acoes"><div class="acoes-col"><button class="lnk" data-emitir="${esc(c.documento)}">${icone('nota')} Emitir nota</button>${c.salvo ? `<button class="lnk" data-editar="${esc(c.id)}">Editar</button><button class="lnk perigo" data-excluir="${esc(c.id)}">Excluir</button>` : `<button class="lnk" data-salvar="${esc(c.documento)}">Salvar no cadastro</button>`}</div></td>
+    </tr>`).join('') : '<tr><td colspan="7" class="vazio">Nenhum cliente ainda. Cadastre o primeiro ou emita uma nota.</td></tr>';
+    $$('[data-emitir]').forEach((b) => b.addEventListener('click', () => {
+      try { sessionStorage.setItem('preNota', JSON.stringify({ empresa: e.id, documento: b.dataset.emitir })); } catch { /* ok */ }
+      location.hash = `#/empresa/${e.id}/notas`;
+    }));
+    $$('[data-editar]').forEach((b) => b.addEventListener('click', () => formCliente(e, d.clientes.find((c) => c.id === b.dataset.editar))));
+    $$('[data-salvar]').forEach((b) => b.addEventListener('click', () => formCliente(e, { ...d.clientes.find((c) => c.documento === b.dataset.salvar), salvo: false, novoDeNota: true })));
+    $$('[data-excluir]').forEach((b) => b.addEventListener('click', async () => {
+      const c = d.clientes.find((x) => x.id === b.dataset.excluir);
+      const ok = await dialogo({ titulo: 'Excluir cliente?', sub: `${esc(c.nome)} · ${doc(c.documento)}`, corpo: '<p class="suave" style="margin:0">As notas já emitidas para ele continuam no histórico.</p>', botoes: [{ texto: 'Voltar', valor: false }, { texto: 'Excluir', classe: 'primario', acao: async () => api(`/escritorio/empresas/${e.id}/clientes/${c.id}`, { method: 'DELETE' }) }] });
+      if (ok) { aviso('Cliente excluído.'); telaEmpresa(e.id, 'clientes'); }
+    }));
+  };
+  $('#buscaCli').addEventListener('input', desenha);
+  $('#novoCli').addEventListener('click', () => formCliente(e, null));
+  desenha();
+}
+
+async function formCliente(e, c) {
+  const editando = c && c.salvo;
+  const v = c || {};
+  const r = await dialogo({
+    titulo: editando ? 'Editar cliente' : 'Novo cliente', sub: editando ? `${doc(v.documento)}` : 'Com CNPJ, a razão social e a cidade vêm da Receita.',
+    corpo: `${editando ? '' : `<label class="campo"><span>CNPJ ou CPF</span><input id="kDoc" inputmode="numeric" value="${esc(mascaraDoc(v.documento || ''))}" placeholder="00.000.000/0000-00"></label><div id="kInfo" class="tomador" hidden></div>`}
+      <label class="campo"><span>Nome / razão social</span><input id="kNome" value="${esc(v.nome || '')}" placeholder="${editando ? '' : 'Preenchido pela Receita quando for CNPJ'}"></label>
+      <div class="form-2"><label class="campo"><span>E-mail</span><input id="kEmail" type="email" value="${esc(v.email || '')}"></label>
+      <label class="campo"><span>Telefone / WhatsApp</span><input id="kTel" value="${esc(v.telefone || '')}"></label></div>
+      <label class="campo"><span>Descrição padrão do serviço</span><textarea id="kDesc" rows="2">${esc(v.descricaoPadrao || '')}</textarea></label>
+      <div class="form-2"><label class="campo"><span>Valor padrão (R$)</span><input id="kValor" inputmode="numeric" value="${v.valorPadrao ? esc(mascaraValor(Math.round(v.valorPadrao * 100))) : ''}"></label>
+      <label class="campo"><span>Observações</span><input id="kObs" value="${esc(v.observacoes || '')}"></label></div>`,
+    botoes: [{ texto: 'Cancelar', valor: null }, { texto: editando ? 'Salvar' : 'Cadastrar cliente', classe: 'primario', acao: async (dl) => {
+      const corpo = { documento: editando ? v.documento : $('#kDoc', dl).value, nome: $('#kNome', dl).value, email: $('#kEmail', dl).value, telefone: $('#kTel', dl).value, descricaoPadrao: $('#kDesc', dl).value, valorPadrao: $('#kValor', dl).value, observacoes: $('#kObs', dl).value };
+      return editando ? api(`/escritorio/empresas/${e.id}/clientes/${v.id}`, { method: 'PUT', body: corpo }) : api(`/escritorio/empresas/${e.id}/clientes`, { body: corpo });
+    } }],
+  });
+  if (r) { aviso(editando ? 'Cliente atualizado.' : 'Cliente cadastrado.'); telaEmpresa(e.id, 'clientes'); }
+}
+// Busca na Receita enquanto digita o CNPJ no cadastro de cliente
+document.addEventListener('input', async (ev) => {
+  if (ev.target.id === 'kValor') { ev.target.value = mascaraValor(ev.target.value); return; }
+  if (ev.target.id !== 'kDoc') return;
+  ev.target.value = mascaraDoc(ev.target.value);
+  const c = ev.target.value.replace(/\D/g, '');
+  const info = $('#kInfo');
+  if (c.length !== 14) { info.hidden = true; return; }
+  info.hidden = false; info.className = 'tomador carregando'; info.textContent = 'Buscando na Receita…';
+  try {
+    const t = await api('/escritorio/tomador/' + c);
+    info.className = 'tomador ok'; info.innerHTML = `${icone('check')}<span><b>${esc(t.nome)}</b><br><small>${esc([t.municipio, t.uf].filter(Boolean).join('/'))}</small></span>`;
+    if (!$('#kNome').value) $('#kNome').value = t.nome;
+  } catch (err) { info.className = 'tomador erro'; info.textContent = err.message; }
+});
+
 // ----- PGDAS-D e DAS -----
-const STATUS_APU = { calculada: 'A conferir', aprovada: 'Aprovada: gerar a guia', das_disponivel: 'Guia enviada ao cliente', paga: 'Paga' };
+// Um botão por mês, no passo certo: sem movimento -> declarar; com valor -> gerar guia; guia enviada -> marcar paga
+const PORTAL_PGDAS = 'https://www8.receita.fazenda.gov.br/SimplesNacional/Aplicacoes/ATSPO/pgdasd2018.app/';
+const zerado = (m) => !(m.das ? m.das.valor : m.valor);
+function situacaoDas(m) {
+  if (m.status === 'paga') return ['ok', 'Paga'];
+  if (m.status === 'entregue') return ['ok', 'Entregue sem movimento'];
+  if (m.status === 'das_disponivel') return ['info', 'Guia com o cliente'];
+  if (m.semDados) return ['neutro', 'Sem notas no sistema'];
+  return zerado(m) ? ['atencao', 'Declarar sem movimento'] : ['atencao', 'Gerar guia'];
+}
 function abaDas(d) {
   const e = d.empresa;
   if (!d.apuracao) { $('#abaCorpo').innerHTML = `<div class="card vazio">${e.regime === 'MEI' ? 'Empresa MEI: o DAS-MEI é fixo e não passa pelo PGDAS-D.' : 'Esta empresa não está no Simples Nacional.'}</div>`; return; }
   const meses = d.apuracao.meses;
-  const atual = meses[0]; // última competência fechada
   const hoje = new Date().toISOString().slice(0, 10);
+  const pendentes = meses.filter((m) => ['calculada', 'aprovada'].includes(m.status) && !m.semDados);
+  const aPagar = meses.filter((m) => m.status === 'das_disponivel').reduce((t, m) => t + (m.das ? m.das.valor : 0), 0);
+  const prox = meses[0];
   $('#abaCorpo').innerHTML = `
     <div class="kpis">
-      <div class="kpi"><span>Competência</span><b>${comp(atual.competencia)}</b><small>${STATUS_APU[atual.status] || atual.status}</small></div>
-      <div class="kpi"><span>Receita do mês</span><b>${brl(atual.receita)}</b><small>${atual.notas.length} nota(s)</small></div>
-      <div class="kpi"><span>RBT12</span><b>${brl(atual.rbt12)}</b><small>${esc(atual.regraRbt12 || '')}</small></div>
-      <div class="kpi"><span>DAS</span><b>${brl(atual.das ? atual.das.valor : atual.valor)}</b><small>vence ${dataIso((atual.das && atual.das.vencimento) || atual.vencimento)}</small></div>
+      <div class="kpi"><span>Mês a declarar</span><b>${comp(prox.competencia)}</b><small>${situacaoDas(prox)[1]}</small></div>
+      <div class="kpi"><span>Faturamento</span><b>${brl(prox.receita)}</b><small>${prox.notas.length} nota(s) no mês</small></div>
+      <div class="kpi"><span>DAS do mês</span><b>${brl(prox.das ? prox.das.valor : prox.valor)}</b><small>vence ${dataIso((prox.das && prox.das.vencimento) || prox.vencimento)}</small></div>
+      <div class="kpi"><span>Pendências</span><b>${pendentes.length}</b><small>${aPagar ? `${brl(aPagar)} em guias a pagar` : 'mês(es) para declarar'}</small></div>
     </div>
-    <div class="faixa info">${icone('raio')}<span><b>Transmissão automática do PGDAS-D:</b> aguardando a ativação do contrato Integra Contador (SERPRO). Até lá, gere a guia no Portal do Simples e anexe aqui.</span><button class="btn pequeno" disabled>Gerar pelo Integra Contador</button></div>
-    <div class="card sem-pad"><table class="tabela"><thead><tr><th>Competência</th><th class="num">Receita</th><th class="num ocultar-cel">RBT12</th><th class="ocultar-cel">Cálculo</th><th class="num">DAS</th><th>Vencimento</th><th>Situação</th><th></th></tr></thead><tbody>
-    ${meses.map((m) => { const venc = (m.das && m.das.vencimento) || m.vencimento; const atrasado = m.status !== 'paga' && venc < hoje && !m.semMovimento; return `<tr>
-      <td><b>${comp(m.competencia)}</b></td>
-      <td class="num">${brl(m.receita)}<br><small>${m.notas.length} nota(s)${m.ajuste && m.ajuste.extra ? ' + ajuste' : ''}</small></td>
-      <td class="num ocultar-cel">${brl(m.rbt12)}</td>
-      <td class="ocultar-cel"><small>${m.partes.map((p) => `${esc(p.rotulo)}: Anexo ${p.anexo} · ${pct(p.aliquota)}`).join('<br>') || (m.semDados ? '<span style="color:var(--atencao)">Sem notas no sistema</span>' : 'Sem movimento')}${m.avisos.length ? `<br><span style="color:var(--atencao)" title="${esc(m.avisos.join(' '))}">⚠ ${m.avisos.length} aviso(s)</span>` : ''}</small></td>
-      <td class="num"><b>${brl(m.das ? m.das.valor : m.valor)}</b></td>
-      <td style="${atrasado ? 'color:var(--erro);font-weight:700' : ''}">${dataIso(venc)}${atrasado ? '<br><small>vencido</small>' : ''}</td>
-      <td>${chipDas(m.status)}</td>
-      <td class="acoes">${{
-        calculada: `<button class="btn pequeno" data-apu="ajuste" data-c="${m.competencia}">Ajustar</button><button class="btn pequeno primario" data-apu="aprovar" data-c="${m.competencia}">Aprovar</button>`,
-        aprovada: `<button class="btn pequeno primario" data-apu="das" data-c="${m.competencia}" data-v="${m.valor}">Anexar guia</button>`,
-        das_disponivel: `${m.das && m.das.pdf ? `<a class="btn pequeno" href="${esc(m.das.pdf)}" target="_blank" rel="noopener">${icone('pdf')} Guia</a>` : ''}<button class="btn pequeno" data-apu="pago" data-c="${m.competencia}">Marcar paga</button>`,
-      }[m.status] || ''}</td>
-    </tr>`; }).join('')}
-    </tbody></table></div>`;
+    <div class="card sem-pad"><table class="tabela"><thead><tr><th>Mês</th><th class="num">Faturamento</th><th class="num">DAS</th><th>Vencimento</th><th>Situação</th><th></th></tr></thead><tbody>
+    ${meses.map((m) => {
+      const venc = (m.das && m.das.vencimento) || m.vencimento;
+      const [cls, txt] = situacaoDas(m);
+      const atrasado = !['paga', 'entregue'].includes(m.status) && !zerado(m) && venc < hoje;
+      const calc = m.partes.map((p) => `${p.rotulo}: Anexo ${p.anexo} · ${pct(p.aliquota)}`).join(' | ');
+      let acao = '';
+      if (['calculada', 'aprovada'].includes(m.status)) acao = zerado(m) ? `<button class="btn pequeno primario" data-apu="zerada" data-c="${m.competencia}">Declarar sem movimento</button>` : `<button class="btn pequeno ouro" data-apu="guia" data-c="${m.competencia}">Gerar guia</button>`;
+      if (m.status === 'das_disponivel') acao = `${m.das && m.das.pdf ? `<a class="lnk" href="${esc(m.das.pdf)}" target="_blank" rel="noopener">${icone('pdf')} Ver guia</a> ` : ''}<button class="btn pequeno" data-apu="pago" data-c="${m.competencia}">Marcar paga</button>`;
+      if (['paga', 'entregue'].includes(m.status)) acao = `<span class="suave">${icone('check')}</span>`;
+      return `<tr title="${esc(calc)}">
+        <td><b>${comp(m.competencia)}</b>${m.avisos.length ? `<br><small style="color:var(--atencao)" title="${esc(m.avisos.join(' '))}">⚠ conferir</small>` : ''}</td>
+        <td class="num">${brl(m.receita)}<br><small>${m.notas.length} nota(s)${m.ajuste && m.ajuste.extra ? ' + ajuste' : ''}</small></td>
+        <td class="num"><b>${brl(m.das ? m.das.valor : m.valor)}</b></td>
+        <td style="${atrasado ? 'color:var(--erro);font-weight:700' : ''}">${dataIso(venc)}${atrasado ? '<br><small>vencido</small>' : ''}</td>
+        <td><span class="chip ${cls}">${txt}</span></td>
+        <td class="acoes">${acao}${['calculada', 'aprovada'].includes(m.status) ? `<br><button class="lnk" data-apu="ajuste" data-c="${m.competencia}" style="margin-top:6px">Ajustar faturamento</button>` : ''}</td>
+      </tr>`;
+    }).join('')}
+    </tbody></table></div>
+    <p class="suave" style="font-size:.85rem;margin-top:12px">Quando o Integra Contador (SERPRO) for ativado, o "Gerar guia" transmite o PGDAS-D e baixa o DAS sozinho. Até lá, ele abre o PGDAS-D e você anexa o PDF da guia aqui.</p>`;
   $$('[data-apu]').forEach((b) => b.addEventListener('click', async () => {
-    const base = `/apuracoes/${e.id}/${b.dataset.c}`;
+    const m = meses.find((x) => x.competencia === b.dataset.c);
+    const base = `/apuracoes/${e.id}/${m.competencia}`;
     try {
-      if (b.dataset.apu === 'aprovar') { await api(base + '/aprovar', { body: {} }); aviso('Apuração aprovada.'); }
       if (b.dataset.apu === 'pago') { await api(base + '/pago', { body: {} }); aviso('DAS marcado como pago.'); }
-      if (b.dataset.apu === 'ajuste') {
-        const ok = await dialogo({ titulo: `Ajustar ${comp(b.dataset.c)}`, sub: 'Use quando houver faturamento fora do sistema ou o RBT12 estiver errado.',
-          corpo: `<label class="campo"><span>Receita a somar em serviços (R$)</span><input id="aExtra" placeholder="0,00"></label>
-            <label class="campo"><span>RBT12 correto (vazio = usar o calculado)</span><input id="aRbt"></label>
-            <label class="campo"><span>Anexo dos serviços</span><select id="aAnexo"><option value="">Manter</option><option>III</option><option>IV</option><option>V</option></select></label>`,
-          botoes: [{ texto: 'Cancelar', valor: null }, { texto: 'Salvar ajuste', classe: 'primario', acao: async (dl) => api(base + '/ajuste', { body: { extra: { servicos: $('#aExtra', dl).value }, rbt12: $('#aRbt', dl).value, anexos: $('#aAnexo', dl).value ? { servicos: $('#aAnexo', dl).value } : {} } }) }] });
-        if (ok) aviso('Ajuste salvo e DAS recalculado.');
+      if (b.dataset.apu === 'zerada') {
+        const ok = await dialogo({ titulo: `Declarar ${comp(m.competencia)} sem movimento`, sub: 'Mês sem faturamento: não há guia para pagar.',
+          corpo: `<p style="margin:0 0 12px">Transmita o PGDAS-D de <b>${comp(m.competencia)}</b> com receita <b>R$ 0,00</b> e marque aqui como entregue.</p><a class="btn" href="${PORTAL_PGDAS}" target="_blank" rel="noopener">Abrir o PGDAS-D ${icone('seta')}</a>`,
+          botoes: [{ texto: 'Voltar', valor: null }, { texto: 'Marcar como entregue', classe: 'primario', acao: async () => api(base + '/zerada', { method: 'POST' }) }] });
+        if (ok) aviso(`${comp(m.competencia)} entregue sem movimento.`);
       }
-      if (b.dataset.apu === 'das') {
-        const ok = await dialogo({ titulo: `Guia do DAS · ${comp(b.dataset.c)}`, sub: 'O cliente recebe o aviso e a guia na Área do Cliente.',
-          corpo: `<label class="campo"><span>Link do PDF do DAS</span><input id="gPdf" placeholder="https://…"></label>
-            <label class="campo"><span>Código de barras / linha digitável</span><input id="gLinha"></label>
-            <div class="form-2"><label class="campo"><span>Valor da guia</span><input id="gValor" value="${Number(b.dataset.v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}"></label>
-            <label class="campo"><span>Vencimento</span><input id="gVenc" type="date"></label></div>`,
-          botoes: [{ texto: 'Cancelar', valor: null }, { texto: 'Enviar ao cliente', classe: 'primario', acao: async (dl) => api(base + '/das', { body: { pdf: $('#gPdf', dl).value, linhaDigitavel: $('#gLinha', dl).value, valor: $('#gValor', dl).value, vencimento: $('#gVenc', dl).value } }) }] });
+      if (b.dataset.apu === 'ajuste') {
+        const ok = await dialogo({ titulo: `Ajustar ${comp(m.competencia)}`, sub: 'Para faturamento que não passou pelo sistema ou RBT12 diferente.',
+          corpo: `<label class="campo"><span>Faturamento a somar (R$)</span><input id="aExtra" placeholder="0,00"></label>
+            <div class="form-2"><label class="campo"><span>RBT12 correto</span><input id="aRbt" placeholder="vazio = calculado"></label>
+            <label class="campo"><span>Anexo dos serviços</span><select id="aAnexo"><option value="">Manter</option><option>III</option><option>IV</option><option>V</option></select></label></div>`,
+          botoes: [{ texto: 'Cancelar', valor: null }, { texto: 'Recalcular', classe: 'primario', acao: async (dl) => api(base + '/ajuste', { body: { extra: { servicos: $('#aExtra', dl).value }, rbt12: $('#aRbt', dl).value, anexos: $('#aAnexo', dl).value ? { servicos: $('#aAnexo', dl).value } : {} } }) }] });
+        if (ok) aviso('Faturamento ajustado e DAS recalculado.');
+      }
+      if (b.dataset.apu === 'guia') {
+        const venc = (m.das && m.das.vencimento) || m.vencimento;
+        const ok = await dialogo({ titulo: `Gerar guia · ${comp(m.competencia)}`, sub: 'Confira, transmita no PGDAS-D e anexe a guia. O cliente recebe na hora.',
+          corpo: `<dl class="confere" style="margin-bottom:16px"><dt>Faturamento</dt><dd><b>${brl(m.receita)}</b> <small>(${m.notas.length} nota(s))</small></dd>
+              <dt>RBT12</dt><dd>${brl(m.rbt12)}</dd><dt>Cálculo</dt><dd><small>${esc(m.partes.map((p) => `${p.rotulo}: Anexo ${p.anexo} · ${pct(p.aliquota)}`).join(' | ') || '—')}</small></dd>
+              <dt>DAS</dt><dd class="valor">${brl(m.valor)}</dd></dl>
+            <a class="btn" href="${PORTAL_PGDAS}" target="_blank" rel="noopener" style="margin-bottom:16px">1. Abrir o PGDAS-D ${icone('seta')}</a>
+            <label class="campo"><span>2. PDF da guia (DAS)</span><input type="file" id="gArq" accept="application/pdf,.pdf"></label>
+            <div class="form-2"><label class="campo"><span>Valor da guia</span><input id="gValor" value="${Number(m.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}"></label>
+            <label class="campo"><span>Vencimento</span><input id="gVenc" type="date" value="${esc(venc || '')}"></label></div>
+            <label class="campo"><span>Código de barras <small>(opcional)</small></span><input id="gLinha" placeholder="Para o cliente copiar e pagar"></label>`,
+          botoes: [{ texto: 'Cancelar', valor: null }, { texto: 'Enviar guia ao cliente', classe: 'ouro', acao: async (dl) => {
+            const arq = $('#gArq', dl).files[0];
+            if (!arq && !$('#gLinha', dl).value.trim()) throw new Error('Anexe o PDF da guia ou informe o código de barras.');
+            const pdfArquivo = arq ? await new Promise((ok2) => { const fr = new FileReader(); fr.onload = () => ok2(String(fr.result).split(',')[1]); fr.readAsDataURL(arq); }) : undefined;
+            return api(base + '/das', { body: { pdfArquivo, linhaDigitavel: $('#gLinha', dl).value, valor: $('#gValor', dl).value, vencimento: $('#gVenc', dl).value } });
+          } }] });
         if (ok) aviso('Guia enviada ao cliente.');
       }
     } catch (err) { aviso(esc(err.message), 'erro'); }

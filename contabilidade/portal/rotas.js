@@ -184,7 +184,28 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       pdf = `https://www.nfse.gov.br/ConsultaPublica/?tpc=1&chave=${r.chaveAcesso}`;
     }
     const { nfseXml, ...resto } = r;
-    return db.atualiza('notas', n.id, { ...resto, token, pdf });
+    const salva = db.atualiza('notas', n.id, { ...resto, token, pdf });
+    if (salva.status === 'emitida' && !salva.teste) await entregaNota(u, salva).catch((err) => console.warn('[nfse] entrega', err.message));
+    return db.acha('notas', (x) => x.id === n.id);
+  }
+
+  // Assim que a nota sai, manda por e-mail (PDF e XML anexos) para o escritório, a empresa e o tomador
+  async function entregaNota(u, n) {
+    const esc = (s) => String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const escritorio = (tabelaPrecos().escritorio || {});
+    const para = [...new Set([process.env.NOTAS_EMAIL || escritorio.email, u.email, n.tomador && n.tomador.email].filter((e) => e && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)))];
+    if (!para.length) return;
+    if (!canais.emailAtivo()) { db.atualiza('notas', n.id, { entrega: { ok: false, erro: 'e-mail não configurado', em: new Date().toISOString() } }); return; }
+    const anexos = [];
+    try { anexos.push({ nome: `NFS-e ${n.numero || n.id}.pdf`, conteudo: fs.readFileSync(arqNota(n, 'pdf')) }); } catch { /* sem PDF: vai o link */ }
+    try { anexos.push({ nome: `NFS-e ${n.numero || n.id}.xml`, conteudo: fs.readFileSync(arqNota(n, 'xml')) }); } catch { /* sem XML */ }
+    const prestador = (u.empresa && u.empresa.razaoSocial) || u.nome;
+    const html = `<p>Nota fiscal de serviço emitida.</p>
+      <p><b>Número:</b> ${esc(n.numero || '—')}<br><b>Prestador:</b> ${esc(prestador)}<br><b>Tomador:</b> ${esc(n.tomador.nome)}<br><b>Valor:</b> ${brl(n.valor)}<br><b>Serviço:</b> ${esc(n.descricao)}</p>
+      <p>${n.pdf ? `<a href="${esc(n.pdf)}">Abrir a nota (PDF)</a>` : ''}${n.chaveAcesso ? `<br><small>Chave de acesso: ${esc(n.chaveAcesso)}</small>` : ''}</p>
+      <p>${esc(escritorio.nome || 'V&J Assessoria Contábil')}</p>`;
+    const r = await canais.enviaEmail({ para, assunto: `NFS-e ${n.numero ? 'nº ' + n.numero + ' ' : ''}emitida · ${prestador} → ${n.tomador.nome} · ${brl(n.valor)}`, html, anexos });
+    db.atualiza('notas', n.id, { entrega: { ok: r.ok, para, erro: r.erro || '', em: new Date().toISOString() } });
   }
 
   async function emiteNacional(u, n, agora) {
@@ -211,6 +232,14 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     const achou = await nacional.consultaDps(n.idDps, cert, opcoesAmb(n.ambiente));
     if (achou) await guardaArquivosNacional(u, n, { status: 'emitida', chaveAcesso: achou.chaveAcesso, emitidaEm: new Date().toISOString() }, cert);
     else if (Date.now() - Date.parse(n.enviadaEm) > 30 * 60 * 1000) db.atualiza('notas', n.id, { status: 'erro', erro: 'A Receita não confirmou a emissão. Peça a nota de novo ou fale com a equipe V&J.' });
+  }
+
+  // PDF do DAS anexado pelo escritório (link com token, para o cliente baixar)
+  function enviaPdfDas(req, res) {
+    const token = String(req.params.token || '').replace(/[^\w-]/g, '');
+    const arq = path.join(DADOS_DIR, 'das', `${token}.pdf`);
+    if (!token || !fs.existsSync(arq)) return res.status(404).send('Guia não encontrada.');
+    res.type('application/pdf').set('Content-Disposition', 'inline; filename="DAS.pdf"').sendFile(arq);
   }
 
   // PDF da nota por link público (com token), para enviar ao tomador
@@ -494,7 +523,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     u = await garanteAbertura(db.acha('usuarios', (x) => x.id === u.id));
     const lista = minhasNotas(u).filter((n) => n.status !== 'rascunho' && !n.teste);
     res.json({
-      empresa: resumoEmpresa(u), notas: lista, tomadores: tomadoresFrequentes(u),
+      empresa: resumoEmpresa(u), notas: lista, tomadores: tomadoresFrequentes(u), clientes: clientesDa(u),
       apuracao: doSimples(u) ? { anexos: apuracao.anexosDa(u), meses: apuracao.painel(u, { quantas: 12 }) } : null,
     });
   });
@@ -505,9 +534,82 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (!e) return res.status(404).json({ erro: 'CNPJ não encontrado na Receita.' });
     res.json({ cnpj: doc, nome: e.razaoSocial, fantasia: e.nomeFantasia || '', municipio: e.municipio || '', uf: e.uf || '', situacao: e.situacao || '' });
   });
+  // ---- Clientes (tomadores) de cada empresa ----
+  // Cadastro próprio + os que já receberam nota (entram como "das notas" até serem salvos)
+  function clientesDa(u) {
+    const salvos = db.lista('tomadores', (t) => t.usuarioId === u.id);
+    const notasDa = minhasNotas(u).filter((n) => n.status !== 'rascunho' && !n.teste);
+    const estat = {};
+    for (const n of notasDa) {
+      const d = n.tomador.cnpj || n.tomador.cpf;
+      if (!d) continue;
+      const e = estat[d] || (estat[d] = { quantidade: 0, total: 0, ultima: null, nome: n.tomador.nome, email: n.tomador.email || '', municipio: n.tomador.municipio || '', uf: n.tomador.uf || '', descricao: n.descricao, valor: n.valor });
+      if (n.status !== 'erro' && n.status !== 'cancelada') { e.quantidade += 1; e.total += n.valor; }
+      if (!e.ultima || n.enviadaEm > e.ultima) e.ultima = n.enviadaEm;
+    }
+    const lista = salvos.map((t) => ({ ...t, salvo: true, notas: estat[t.documento] || { quantidade: 0, total: 0, ultima: null } }));
+    for (const [d, e] of Object.entries(estat)) {
+      if (salvos.some((t) => t.documento === d)) continue;
+      lista.push({ id: `nota-${d}`, documento: d, nome: e.nome, email: e.email, municipio: e.municipio, uf: e.uf, descricaoPadrao: e.descricao, valorPadrao: e.valor, salvo: false, notas: { quantidade: e.quantidade, total: e.total, ultima: e.ultima } });
+    }
+    return lista.sort((a, b) => (b.notas.ultima || '').localeCompare(a.notas.ultima || '') || String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+  }
+  async function dadosCliente(body) {
+    const documento = String(body.documento || '').replace(/\D/g, '');
+    if (documento.length === 14 && !cnpjUtil.valido(documento)) return { erro: 'CNPJ inválido.' };
+    if (documento.length !== 14 && documento.length !== 11) return { erro: 'Informe o CNPJ (14 dígitos) ou CPF (11 dígitos).' };
+    let receita = null;
+    if (documento.length === 14) receita = await buscaEmpresa(documento).catch(() => null);
+    const nome = txt(body.nome, 160) || (receita && receita.razaoSocial) || '';
+    if (!nome) return { erro: 'Informe o nome do cliente.' };
+    const email = txt(body.email, 160);
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { erro: 'E-mail inválido.' };
+    return {
+      dados: {
+        documento, nome, fantasia: txt(body.fantasia, 160) || (receita && receita.nomeFantasia) || '', email, telefone: txt(body.telefone, 20).replace(/\D/g, ''),
+        municipio: (receita && receita.municipio) || txt(body.municipio, 80), uf: (receita && receita.uf) || txt(body.uf, 2).toUpperCase(),
+        descricaoPadrao: txt(body.descricaoPadrao, 2000), valorPadrao: body.valorPadrao ? dinheiro(String(body.valorPadrao).replace(/\./g, '').replace(',', '.')) || 0 : 0, observacoes: txt(body.observacoes, 500),
+      },
+    };
+  }
+  admin.get('/escritorio/empresas/:id/clientes', (req, res) => { const u = empresaDe(req, res); if (u) res.json({ clientes: clientesDa(u) }); });
+  admin.post('/escritorio/empresas/:id/clientes', express.json(), async (req, res) => {
+    const u = empresaDe(req, res);
+    if (!u) return;
+    const r = await dadosCliente(req.body || {});
+    if (r.erro) return res.status(400).json({ erro: r.erro });
+    if (db.acha('tomadores', (t) => t.usuarioId === u.id && t.documento === r.dados.documento)) return res.status(409).json({ erro: 'Este cliente já está cadastrado nesta empresa.' });
+    res.json({ cliente: db.insere('tomadores', { usuarioId: u.id, ...r.dados }) });
+  });
+  admin.put('/escritorio/empresas/:id/clientes/:cid', express.json(), async (req, res) => {
+    const u = empresaDe(req, res);
+    if (!u) return;
+    const t = db.acha('tomadores', (x) => x.id === req.params.cid && x.usuarioId === u.id);
+    if (!t) return res.status(404).json({ erro: 'Cliente não encontrado.' });
+    const r = await dadosCliente({ ...req.body, documento: t.documento });
+    if (r.erro) return res.status(400).json({ erro: r.erro });
+    res.json({ cliente: db.atualiza('tomadores', t.id, r.dados) });
+  });
+  admin.delete('/escritorio/empresas/:id/clientes/:cid', (req, res) => {
+    const u = empresaDe(req, res);
+    if (!u) return;
+    db.remove('tomadores', (x) => x.id === req.params.cid && x.usuarioId === u.id);
+    res.json({ ok: true });
+  });
+
   admin.post('/escritorio/empresas/:id/notas', express.json(), async (req, res) => {
     const u = empresaDe(req, res);
-    if (u) responde2(res, await criaRascunho(u, { ...(req.body || {}), pedidoPor: 'escritorio' }));
+    if (!u) return;
+    const r = await criaRascunho(u, { ...(req.body || {}), pedidoPor: 'escritorio' });
+    // "Salvar este cliente": entra no cadastro de clientes da empresa
+    if (r.nota && req.body && req.body.salvarCliente) {
+      const t = r.nota.tomador;
+      const documento = t.cnpj || t.cpf;
+      if (!db.acha('tomadores', (x) => x.usuarioId === u.id && x.documento === documento)) {
+        db.insere('tomadores', { usuarioId: u.id, documento, nome: t.nome, fantasia: '', email: t.email || '', telefone: '', municipio: t.municipio || '', uf: t.uf || '', descricaoPadrao: r.nota.descricao, valorPadrao: r.nota.valor, observacoes: '' });
+      }
+    }
+    responde2(res, r);
   });
   const notaDaEmpresa = (req, res) => {
     const u = empresaDe(req, res);
@@ -610,18 +712,43 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     db.atualiza('apuracoes', reg.id, { status: 'aprovada', aprovado: calc, aprovadoEm: new Date().toISOString() });
     res.json({ linha: linhaDe(u, req.params.comp) });
   });
-  admin.post('/apuracoes/:id/:comp/das', express.json(), (req, res) => {
+  // Mês sem faturamento: declaração zerada, sem guia
+  admin.post('/apuracoes/:id/:comp/zerada', (req, res) => {
     const u = alvoApu(req, res);
     if (!u) return;
     const reg = apuracao.registro(u, req.params.comp);
-    if (reg.status === 'calculada') return res.status(409).json({ erro: 'Aprove a apuração antes de anexar o DAS.' });
-    const pdf = txt(req.body.pdf, 600);
+    if (!['calculada', 'aprovada'].includes(reg.status)) return res.status(409).json({ erro: 'Esta competência já foi concluída.' });
+    const calc = reg.aprovado || apuracao.calcula(u, req.params.comp, apuracao.receitas(u), reg.ajuste || {});
+    if (calc.valor > 0) return res.status(409).json({ erro: 'Esta competência tem DAS a pagar: use "Gerar guia".' });
+    db.atualiza('apuracoes', reg.id, { status: 'entregue', aprovado: calc, aprovadoEm: reg.aprovadoEm || new Date().toISOString(), entregueEm: new Date().toISOString() });
+    res.json({ linha: linhaDe(u, req.params.comp) });
+  });
+  admin.post('/apuracoes/:id/:comp/das', express.json({ limit: '4mb' }), (req, res) => {
+    const u = alvoApu(req, res);
+    if (!u) return;
+    let reg = apuracao.registro(u, req.params.comp);
+    // Gerar guia num passo só: aprova o cálculo (se ainda não aprovado) e anexa a guia
+    if (reg.status === 'calculada') {
+      const calc = apuracao.calcula(u, req.params.comp, apuracao.receitas(u), reg.ajuste || {});
+      reg = db.atualiza('apuracoes', reg.id, { status: 'aprovada', aprovado: calc, aprovadoEm: new Date().toISOString() });
+    }
+    let pdf = txt(req.body.pdf, 600);
     if (pdf && !/^https:\/\//.test(pdf)) return res.status(400).json({ erro: 'O link do PDF precisa começar com https://' });
+    // PDF do DAS enviado do computador: guardado no volume e servido por link com token
+    if (req.body.pdfArquivo) {
+      const buf = Buffer.from(String(req.body.pdfArquivo), 'base64');
+      if (buf.subarray(0, 4).toString() !== '%PDF') return res.status(400).json({ erro: 'O arquivo precisa ser o PDF do DAS.' });
+      const token = (reg.das && reg.das.token) || crypto.randomBytes(12).toString('base64url');
+      fs.mkdirSync(path.join(DADOS_DIR, 'das'), { recursive: true });
+      fs.writeFileSync(path.join(DADOS_DIR, 'das', `${token}.pdf`), buf);
+      pdf = `${site}/das/${token}`;
+      req.body.token = token;
+    }
     const linhaDigitavel = txt(req.body.linhaDigitavel, 80).replace(/[^\d]/g, '');
     if (!pdf && !linhaDigitavel) return res.status(400).json({ erro: 'Informe o link do PDF ou a linha digitável do DAS.' });
     const valor = Number(String(req.body.valor || '').replace(/\./g, '').replace(',', '.')) || (reg.aprovado && reg.aprovado.valor) || 0;
     const vencimento = /^\d{4}-\d{2}-\d{2}$/.test(req.body.vencimento || '') ? req.body.vencimento : reg.aprovado && reg.aprovado.vencimento;
-    db.atualiza('apuracoes', reg.id, { status: 'das_disponivel', das: { pdf, linhaDigitavel, valor, vencimento, em: new Date().toISOString() } });
+    db.atualiza('apuracoes', reg.id, { status: 'das_disponivel', das: { pdf, linhaDigitavel, valor, vencimento, em: new Date().toISOString(), ...(req.body.token ? { token: req.body.token } : {}) } });
     const alerta = { em: new Date().toISOString(), texto: `Seu DAS de ${nomeComp(req.params.comp)} está disponível: ${brl(valor)}, vence em ${vencimento ? vencimento.split('-').reverse().join('/') : '—'}. Veja em Minha empresa › Seu DAS.` };
     db.atualiza('usuarios', u.id, { alertas: [alerta, ...(u.alertas || [])].slice(0, 30) });
     res.json({ linha: linhaDe(u, req.params.comp) });
@@ -645,7 +772,10 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (!n) return res.status(404).json({ erro: 'Nota não encontrada.' });
     const pdf = txt(req.body.pdf, 600);
     if (pdf && !/^https:\/\//.test(pdf)) return res.status(400).json({ erro: 'O link do PDF precisa começar com https://' });
-    res.json({ nota: db.atualiza('notas', n.id, { status: 'emitida', numero: txt(req.body.numero, 30), pdf, emitidaEm: new Date().toISOString() }) });
+    const emitida = db.atualiza('notas', n.id, { status: 'emitida', numero: txt(req.body.numero, 30), pdf, emitidaEm: new Date().toISOString() });
+    const dono = db.acha('usuarios', (x) => x.id === emitida.usuarioId);
+    if (dono) entregaNota(dono, emitida).catch((err) => console.warn('[nfse] entrega', err.message));
+    res.json({ nota: emitida });
   });
 
   // Carteira do contador: empresas de clientes sem login próprio
@@ -717,5 +847,5 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
   // DAS do cliente: estimativa do mês e guias liberadas pelo contador
   r.get('/das', auth.exigePlano, (req, res) => res.json({ meses: apuracao.painel(req.usuario, { quantas: 6 }).map(({ ajuste, ...l }) => l) }));
   r.use('/analises', analises.portal());
-  return { portal: r, publico, admin, enviaPdfNota };
+  return { portal: r, publico, admin, enviaPdfNota, enviaPdfDas };
 };
