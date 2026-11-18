@@ -143,11 +143,20 @@ async function lePdfDeclaracao(buf) {
   const pdf = require('pdf-parse/lib/pdf-parse.js');
   const { text } = await pdf(buf);
   const t = text.replace(/\r/g, '');
-  const rpa = t.match(/Receita Bruta do PA \(RPA\) - Compet[eê]ncia\s+([\d.]+,\d{2})\s+([\d.]+,\d{2})\s+([\d.]+,\d{2})/);
-  const deb = t.match(/Valor Total do D[eé]bito Declarado \(R\$\)[\s\S]*?\n\s*([\d.]+,\d{2})\s+([\d.]+,\d{2})\s*\n/);
+  // Valores podem vir separados por espaço ("36.500,00 0,00 36.500,00") ou colados ("36.500,000,0036.500,00")
+  const V = '(\\d{1,3}(?:\\.\\d{3})*,\\d{2})';
+  const rpa = t.match(new RegExp(`Receita Bruta do PA \\(RPA\\) - Compet[eê]ncia\\s*${V}\\s*${V}\\s*${V}`));
+  const receitaTxt = rpa ? rpa[3] : null;
+  // Débito declarado: no resumo vem logo depois da receita auferida ("36.500,00 2.190,00")
+  let debito = null;
+  const resumo = t.slice(Math.max(0, t.search(/Resumo da Declara[cç][aã]o/)));
+  if (receitaTxt) {
+    const m = resumo.match(new RegExp(`${receitaTxt.replace(/\./g, '\\.')}\\s*${V}`));
+    if (m) debito = dinheiroBr(m[1]);
+  }
   return {
-    receita: rpa ? dinheiroBr(rpa[3]) : null,
-    debito: deb ? dinheiroBr(deb[2]) : null,
+    receita: receitaTxt ? dinheiroBr(receitaTxt) : null,
+    debito,
     tipo: /Declara[cç][aã]o Retificadora/i.test(t) ? 'Retificadora' : 'Original',
   };
 }
