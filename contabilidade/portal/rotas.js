@@ -150,7 +150,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
   const minhasNotas = (u) => db.lista('notas', (n) => n.usuarioId === u.id).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm));
   const usadasNoMes = (u) => {
     const mes = new Date().toISOString().slice(0, 7);
-    return minhasNotas(u).filter((n) => n.enviadaEm && n.enviadaEm.startsWith(mes) && n.status !== 'erro').length;
+    return minhasNotas(u).filter((n) => n.enviadaEm && n.enviadaEm.startsWith(mes) && n.status !== 'erro' && !n.teste).length;
   };
 
   async function atualizaProcessando(u) {
@@ -551,7 +551,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
 
   admin.get('/notas', (req, res) => {
     const nomes = Object.fromEntries(db.lista('usuarios').map((u) => [u.id, { nome: u.empresa ? u.empresa.razaoSocial : u.nome, cnpj: u.cnpj, fiscal: u.fiscal }]));
-    res.json({ notas: db.lista('notas', (n) => n.status !== 'rascunho').sort((a, b) => (b.enviadaEm || '').localeCompare(a.enviadaEm || '')).map((n) => ({ ...n, prestador: nomes[n.usuarioId] })) });
+    res.json({ notas: db.lista('notas', (n) => n.status !== 'rascunho' && !n.teste).sort((a, b) => (b.enviadaEm || '').localeCompare(a.enviadaEm || '')).map((n) => ({ ...n, prestador: nomes[n.usuarioId] })) });
   });
   admin.post('/notas/:id/anexar', express.json(), (req, res) => {
     const n = db.acha('notas', (x) => x.id === req.params.id);

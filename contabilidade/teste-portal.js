@@ -336,6 +336,7 @@ const notas = require('./portal/notas');
       assert.strictEqual(r.json.nota.status, 'emitida', JSON.stringify(r.json));
       assert.strictEqual(r.json.nota.ambiente, 'homologacao');
       assert.ok(urls.every((u) => u.includes('producaorestrita')), 'homologação usa a produção restrita');
+      assert.ok(!(await req('GET', '/api/admin/portal/notas', null, admin)).json.notas.some((x) => x.teste), 'nota de teste não vai para a fila da equipe');
       nacional._setTransporte(null);
     }
     await new Promise((ok) => setTimeout(ok, 200));
