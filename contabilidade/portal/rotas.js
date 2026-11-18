@@ -499,7 +499,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
   // ---------- Equipe do escritório (dono e funcionários) ----------
   const soGestor = (req, res, next) => (req.acesso && req.acesso.gestor ? next() : res.status(403).json({ erro: 'Só o responsável pelo escritório pode fazer isso.' }));
   const daEquipe = (u) => u.papel === 'dono' || u.papel === 'equipe';
-  const membro = (u) => ({ id: u.id, nome: u.nome, email: u.email, papel: u.papel, ativo: u.ativo !== false, trocarSenha: !!u.trocarSenha, criadoEm: u.criadoEm, ultimoAcesso: u.ultimoAcesso || null });
+  const membro = (u) => ({ id: u.id, nome: u.nome, email: u.email, papel: u.papel, ativo: u.ativo !== false, trocarSenha: !!u.trocarSenha, criadoEm: u.criadoEm, ultimoAcesso: u.ultimoAcesso || null, carteiraPrivada: !!u.carteiraPrivada, privadas: db.lista('usuarios', (x) => x.privadaDe === u.id).length });
   // Senha provisória: mostrada uma vez para o responsável, a pessoa troca no primeiro acesso
   const senhaProvisoria = () => {
     const letras = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -511,8 +511,16 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     res.json({ usuario: u ? membro(u) : null, gestor: !!(req.acesso && req.acesso.gestor) });
   });
   // Empresas da carteira (as mesmas do painel) e quem cuida de cada uma
-  const carteiraEmpresas = () => db.lista('usuarios', (u) => u.cnpj && !auth.ehDono(u));
+  // Para o responsável: só as empresas que não são privadas de um funcionário
+  const carteiraEmpresas = () => db.lista('usuarios', (u) => u.cnpj && !auth.ehDono(u) && !u.privadaDe);
   const empresasDoMembro = (id) => carteiraEmpresas().filter((u) => (u.responsaveis || []).includes(id)).map((u) => u.id);
+  // Passa empresas para a carteira privada do funcionário (somem da visão do responsável)
+  function tornaPrivadas(membroId, ids) {
+    for (const id of (Array.isArray(ids) ? ids : []).map(String)) {
+      const u = db.acha('usuarios', (x) => x.id === id && x.cnpj && !auth.ehDono(x));
+      if (u) db.atualiza('usuarios', u.id, { privadaDe: membroId, responsaveis: [...new Set([...(u.responsaveis || []), membroId])] });
+    }
+  }
   function defineCarteira(membroId, ids) {
     const quer = new Set((Array.isArray(ids) ? ids : []).map(String));
     for (const u of carteiraEmpresas()) {
@@ -560,6 +568,12 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (req.body.nome !== undefined) patch.nome = txt(req.body.nome, 120) || u.nome;
     if (req.body.papel !== undefined) patch.papel = req.body.papel === 'dono' ? 'dono' : 'equipe';
     if (req.body.ativo !== undefined) patch.ativo = req.body.ativo !== false;
+    if (req.body.carteiraPrivada !== undefined) {
+      patch.carteiraPrivada = req.body.carteiraPrivada === true;
+      // Desligou: as empresas privadas dele voltam a aparecer para o responsável
+      if (!patch.carteiraPrivada) for (const e of db.lista('usuarios', (x) => x.privadaDe === u.id)) db.atualiza('usuarios', e.id, { privadaDe: null });
+    }
+    if (Array.isArray(req.body.privadas)) tornaPrivadas(u.id, req.body.privadas);
     const viraFuncionario = patch.papel === 'equipe' && u.papel === 'dono';
     if ((patch.ativo === false || viraFuncionario) && u.papel === 'dono' && !outrosDonosAtivos(u.id)) return res.status(409).json({ erro: 'O escritório precisa de pelo menos um responsável ativo.' });
     const salvo = db.atualiza('usuarios', u.id, patch);
@@ -579,13 +593,17 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
 
   // ---------- Carteira de cada funcionário ----------
   // O responsável vê todas as empresas; o funcionário só as que foram passadas para ele
+  // Carteira privada: empresa com privadaDe só aparece para aquele funcionário (o responsável não vê)
   const restrito = (req) => (req.acesso && !req.acesso.gestor && req.acesso.usuario ? req.acesso.usuario.id : null);
-  const naCarteira = (req) => { const m = restrito(req); return (u) => !m || (u.responsaveis || []).includes(m); };
+  const naCarteira = (req) => {
+    const m = restrito(req);
+    const eu = req.acesso && req.acesso.usuario ? req.acesso.usuario.id : null;
+    return (u) => (m ? (u.responsaveis || []).includes(m) : !u.privadaDe || u.privadaDe === eu);
+  };
   admin.use((req, res, next) => {
     const m = restrito(req);
-    if (!m) return next();
     const p = req.path;
-    if (/^\/analises/.test(p) || /^\/escritorio\/integra\/certificado/.test(p) || /^\/assinantes\/[^/]+\/(liberar|papel)/.test(p)) return res.status(403).json({ erro: 'Só o responsável pelo escritório pode fazer isso.' });
+    if (m && (/^\/analises/.test(p) || /^\/escritorio\/integra\/certificado/.test(p) || /^\/assinantes\/[^/]+\/(liberar|papel)/.test(p))) return res.status(403).json({ erro: 'Só o responsável pelo escritório pode fazer isso.' });
     let alvo = null;
     let x = p.match(/^\/(?:assinantes|empresas|apuracoes|escritorio\/empresas)\/([^/]+)/);
     if (x) alvo = x[1];
@@ -638,7 +656,10 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (existe) return res.status(409).json({ erro: 'Esta empresa já está na carteira.', id: existe.id });
     let u = await criaEmpresaCarteira(cnpj, { nome: txt(req.body.nome, 120), telefone: txt(req.body.telefone, 20).replace(/\D/g, '') });
     // Empresa cadastrada pelo funcionário já entra na carteira dele
-    if (restrito(req)) u = db.atualiza('usuarios', u.id, { responsaveis: [restrito(req)] });
+    if (restrito(req)) {
+      const quem = db.acha('usuarios', (x) => x.id === restrito(req));
+      u = db.atualiza('usuarios', u.id, { responsaveis: [restrito(req)], ...(quem && quem.carteiraPrivada ? { privadaDe: quem.id } : {}) });
+    }
     // Já traz os códigos de emissão (município IBGE, código do serviço pelo CNAE e alíquota do Simples)
     const r = await preencheFiscal(u).catch(() => ({ usuario: u, preenchidos: [] }));
     res.json({ usuario: auth.publico(r.usuario), preenchidos: r.preenchidos, servico: r.servico || null });

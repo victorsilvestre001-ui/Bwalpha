@@ -700,7 +700,8 @@ async function telaEquipe() {
   const { equipe, empresas } = await api('/equipe');
   const ativos = equipe.filter((m) => m.ativo).length;
   const semDono = empresas.filter((e) => !equipe.some((m) => m.ativo && m.papel === 'equipe' && m.empresas.includes(e.id))).length;
-  const carteira = (m) => (m.papel === 'dono' ? '<span class="suave">Todas</span>' : m.empresas.length ? `<b>${m.empresas.length}</b> <span class="suave">de ${empresas.length}</span>` : '<span class="chip atencao">Nenhuma</span>');
+  const carteira = (m) => (m.papel === 'dono' ? '<span class="suave">Todas</span>'
+    : `${m.empresas.length ? `<b>${m.empresas.length}</b> <span class="suave">de ${empresas.length}</span>` : (m.privadas ? '' : '<span class="chip atencao">Nenhuma</span>')}${m.privadas ? `${m.empresas.length ? '<br>' : ''}<small class="suave">+ ${m.privadas} privada(s)</small>` : ''}${m.carteiraPrivada ? '<br><span class="chip neutro">Carteira privada</span>' : ''}`);
   el.innerHTML = `
     <div class="cab">
       <div><h1>Equipe</h1><p>Quem entra no painel e quais empresas cada funcionário cuida.</p></div>
@@ -751,6 +752,7 @@ async function telaEquipe() {
     <label class="campo"><span>Nome</span><input id="mNome" value="${esc(m.nome || '')}" maxlength="120"></label>
     ${m.id ? '' : '<label class="campo"><span>E-mail</span><input id="mEmail" type="email" maxlength="160"></label>'}
     <label class="campo"><span>Função</span><select id="mPapel"><option value="equipe">Funcionário (só as empresas dele)</option><option value="dono" ${m.papel === 'dono' ? 'selected' : ''}>Responsável (vê tudo)</option></select></label>
+    ${m.id && m.papel === 'equipe' ? `<label class="check-salvar"><input type="checkbox" id="mPrivada" ${m.carteiraPrivada ? 'checked' : ''}> Carteira privada: as empresas que ${esc(m.nome)} cadastrar ficam só com ele (não aparecem para você)</label>` : ''}
     ${m.id ? '' : `<div id="mCarteira"><span class="rotulo">Empresas que vai cuidar</span>${escolhaEmpresas()}</div>`}`;
 
   $('#novoMembro').addEventListener('click', async () => {
@@ -763,12 +765,12 @@ async function telaEquipe() {
   $$('[data-acao]', el).forEach((b) => b.addEventListener('click', async () => {
     const m = equipe.find((x) => x.id === b.closest('tr').dataset.id);
     if (b.dataset.acao === 'carteira') {
-      const p = dialogo({ titulo: `Empresas de ${esc(m.nome)}`, sub: 'Marque as empresas que essa pessoa cuida. Ela só vê essas no painel.', corpo: escolhaEmpresas(m.empresas), botoes: [{ texto: 'Cancelar', valor: null }, { texto: 'Salvar', classe: 'primario', acao: () => api(`/equipe/${m.id}`, { body: { empresas: marcadas() } }) }] });
+      const p = dialogo({ titulo: `Empresas de ${esc(m.nome)}`, sub: 'Marque as empresas que essa pessoa cuida. Ela só vê essas no painel.', corpo: `${escolhaEmpresas(m.empresas)}<label class="check-salvar" style="margin-top:12px"><input type="checkbox" id="ePrivar"> Passar as marcadas só para ${esc(m.nome)} (somem do seu painel)</label>`, botoes: [{ texto: 'Cancelar', valor: null }, { texto: 'Salvar', classe: 'primario', acao: () => api(`/equipe/${m.id}`, { body: { empresas: marcadas(), ...($('#ePrivar').checked ? { privadas: marcadas() } : {}) } }) }] });
       ligaEscolha();
       const r = await p;
       if (r) { aviso(`${esc(m.nome)} agora cuida de ${r.membro.empresas.length} empresa(s).`); telaEquipe(); }
     } else if (b.dataset.acao === 'editar') {
-      const r = await dialogo({ titulo: `Editar ${esc(m.nome)}`, sub: esc(m.email), corpo: campos(m), botoes: [{ texto: 'Cancelar', valor: null }, { texto: 'Salvar', classe: 'primario', acao: () => api(`/equipe/${m.id}`, { body: { nome: $('#mNome').value, papel: $('#mPapel').value } }) }] });
+      const r = await dialogo({ titulo: `Editar ${esc(m.nome)}`, sub: esc(m.email), corpo: campos(m), botoes: [{ texto: 'Cancelar', valor: null }, { texto: 'Salvar', classe: 'primario', acao: () => api(`/equipe/${m.id}`, { body: { nome: $('#mNome').value, papel: $('#mPapel').value, ...($('#mPrivada') ? { carteiraPrivada: $('#mPrivada').checked } : {}) } }) }] });
       if (r) { aviso('Alterações salvas.'); telaEquipe(); }
     } else if (b.dataset.acao === 'senha') {
       const r = await dialogo({ titulo: 'Gerar nova senha?', sub: `${esc(m.nome)} sai do painel e entra de novo com a senha provisória.`, botoes: [{ texto: 'Cancelar', valor: null }, { texto: 'Gerar senha', classe: 'primario', acao: () => api(`/equipe/${m.id}/senha`, { method: 'POST' }) }] });
