@@ -570,6 +570,25 @@ function situacaoDas(m) {
   if (m.semDados) return ['neutro', 'Sem notas no sistema'];
   return zerado(m) ? ['atencao', 'Declarar sem movimento'] : ['atencao', 'Gerar guia'];
 }
+// Coluna "Declarado na Receita" (resultado da conferência pelo Integra Contador)
+function celulaDeclarado(m) {
+  const c = m.conferencia;
+  if (!c) return '<span class="suave">—</span>';
+  const v = c.receitaDeclarada != null ? brl(c.receitaDeclarada) : '';
+  const extra = `${c.retificada ? ' · retificada' : ''}${c.dasPago ? ' · DAS pago' : ''}${c.malha ? ' · em malha' : ''}`;
+  if (c.situacao === 'ok') return `<span class="chip ok">${v || 'Declarado'}</span><br><small>confere${extra}</small>`;
+  if (c.situacao === 'divergente') return `<span class="chip erro">${v}</span><br><small style="color:var(--erro)">diferença ${brl(c.diferenca)}${extra}</small>`;
+  if (c.situacao === 'nao_declarada') return '<span class="chip erro">Não declarado</span><br><small style="color:var(--erro)">tem notas no mês</small>';
+  if (c.situacao === 'sem_declaracao') return '<span class="chip neutro">Não declarado</span>';
+  return `<span class="chip atencao">Declarado</span><br><small>valor não lido${extra}</small>`;
+}
+
+async function conferirEmpresa(e) {
+  const r = await api(`/escritorio/empresas/${e.id}/conferir`, { method: 'POST' });
+  aviso(r.problemas ? `${r.problemas} mês(es) com diferença entre o PGDAS-D e as notas.` : 'Tudo confere com a Receita.', r.problemas ? 'erro' : 'ok');
+  return r;
+}
+
 function abaDas(d) {
   const e = d.empresa;
   if (!d.apuracao) { $('#abaCorpo').innerHTML = `<div class="card vazio">${e.regime === 'MEI' ? 'Empresa MEI: o DAS-MEI é fixo e não passa pelo PGDAS-D.' : 'Esta empresa não está no Simples Nacional.'}</div>`; return; }
@@ -578,6 +597,8 @@ function abaDas(d) {
   const pendentes = meses.filter((m) => ['calculada', 'aprovada'].includes(m.status) && !m.semDados);
   const aPagar = meses.filter((m) => m.status === 'das_disponivel').reduce((t, m) => t + (m.das ? m.das.valor : 0), 0);
   const prox = meses[0];
+  const divergentes = meses.filter((m) => m.conferencia && ['divergente', 'nao_declarada'].includes(m.conferencia.situacao));
+  const ultimaConf = meses.map((m) => m.conferencia && m.conferencia.em).filter(Boolean).sort().pop();
   $('#abaCorpo').innerHTML = `
     <div class="kpis">
       <div class="kpi"><span>Mês a declarar</span><b>${comp(prox.competencia)}</b><small>${situacaoDas(prox)[1]}</small></div>
@@ -585,7 +606,8 @@ function abaDas(d) {
       <div class="kpi"><span>DAS do mês</span><b>${brl(prox.das ? prox.das.valor : prox.valor)}</b><small>vence ${dataIso((prox.das && prox.das.vencimento) || prox.vencimento)}</small></div>
       <div class="kpi"><span>Pendências</span><b>${pendentes.length}</b><small>${aPagar ? `${brl(aPagar)} em guias a pagar` : 'mês(es) para declarar'}</small></div>
     </div>
-    <div class="card sem-pad"><table class="tabela"><thead><tr><th>Mês</th><th class="num">Faturamento</th><th class="num">DAS</th><th>Vencimento</th><th>Situação</th><th></th></tr></thead><tbody>
+    ${INTEGRA.ativo ? `<div class="faixa ${divergentes.length ? 'atencao' : 'info'}">${icone('raio')}<span>${divergentes.length ? `<b>${divergentes.length} mês(es) com o PGDAS-D diferente das notas:</b> ${divergentes.map((m) => comp(m.competencia)).join(', ')}. Retifique e depois puxe a guia.` : (ultimaConf ? `Conferido com a Receita em ${new Date(ultimaConf).toLocaleString('pt-BR')}.` : '<b>Confira com a Receita</b> o que foi declarado no PGDAS-D em cada mês.')}</span><button class="btn pequeno" id="btnConferir">Conferir com a Receita</button></div>` : ''}
+    <div class="card sem-pad"><table class="tabela"><thead><tr><th>Mês</th><th class="num">Faturamento (notas)</th><th>Declarado na Receita</th><th class="num">DAS</th><th>Vencimento</th><th>Situação</th><th></th></tr></thead><tbody>
     ${meses.map((m) => {
       const venc = (m.das && m.das.vencimento) || m.vencimento;
       const [cls, txt] = situacaoDas(m);
@@ -598,6 +620,7 @@ function abaDas(d) {
       return `<tr title="${esc(calc)}">
         <td><b>${comp(m.competencia)}</b>${m.avisos.length ? `<br><small style="color:var(--atencao)" title="${esc(m.avisos.join(' '))}">⚠ conferir</small>` : ''}</td>
         <td class="num">${brl(m.receita)}<br><small>${m.notas.length} nota(s)${m.ajuste && m.ajuste.extra ? ' + ajuste' : ''}</small></td>
+        <td>${celulaDeclarado(m)}</td>
         <td class="num"><b>${brl(m.das ? m.das.valor : m.valor)}</b></td>
         <td style="${atrasado ? 'color:var(--erro);font-weight:700' : ''}">${dataIso(venc)}${atrasado ? '<br><small>vencido</small>' : ''}</td>
         <td><span class="chip ${cls}">${txt}</span></td>
@@ -606,11 +629,17 @@ function abaDas(d) {
     }).join('')}
     </tbody></table></div>
     <p class="suave" style="font-size:.85rem;margin-top:12px">${INTEGRA.ativo ? 'Puxar guia: o site busca o DAS na Receita (vencido já sai com multa e juros até hoje) e envia ao cliente.' : 'Quando o Integra Contador estiver ligado, aparece o botão "Puxar guia": o site busca o DAS na Receita sozinho. Até lá, use "Gerar guia" e anexe o PDF.'}</p>`;
+  if ($('#btnConferir')) $('#btnConferir').addEventListener('click', async (ev) => {
+    ev.target.disabled = true; ev.target.textContent = 'Consultando a Receita…';
+    try { await conferirEmpresa(e); } catch (err) { aviso(esc(err.message), 'erro'); }
+    telaEmpresa(e.id, 'das');
+  });
   $$('[data-apu]').forEach((b) => b.addEventListener('click', async () => {
     const m = meses.find((x) => x.competencia === b.dataset.c);
     const base = `/apuracoes/${e.id}/${m.competencia}`;
     try {
       if (b.dataset.apu === 'pago') { await api(base + '/pago', { body: {} }); aviso('DAS marcado como pago.'); }
+      if (b.dataset.apu === 'conferir') { await conferirEmpresa(e); }
       if (b.dataset.apu === 'puxar') { b.disabled = true; b.textContent = 'Buscando na Receita…'; await puxaGuia(e, m.competencia); }
       if (b.dataset.apu === 'zerada') {
         const ok = await dialogo({ titulo: `Declarar ${comp(m.competencia)} sem movimento`, sub: 'Mês sem faturamento: não há guia para pagar.',

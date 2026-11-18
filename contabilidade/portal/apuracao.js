@@ -121,7 +121,7 @@ function painel(u, { quantas = 6 } = {}) {
     const reg = db.acha('apuracoes', (a) => a.usuarioId === u.id && a.competencia === comp);
     // Depois de aprovada, vale o que o contador aprovou
     const calc = reg && reg.status !== 'calculada' && reg.aprovado ? reg.aprovado : calcula(u, comp, meses, (reg && reg.ajuste) || {});
-    return { ...calc, semDados: semDados && (!reg || !reg.ajuste), id: reg ? reg.id : null, status: reg ? reg.status : 'calculada', ajuste: (reg && reg.ajuste) || null, das: (reg && reg.das) || null, aprovadoEm: reg && reg.aprovadoEm, pagoEm: reg && reg.pagoEm };
+    return { ...calc, semDados: semDados && (!reg || !reg.ajuste), id: reg ? reg.id : null, status: reg ? reg.status : 'calculada', ajuste: (reg && reg.ajuste) || null, das: (reg && reg.das) || null, aprovadoEm: reg && reg.aprovadoEm, pagoEm: reg && reg.pagoEm, conferencia: (reg && reg.conferencia) || null };
   });
 }
 

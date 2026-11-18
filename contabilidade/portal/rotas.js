@@ -797,6 +797,48 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     res.json({ linha: linhaDe(u, req.params.comp), das, envio, telefone: u.telefone || '' });
   });
 
+  // Conferir com a Receita: o que foi declarado no PGDAS-D x o faturamento das notas
+  // 1 consulta por ano (declarou? DAS pago?) + 1 por mês declarado (valores lidos do PDF da declaração)
+  admin.post('/escritorio/empresas/:id/conferir', async (req, res) => {
+    const u = empresaDe(req, res);
+    if (!u) return;
+    if (!integra.situacao().ativo) return res.status(409).json({ erro: 'O Integra Contador ainda não está ligado.' });
+    if (!doSimples(u)) return res.status(409).json({ erro: 'Esta empresa não está no Simples Nacional.' });
+    const meses = apuracao.painel(u, { quantas: Math.min(24, Number(req.query.meses) || 12) });
+    const anos = [...new Set(meses.map((m) => m.competencia.slice(0, 4)))];
+    const porMes = {};
+    try { for (const ano of anos) Object.assign(porMes, await integra.declaracoesDoAno(u.cnpj, ano)); } catch (err) { return res.status(502).json({ erro: err.message }); }
+    const resultado = [];
+    for (const m of meses) {
+      const info = porMes[m.competencia] || { declarada: false, das: [], dasPago: false };
+      let decl = null;
+      if (info.declarada) { try { decl = await integra.declaracaoDoMes(u.cnpj, m.competencia); } catch (err) { decl = { erro: err.message }; } }
+      const receitaDecl = decl && decl.receita != null ? decl.receita : null;
+      const diferenca = receitaDecl == null ? null : Math.round((m.receita - receitaDecl) * 100) / 100;
+      let situacao = 'ok';
+      if (!info.declarada) situacao = m.receita > 0 ? 'nao_declarada' : 'sem_declaracao';
+      else if (diferenca != null && Math.abs(diferenca) >= 0.01) situacao = 'divergente';
+      else if (receitaDecl == null) situacao = 'sem_leitura';
+      const conferencia = {
+        em: new Date().toISOString(), situacao, declarada: info.declarada, retificada: !!info.retificada, numero: (decl && decl.numero) || (info.ultima && info.ultima.numero) || '',
+        receitaDeclarada: receitaDecl, debitoDeclarado: decl && decl.debito != null ? decl.debito : null, receitaNotas: m.receita, diferenca, dasPago: info.dasPago, malha: (info.ultima && info.ultima.malha) || '',
+      };
+      const reg = apuracao.registro(u, m.competencia);
+      const patch = { conferencia };
+      // A Receita já resolve alguns casos: DAS pago -> paga; declarado zerado e sem notas -> entregue
+      if (info.dasPago && reg.status !== 'paga') patch.status = 'paga';
+      else if (situacao === 'ok' && receitaDecl === 0 && m.receita === 0 && ['calculada', 'aprovada'].includes(reg.status)) patch.status = 'entregue';
+      db.atualiza('apuracoes', reg.id, patch);
+      resultado.push({ competencia: m.competencia, ...conferencia });
+    }
+    const problemas = resultado.filter((r) => ['divergente', 'nao_declarada'].includes(r.situacao));
+    if (problemas.length) {
+      const alerta = { em: new Date().toISOString(), texto: `Conferência com a Receita: ${problemas.length} mês(es) com o PGDAS-D diferente das notas (${problemas.map((p) => nomeComp(p.competencia)).join(', ')}).` };
+      db.atualiza('usuarios', u.id, { alertasEscritorio: [alerta, ...((u.alertasEscritorio) || [])].slice(0, 30) });
+    }
+    res.json({ resultado, problemas: problemas.length, consultas: anos.length + resultado.filter((r) => r.declarada).length });
+  });
+
   // Mês sem faturamento: declaração zerada, sem guia
   admin.post('/apuracoes/:id/:comp/zerada', (req, res) => {
     const u = alvoApu(req, res);

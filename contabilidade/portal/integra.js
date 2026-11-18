@@ -117,4 +117,47 @@ async function geraDas(cnpj, competencia, { vencido = false, pagarAte } = {}) {
   };
 }
 
-module.exports = { situacao, geraDas, ID_CERT, trial, ErroIntegra, _setTransporte: (t) => { transporte = t || requisicao; token = null; } };
+// ---------- Conferência: o que foi declarado no PGDAS-D ----------
+const dinheiroBr = (s) => Number(String(s || '0').replace(/\./g, '').replace(',', '.')) || 0;
+
+// Lista do ano (CONSDECLARACAO13): por competência, se declarou, a última declaração e os DAS (pago ou não)
+async function declaracoesDoAno(cnpj, ano) {
+  const { dados } = await chama('Consultar', cnpj, 'CONSDECLARACAO13', { anoCalendario: String(ano) });
+  const porMes = {};
+  for (const p of (dados && dados.periodos) || []) {
+    const comp = `${String(p.periodoApuracao).slice(0, 4)}-${String(p.periodoApuracao).slice(4, 6)}`;
+    const decls = (p.operacoes || []).filter((o) => o.indiceDeclaracao);
+    const das = (p.operacoes || []).filter((o) => o.indiceDas).map((o) => ({ numero: o.indiceDas.numeroDas, emitidoEm: o.indiceDas.datahoraEmissaoDas, pago: !!o.indiceDas.dasPago }));
+    const ultima = decls[decls.length - 1];
+    porMes[comp] = {
+      declarada: decls.length > 0, retificada: decls.length > 1,
+      ultima: ultima ? { tipo: ultima.tipoOperacao, numero: ultima.indiceDeclaracao.numeroDeclaracao, transmitidaEm: ultima.indiceDeclaracao.dataHoraTransmissao, malha: ultima.indiceDeclaracao.malha || '' } : null,
+      das, dasPago: das.some((d) => d.pago),
+    };
+  }
+  return porMes;
+}
+
+// Lê do PDF da declaração a receita do período (RPA) e o débito declarado
+async function lePdfDeclaracao(buf) {
+  const pdf = require('pdf-parse/lib/pdf-parse.js');
+  const { text } = await pdf(buf);
+  const t = text.replace(/\r/g, '');
+  const rpa = t.match(/Receita Bruta do PA \(RPA\) - Compet[eê]ncia\s+([\d.]+,\d{2})\s+([\d.]+,\d{2})\s+([\d.]+,\d{2})/);
+  const deb = t.match(/Valor Total do D[eé]bito Declarado \(R\$\)[\s\S]*?\n\s*([\d.]+,\d{2})\s+([\d.]+,\d{2})\s*\n/);
+  return {
+    receita: rpa ? dinheiroBr(rpa[3]) : null,
+    debito: deb ? dinheiroBr(deb[2]) : null,
+    tipo: /Declara[cç][aã]o Retificadora/i.test(t) ? 'Retificadora' : 'Original',
+  };
+}
+
+// Última declaração do mês (CONSULTIMADECREC14): número + valores lidos do PDF
+async function declaracaoDoMes(cnpj, competencia) {
+  const { dados } = await chama('Consultar', cnpj, 'CONSULTIMADECREC14', { periodoApuracao: competencia.replace('-', '') });
+  if (!dados || !dados.declaracao || !dados.declaracao.pdf) return null;
+  const lido = await lePdfDeclaracao(Buffer.from(dados.declaracao.pdf, 'base64')).catch(() => ({ receita: null, debito: null, tipo: '' }));
+  return { numero: dados.numeroDeclaracao || '', ...lido };
+}
+
+module.exports = { situacao, geraDas, declaracoesDoAno, declaracaoDoMes, lePdfDeclaracao, ID_CERT, trial, ErroIntegra, _setTransporte: (t) => { transporte = t || requisicao; token = null; } };
