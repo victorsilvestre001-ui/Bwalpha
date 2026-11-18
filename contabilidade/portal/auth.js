@@ -44,10 +44,13 @@ function usuarioDaSessao(req) {
   if (!token) return null;
   const s = db.acha('sessoes', (x) => x.tokenHash === hashToken(token));
   if (!s || s.expira < Date.now()) return null;
-  return db.acha('usuarios', (u) => u.id === s.usuarioId);
+  const u = db.acha('usuarios', (x) => x.id === s.usuarioId);
+  return u && u.ativo !== false ? u : null;
 }
 
 const ehDono = (u) => !!u && u.papel === 'dono';
+// Quem trabalha no escritório: o dono e os funcionários
+const ehEquipe = (u) => !!u && u.ativo !== false && (u.papel === 'dono' || u.papel === 'equipe');
 
 function planoAtivo(u) {
   return ehDono(u) || (!!u && !!u.planoAte && new Date(u.planoAte) > new Date());
@@ -73,4 +76,4 @@ function publico(u) {
   return { ...resto, assinante: planoAtivo(u), dono: ehDono(u) };
 }
 
-module.exports = { ehDono, hashSenha, confereSenha, criaSessao, encerraSessao, leCookies, usuarioDaSessao, exigeLogin, exigePlano, planoAtivo, publico };
+module.exports = { ehDono, ehEquipe, hashSenha, confereSenha, criaSessao, encerraSessao, leCookies, usuarioDaSessao, exigeLogin, exigePlano, planoAtivo, publico };

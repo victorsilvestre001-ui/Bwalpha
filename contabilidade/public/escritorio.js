@@ -7,7 +7,7 @@ const doc = (d) => { const c = String(d || ''); return c.length === 14 ? c.repla
 const data = (d) => (d ? new Date(d).toLocaleDateString('pt-BR') : '—');
 const dataIso = (d) => (d ? d.split('-').reverse().join('/') : '—');
 const icone = (id) => `<svg class="i"><use href="#i-${id}"/></svg>`;
-const iniciais = (n) => String(n || '?').replace(/\b(LTDA|ME|EPP|EIRELI|S\/?A|SLU)\b/gi, '').trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase();
+const iniciais = (n) => String(n || '?').replace(/\b(LTDA|ME|EPP|EIRELI|S\/?A|SLU)\b/gi, '').replace(/[^\p{L}\s]/gu, '').trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase();
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 const comp = (c) => `${MESES[+c.slice(5, 7) - 1]}/${c.slice(0, 4)}`;
 const pct = (v) => `${(v * 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
@@ -54,27 +54,66 @@ function mostraErroDlg(texto) {
 }
 
 // ---------- Entrada ----------
+// Cada pessoa entra com o próprio e-mail; a senha geral do painel continua valendo para o responsável
+let modoPainel = false;
+let EU = { usuario: null, gestor: false };
+const erroLogin = (t) => { $('#erroLogin').textContent = t; $('#erroLogin').hidden = !t; };
+$('#trocaModo').addEventListener('click', (e) => {
+  e.preventDefault();
+  modoPainel = !modoPainel;
+  $('#modoConta').hidden = modoPainel; $('#modoPainel').hidden = !modoPainel;
+  $('#trocaModo').textContent = modoPainel ? 'Entrar com e-mail e senha' : 'Entrar com a senha geral do painel';
+  erroLogin('');
+  (modoPainel ? $('#senha') : $('#email')).focus();
+});
 $('#formLogin').addEventListener('submit', async (ev) => {
   ev.preventDefault();
-  senha = $('#senha').value;
-  try { sessionStorage.setItem('senhaAdmin', senha); } catch { /* ok */ }
-  inicia();
+  erroLogin('');
+  if (modoPainel) {
+    senha = $('#senha').value;
+    try { sessionStorage.setItem('senhaAdmin', senha); } catch { /* ok */ }
+    return inicia(true);
+  }
+  const email = $('#email').value.trim();
+  if (!email || !$('#senhaConta').value) return erroLogin('Informe e-mail e senha.');
+  const r = await fetch('/api/portal/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ email, senha: $('#senhaConta').value }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) return erroLogin(j.erro || 'Não foi possível entrar.');
+  $('#senhaConta').value = '';
+  inicia(true);
 });
-$('#sair').addEventListener('click', (e) => { e.preventDefault(); senha = ''; try { sessionStorage.removeItem('senhaAdmin'); } catch { /* ok */ } location.hash = ''; location.reload(); });
+$('#sair').addEventListener('click', async (e) => {
+  e.preventDefault();
+  senha = '';
+  try { sessionStorage.removeItem('senhaAdmin'); } catch { /* ok */ }
+  await fetch('/api/portal/sair', { method: 'POST', credentials: 'same-origin' }).catch(() => {});
+  location.hash = ''; location.reload();
+});
 
-async function inicia() {
+async function inicia(tentou) {
   try {
-    await api('/escritorio/empresas');
+    EU = await api('/equipe/eu');
     $('#telaLogin').hidden = true;
     $('#app').hidden = false;
+    desenhaConta();
     await carregaIntegra();
+    if (EU.usuario && EU.usuario.trocarSenha) location.hash = '#/conta';
     rota();
     contaPedidos();
   } catch (err) {
     $('#app').hidden = true;
     $('#telaLogin').hidden = false;
-    if (senha) { $('#erroLogin').textContent = err.status === 401 ? 'Senha incorreta.' : err.message; $('#erroLogin').hidden = false; }
+    if (tentou || senha) erroLogin(err.status === 401 ? (modoPainel ? 'Senha incorreta.' : 'Este acesso não tem permissão no painel do escritório.') : err.message);
   }
+}
+
+const PAPEL = { dono: 'Responsável', equipe: 'Funcionário' };
+function desenhaConta() {
+  const u = EU.usuario;
+  $('#menuEquipe').hidden = !EU.gestor;
+  $('#menuAdmin').hidden = !EU.gestor;
+  $('#menuConta').hidden = !u;
+  if (u) { $('#contaIni').textContent = iniciais(u.nome); $('#contaNome').textContent = u.nome; $('#contaPapel').textContent = PAPEL[u.papel] || ''; }
 }
 window.addEventListener('hashchange', rota);
 
@@ -84,6 +123,9 @@ function rota() {
   if (partes[0] === 'empresa' && partes[1]) return telaEmpresa(partes[1], partes[2] || 'notas');
   if (partes[0] === 'pedidos') return telaPedidos();
   if (partes[0] === 'integra') return telaIntegra();
+  if (EU.usuario && EU.usuario.trocarSenha) return telaConta();
+  if (partes[0] === 'equipe' && EU.gestor) return telaEquipe();
+  if (partes[0] === 'conta' && EU.usuario) return telaConta();
   if (partes[0] === 'assistente') return telaAssistente();
   if (partes[0] === 'empresas') return telaEmpresas();
   return telaAssistente();
@@ -556,6 +598,98 @@ async function telaIntegra() {
     if (!arq) return msg('Escolha o arquivo do certificado.', 'erro');
     const b64 = await new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1]); fr.readAsDataURL(arq); });
     try { await api('/escritorio/integra/certificado', { body: { pfx: b64, senha: $('#iSenha').value } }); aviso('Certificado do escritório conectado.'); telaIntegra(); } catch (err) { msg(err.message, 'erro'); }
+  });
+}
+
+// ---------- Equipe ----------
+// A senha provisória aparece uma única vez, para o responsável repassar à pessoa
+function mostraSenhaProvisoria(m, s) {
+  return dialogo({
+    titulo: 'Acesso pronto',
+    sub: `Repasse para ${esc(m.nome)}. Esta senha aparece só agora; no primeiro acesso a pessoa cria a própria.`,
+    corpo: `<div class="cred"><div><span>Endereço</span><b>${esc(location.origin)}/escritorio</b></div><div><span>E-mail</span><b>${esc(m.email)}</b></div><div><span>Senha provisória</span><b class="mono-txt">${esc(s)}</b></div></div>`,
+    botoes: [{ texto: 'Copiar dados', classe: 'secundario', acao: async () => { try { await navigator.clipboard.writeText(`Painel do escritório: ${location.origin}/escritorio\nE-mail: ${m.email}\nSenha provisória: ${s}`); aviso('Dados copiados.'); } catch { aviso('Não deu para copiar; anote a senha.', 'erro'); } return false; } }, { texto: 'Pronto', classe: 'primario', valor: true }],
+  });
+}
+
+async function telaEquipe() {
+  const el = $('#conteudo');
+  el.innerHTML = '<p class="vazio">Carregando equipe…</p>';
+  const { equipe } = await api('/equipe');
+  const ativos = equipe.filter((m) => m.ativo).length;
+  el.innerHTML = `
+    <div class="cab">
+      <div><h1>Equipe</h1><p>Quem pode entrar no painel do escritório. Cada pessoa tem o próprio e-mail e senha.</p></div>
+      <button class="btn primario" id="novoMembro">${icone('mais')} Adicionar pessoa</button>
+    </div>
+    <div class="kpis tres">
+      <div class="kpi"><span>Acessos ativos</span><b>${ativos}</b><small>${equipe.length - ativos ? `${equipe.length - ativos} desativado(s)` : 'nenhum desativado'}</small></div>
+      <div class="kpi"><span>Responsáveis</span><b>${equipe.filter((m) => m.ativo && m.papel === 'dono').length}</b><small>gerenciam a equipe</small></div>
+      <div class="kpi"><span>Funcionários</span><b>${equipe.filter((m) => m.ativo && m.papel === 'equipe').length}</b><small>emitem NF e puxam guias</small></div>
+    </div>
+    <div class="card sem-pad"><table class="tabela"><thead><tr><th>Pessoa</th><th>Função</th><th>Situação</th><th class="ocultar-cel">Último acesso</th><th></th></tr></thead><tbody>
+      ${equipe.map((m) => `
+        <tr data-id="${m.id}">
+          <td><div class="empresa-cel"><span class="avatar">${esc(iniciais(m.nome))}</span><div><b>${esc(m.nome)}${EU.usuario && EU.usuario.id === m.id ? ' <small class="suave">(você)</small>' : ''}</b><small>${esc(m.email)}</small></div></div></td>
+          <td>${m.papel === 'dono' ? '<span class="chip info">Responsável</span>' : '<span class="chip neutro">Funcionário</span>'}</td>
+          <td>${!m.ativo ? '<span class="chip erro">Desativado</span>' : m.trocarSenha ? '<span class="chip atencao">Aguardando 1º acesso</span>' : '<span class="chip ok">Ativo</span>'}</td>
+          <td class="ocultar-cel">${m.ultimoAcesso ? data(m.ultimoAcesso) : '<span class="suave">—</span>'}</td>
+          <td class="acoes">
+            <button class="btn pequeno" data-acao="editar">Editar</button>
+            <button class="btn pequeno" data-acao="senha">Nova senha</button>
+            ${EU.usuario && EU.usuario.id === m.id ? '' : `<button class="btn pequeno ${m.ativo ? 'perigo' : ''}" data-acao="ativo">${m.ativo ? 'Desativar' : 'Reativar'}</button>`}
+          </td>
+        </tr>`).join('') || '<tr><td colspan="5" class="vazio">Ninguém cadastrado ainda.</td></tr>'}
+    </tbody></table></div>
+    <div class="card"><h2>O que cada função pode fazer</h2>
+      <div class="linha-info"><span><b>Funcionário</b></span><span class="suave">Empresas, notas fiscais, clientes, PGDAS-D/DAS, pedidos e fila de notas.</span></div>
+      <div class="linha-info"><span><b>Responsável</b></span><span class="suave">Tudo do funcionário, mais gerenciar a equipe e as ferramentas do escritório.</span></div>
+    </div>`;
+  const campos = (m = {}) => `
+    <label class="campo"><span>Nome</span><input id="mNome" value="${esc(m.nome || '')}" maxlength="120"></label>
+    ${m.id ? '' : '<label class="campo"><span>E-mail</span><input id="mEmail" type="email" maxlength="160"></label>'}
+    <label class="campo"><span>Função</span><select id="mPapel"><option value="equipe">Funcionário</option><option value="dono" ${m.papel === 'dono' ? 'selected' : ''}>Responsável</option></select></label>`;
+  $('#novoMembro').addEventListener('click', async () => {
+    const r = await dialogo({ titulo: 'Adicionar pessoa', sub: 'O site cria uma senha provisória para o primeiro acesso.', corpo: campos(), botoes: [{ texto: 'Cancelar', valor: null }, { texto: 'Criar acesso', classe: 'primario', acao: () => api('/equipe', { body: { nome: $('#mNome').value, email: $('#mEmail').value, papel: $('#mPapel').value } }) }] });
+    if (r) { await mostraSenhaProvisoria(r.membro, r.senhaProvisoria); telaEquipe(); }
+  });
+  $$('[data-acao]', el).forEach((b) => b.addEventListener('click', async () => {
+    const m = equipe.find((x) => x.id === b.closest('tr').dataset.id);
+    if (b.dataset.acao === 'editar') {
+      const r = await dialogo({ titulo: `Editar ${esc(m.nome)}`, sub: esc(m.email), corpo: campos(m), botoes: [{ texto: 'Cancelar', valor: null }, { texto: 'Salvar', classe: 'primario', acao: () => api(`/equipe/${m.id}`, { body: { nome: $('#mNome').value, papel: $('#mPapel').value } }) }] });
+      if (r) { aviso('Alterações salvas.'); telaEquipe(); }
+    } else if (b.dataset.acao === 'senha') {
+      const r = await dialogo({ titulo: 'Gerar nova senha?', sub: `${esc(m.nome)} sai do painel e entra de novo com a senha provisória.`, botoes: [{ texto: 'Cancelar', valor: null }, { texto: 'Gerar senha', classe: 'primario', acao: () => api(`/equipe/${m.id}/senha`, { method: 'POST' }) }] });
+      if (r) { await mostraSenhaProvisoria(r.membro, r.senhaProvisoria); telaEquipe(); }
+    } else {
+      try { await api(`/equipe/${m.id}`, { body: { ativo: !m.ativo } }); aviso(m.ativo ? `${esc(m.nome)} não entra mais no painel.` : `${esc(m.nome)} pode entrar de novo.`); telaEquipe(); } catch (err) { aviso(esc(err.message), 'erro'); }
+    }
+  }));
+}
+
+function telaConta() {
+  const u = EU.usuario;
+  $('#conteudo').innerHTML = `
+    <div class="cab"><div><h1>Minha conta</h1><p>${esc(u.nome)} · ${esc(u.email)} · ${PAPEL[u.papel] || ''}</p></div></div>
+    ${u.trocarSenha ? '<p class="msg atencao" style="margin:0 0 16px">Você entrou com uma senha provisória. Crie a sua senha para continuar usando o painel.</p>' : ''}
+    <div class="grade-2"><form class="card" id="formSenha">
+      <h2>Trocar senha</h2>
+      <label class="campo"><span>Senha atual</span><input type="password" id="sAtual" autocomplete="current-password" required></label>
+      <label class="campo"><span>Nova senha (mínimo 8 caracteres)</span><input type="password" id="sNova" autocomplete="new-password" minlength="8" required></label>
+      <label class="campo"><span>Repita a nova senha</span><input type="password" id="sNova2" autocomplete="new-password" minlength="8" required></label>
+      <button class="btn primario">Salvar senha</button>
+      <p id="sMsg" class="msg erro" hidden></p>
+    </form></div>`;
+  $('#formSenha').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const erro = (t) => { $('#sMsg').textContent = t; $('#sMsg').hidden = !t; };
+    if ($('#sNova').value !== $('#sNova2').value) return erro('As duas senhas novas não são iguais.');
+    try {
+      await api('/equipe-minha-senha', { body: { atual: $('#sAtual').value, nova: $('#sNova').value } });
+      EU.usuario.trocarSenha = false;
+      aviso('Senha trocada.');
+      location.hash = '#/assistente';
+    } catch (err) { erro(err.message); }
   });
 }
 

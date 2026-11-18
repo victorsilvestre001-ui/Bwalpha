@@ -58,11 +58,15 @@ async function analisa(doc) {
 
 const authPortal = require('./portal/auth');
 
-// Acesso ao painel do escritório: senha do admin OU login do dono do site
+// Acesso ao painel do escritório: senha do admin, login do dono ou de um funcionário.
+// Marca em req.acesso quem entrou; só o gestor (senha ou dono) mexe na equipe.
 function adminOk(req) {
-  if (senhaOk(req.get('x-admin-senha'))) return true;
+  if (senhaOk(req.get('x-admin-senha'))) { req.acesso = { gestor: true, usuario: null }; return true; }
   authPortal.leCookies(req, null, () => {});
-  return authPortal.ehDono(authPortal.usuarioDaSessao(req));
+  const u = authPortal.usuarioDaSessao(req);
+  if (!authPortal.ehEquipe(u)) return false;
+  req.acesso = { gestor: authPortal.ehDono(u), usuario: u };
+  return true;
 }
 
 function senhaOk(recebida) {

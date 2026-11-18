@@ -150,6 +150,52 @@ const notas = require('./portal/notas');
   assert.strictEqual((await req('GET', '/api/portal/notas')).status, 200, 'dono usa tudo sem plano');
   assert.strictEqual((await req('GET', '/api/admin/portal/assinantes')).status, 200, 'dono entra no admin sem senha');
   assert.strictEqual((await req('GET', '/api/admin/contatos')).status, 200);
+
+  // Equipe do escritório: o dono cria o acesso do funcionário com senha provisória
+  r = await req('GET', '/api/admin/portal/equipe/eu');
+  assert.strictEqual(r.json.gestor, true);
+  assert.strictEqual(r.json.usuario.email, 'dono@ex.com');
+  assert.strictEqual((await req('POST', '/api/admin/portal/equipe', { nome: 'Ana', email: 'maria@ex.com' })).status, 409, 'e-mail já usado');
+  r = await req('POST', '/api/admin/portal/equipe', { nome: 'Ana Souza', email: 'Func@Ex.com' });
+  assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+  assert.strictEqual(r.json.membro.papel, 'equipe');
+  assert(!('senha' in r.json.membro));
+  const idAna = r.json.membro.id;
+  let provisoria = r.json.senhaProvisoria;
+  assert(provisoria.length >= 10);
+  assert.strictEqual((await req('GET', '/api/admin/portal/equipe')).json.equipe.length, 2);
+  const cookieDono = cookie;
+
+  cookie = '';
+  assert.strictEqual((await req('POST', '/api/portal/login', { email: 'func@ex.com', senha: provisoria })).status, 200);
+  r = await req('GET', '/api/admin/portal/equipe/eu');
+  assert.strictEqual(r.json.gestor, false);
+  assert.strictEqual(r.json.usuario.trocarSenha, true);
+  assert.strictEqual((await req('GET', '/api/admin/portal/escritorio/empresas')).status, 200, 'funcionário usa o painel');
+  assert.strictEqual((await req('GET', '/api/admin/portal/equipe')).status, 403, 'funcionário não gerencia a equipe');
+  assert.strictEqual((await req('POST', '/api/admin/portal/equipe', { nome: 'X', email: 'x@ex.com' })).status, 403);
+  assert.strictEqual((await req('POST', `/api/admin/portal/assinantes/${idAna}/papel`, { papel: 'dono' })).status, 403, 'não se promove');
+  assert.strictEqual((await req('POST', '/api/admin/portal/equipe-minha-senha', { atual: 'errada', nova: 'nova-senha-ana' })).status, 401);
+  assert.strictEqual((await req('POST', '/api/admin/portal/equipe-minha-senha', { atual: provisoria, nova: 'curta' })).status, 400);
+  assert.strictEqual((await req('POST', '/api/admin/portal/equipe-minha-senha', { atual: provisoria, nova: 'nova-senha-ana' })).status, 200);
+  assert.strictEqual((await req('GET', '/api/admin/portal/equipe/eu')).json.usuario.trocarSenha, false);
+  const cookieAna = cookie;
+
+  // Dono redefine a senha (derruba a sessão) e desativa o acesso
+  cookie = cookieDono;
+  r = await req('POST', `/api/admin/portal/equipe/${idAna}/senha`);
+  assert.notStrictEqual(r.json.senhaProvisoria, provisoria);
+  provisoria = r.json.senhaProvisoria;
+  cookie = cookieAna;
+  assert.strictEqual((await req('GET', '/api/admin/portal/escritorio/empresas')).status, 401, 'sessão antiga cai na troca de senha');
+  cookie = cookieDono;
+  assert.strictEqual((await req('POST', `/api/admin/portal/equipe/${idDono}`, { ativo: false })).status, 409, 'sempre fica um responsável');
+  assert.strictEqual((await req('POST', `/api/admin/portal/equipe/${idAna}`, { ativo: false })).json.membro.ativo, false);
+  cookie = '';
+  assert.strictEqual((await req('POST', '/api/portal/login', { email: 'func@ex.com', senha: provisoria })).status, 403, 'desativado não entra');
+  cookie = cookieDono;
+  assert.strictEqual((await req('POST', `/api/admin/portal/equipe/${idAna}`, { ativo: true, nome: 'Ana S.' })).json.membro.nome, 'Ana S.');
+  assert(!(await req('GET', '/api/admin/portal/escritorio/empresas')).json.empresas.some((e) => e.id === idAna), 'funcionário não vira empresa');
   cookie = cookieAntesDono;
 
   // Agenda: feriado de 20/11 antecipa FGTS/INSS e adia o DAS

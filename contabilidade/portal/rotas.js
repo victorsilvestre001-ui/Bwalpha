@@ -78,6 +78,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     const email = txt(req.body.email, 160).toLowerCase();
     const u = db.acha('usuarios', (x) => x.email === email);
     if (!u || !auth.confereSenha(String(req.body.senha || ''), u.senha)) return res.status(401).json({ erro: 'E-mail ou senha incorretos.' });
+    if (u.ativo === false) return res.status(403).json({ erro: 'Este acesso foi desativado. Fale com o responsável pelo escritório.' });
     auth.criaSessao(res, u.id);
     res.json({ usuario: auth.publico(u) });
   });
@@ -446,6 +447,71 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
 
   // ---------- Admin (senha do painel) ----------
   const admin = express.Router();
+
+  // ---------- Equipe do escritório (dono e funcionários) ----------
+  const soGestor = (req, res, next) => (req.acesso && req.acesso.gestor ? next() : res.status(403).json({ erro: 'Só o responsável pelo escritório pode fazer isso.' }));
+  const daEquipe = (u) => u.papel === 'dono' || u.papel === 'equipe';
+  const membro = (u) => ({ id: u.id, nome: u.nome, email: u.email, papel: u.papel, ativo: u.ativo !== false, trocarSenha: !!u.trocarSenha, criadoEm: u.criadoEm, ultimoAcesso: u.ultimoAcesso || null });
+  // Senha provisória: mostrada uma vez para o responsável, a pessoa troca no primeiro acesso
+  const senhaProvisoria = () => {
+    const letras = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
+    return Array.from(crypto.randomBytes(10), (b) => letras[b % letras.length]).join('');
+  };
+  admin.get('/equipe/eu', (req, res) => {
+    const u = req.acesso && req.acesso.usuario;
+    if (u) db.atualiza('usuarios', u.id, { ultimoAcesso: new Date().toISOString() });
+    res.json({ usuario: u ? membro(u) : null, gestor: !!(req.acesso && req.acesso.gestor) });
+  });
+  admin.get('/equipe', soGestor, (req, res) => {
+    res.json({ equipe: db.lista('usuarios', daEquipe).map(membro).sort((a, b) => (a.papel === b.papel ? a.nome.localeCompare(b.nome) : a.papel === 'dono' ? -1 : 1)) });
+  });
+  admin.post('/equipe', soGestor, express.json(), (req, res) => {
+    const nome = txt(req.body.nome, 120);
+    const email = txt(req.body.email, 160).toLowerCase();
+    const papel = req.body.papel === 'dono' ? 'dono' : 'equipe';
+    if (!nome || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ erro: 'Informe o nome e um e-mail válido.' });
+    if (db.acha('usuarios', (u) => u.email === email)) return res.status(409).json({ erro: 'Já existe um acesso com este e-mail.' });
+    const senha = senhaProvisoria();
+    const u = db.insere('usuarios', { nome, email, papel, senha: auth.hashSenha(senha), ativo: true, trocarSenha: true, alertas: [] });
+    res.json({ membro: membro(u), senhaProvisoria: senha });
+  });
+  const achaMembro = (req, res) => {
+    const u = db.acha('usuarios', (x) => x.id === req.params.id && daEquipe(x));
+    if (!u) res.status(404).json({ erro: 'Pessoa não encontrada na equipe.' });
+    return u;
+  };
+  const outrosDonosAtivos = (id) => db.lista('usuarios', (x) => x.papel === 'dono' && x.ativo !== false && x.id !== id).length;
+  admin.post('/equipe/:id/senha', soGestor, (req, res) => {
+    const u = achaMembro(req, res);
+    if (!u) return;
+    const senha = senhaProvisoria();
+    db.atualiza('usuarios', u.id, { senha: auth.hashSenha(senha), trocarSenha: true });
+    db.remove('sessoes', (s) => s.usuarioId === u.id);
+    res.json({ membro: membro(db.acha('usuarios', (x) => x.id === u.id)), senhaProvisoria: senha });
+  });
+  admin.post('/equipe/:id', soGestor, express.json(), (req, res) => {
+    const u = achaMembro(req, res);
+    if (!u) return;
+    const patch = {};
+    if (req.body.nome !== undefined) patch.nome = txt(req.body.nome, 120) || u.nome;
+    if (req.body.papel !== undefined) patch.papel = req.body.papel === 'dono' ? 'dono' : 'equipe';
+    if (req.body.ativo !== undefined) patch.ativo = req.body.ativo !== false;
+    const viraFuncionario = patch.papel === 'equipe' && u.papel === 'dono';
+    if ((patch.ativo === false || viraFuncionario) && u.papel === 'dono' && !outrosDonosAtivos(u.id)) return res.status(409).json({ erro: 'O escritório precisa de pelo menos um responsável ativo.' });
+    const salvo = db.atualiza('usuarios', u.id, patch);
+    if (patch.ativo === false) db.remove('sessoes', (s) => s.usuarioId === u.id);
+    res.json({ membro: membro(salvo) });
+  });
+  admin.post('/equipe-minha-senha', express.json(), (req, res) => {
+    const u = req.acesso && req.acesso.usuario;
+    if (!u) return res.status(400).json({ erro: 'Entre com seu e-mail para trocar a sua senha.' });
+    const nova = String(req.body.nova || '');
+    if (!auth.confereSenha(String(req.body.atual || ''), u.senha)) return res.status(401).json({ erro: 'A senha atual não confere.' });
+    if (nova.length < 8) return res.status(400).json({ erro: 'A nova senha precisa ter pelo menos 8 caracteres.' });
+    db.atualiza('usuarios', u.id, { senha: auth.hashSenha(nova), trocarSenha: false });
+    res.json({ ok: true });
+  });
+
   admin.use('/analises', analises.admin());
   admin.get('/assinantes', (req, res) => {
     // Último teste de emissão (homologação) de cada empresa, para conferir a nota gerada
@@ -454,7 +520,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     const resumoTeste = (n) => n && { status: n.status, numero: n.numero || '', chaveAcesso: n.chaveAcesso || '', pdf: n.pdf || '', erro: n.erro || '', enviadaEm: n.enviadaEm };
     res.json({ assinantes: db.lista('usuarios').map((u) => ({ ...auth.publico(u), analise: undefined, ultimoTeste: resumoTeste(testes[u.id]) })).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)) });
   });
-  admin.post('/assinantes/:id/papel', express.json(), (req, res) => {
+  admin.post('/assinantes/:id/papel', soGestor, express.json(), (req, res) => {
     const u = db.acha('usuarios', (x) => x.id === req.params.id);
     if (!u) return res.status(404).json({ erro: 'Conta não encontrada.' });
     const papel = req.body.papel === 'dono' ? 'dono' : 'cliente';
