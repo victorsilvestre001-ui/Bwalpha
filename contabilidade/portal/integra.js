@@ -117,6 +117,34 @@ async function geraDas(cnpj, competencia, { vencido = false, pagarAte } = {}) {
   };
 }
 
+// Entrega o PGDAS-D de um mês SEM MOVIMENTO (TRANSDECLARACAO11, verbo Declarar).
+// Receita 0, estabelecimento sem atividades e sem comparação de valores (não há imposto).
+// transmitir=false só valida (a Receita confere e devolve sem gravar).
+// Devolve { idDeclaracao, transmitidaEm, mensagens, multa (MAED) e os PDFs }.
+async function entregaSemMovimento(cnpj, competencia, { transmitir = true } = {}) {
+  const pa = Number(competencia.replace('-', ''));
+  const dados = {
+    cnpjCompleto: cnpj, pa, indicadorTransmissao: !!transmitir, indicadorComparacao: false,
+    declaracao: {
+      tipoDeclaracao: 1, receitaPaCompetenciaInterno: 0, receitaPaCompetenciaExterno: 0,
+      estabelecimentos: [{ cnpjCompleto: cnpj }],
+      // A partir de 11/2026 a Receita exige a folha do mês (zero, sem empregados)
+      ...(pa >= 202611 ? { folhasSalario: [{ pa, valor: 0 }] } : {}),
+    },
+  };
+  const { dados: lista, mensagens: msgs } = await chama('Declarar', cnpj, 'TRANSDECLARACAO11', dados);
+  const d = Array.isArray(lista) ? lista[0] : lista;
+  if (!transmitir) return { validado: true, mensagens: msgs, valoresDevidos: (d && d.valoresDevidos) || [] };
+  if (!d || !d.idDeclaracao) throw new ErroIntegra(`A Receita não confirmou a entrega${msgs ? `: ${msgs}` : '.'}`);
+  const pdf = (b) => (b ? Buffer.from(b, 'base64') : null);
+  const maed = d.detalhamentoDarfMaed || null;
+  return {
+    idDeclaracao: d.idDeclaracao, transmitidaEm: d.dataHoraTransmissao || '', mensagens: msgs,
+    declaracao: pdf(d.declaracao), recibo: pdf(d.recibo), notificacaoMaed: pdf(d.notificacaoMaed), darfMaed: pdf(d.darf),
+    multa: maed && maed.valores ? { total: Number(maed.valores.total) || 0, vencimento: isoDe(maed.dataVencimento), numeroDocumento: maed.numeroDocumento || '' } : null,
+  };
+}
+
 // ---------- Conferência: o que foi declarado no PGDAS-D ----------
 const dinheiroBr = (s) => Number(String(s || '0').replace(/\./g, '').replace(',', '.')) || 0;
 
@@ -174,4 +202,4 @@ async function declaracaoDoMes(cnpj, competencia) {
   return { numero: dados.numeroDeclaracao || '', ...lido };
 }
 
-module.exports = { situacao, geraDas, declaracoesDoAno, declaracaoDoMes, lePdfDeclaracao, ID_CERT, trial, ErroIntegra, _setTransporte: (t) => { transporte = t || requisicao; token = null; } };
+module.exports = { situacao, geraDas, entregaSemMovimento, declaracoesDoAno, declaracaoDoMes, lePdfDeclaracao, ID_CERT, trial, ErroIntegra, _setTransporte: (t) => { transporte = t || requisicao; token = null; } };

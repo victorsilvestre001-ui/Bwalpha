@@ -1034,15 +1034,30 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
   });
 
   // Mês sem faturamento: declaração zerada, sem guia
-  admin.post('/apuracoes/:id/:comp/zerada', (req, res) => {
+  admin.post('/apuracoes/:id/:comp/zerada', async (req, res) => {
     const u = alvoApu(req, res);
     if (!u) return;
     const reg = apuracao.registro(u, req.params.comp);
     if (!['calculada', 'aprovada'].includes(reg.status)) return res.status(409).json({ erro: 'Esta competência já foi concluída.' });
     const calc = reg.aprovado || apuracao.calcula(u, req.params.comp, apuracao.receitas(u), reg.ajuste || {});
     if (calc.valor > 0) return res.status(409).json({ erro: 'Esta competência tem DAS a pagar: use "Gerar guia".' });
-    db.atualiza('apuracoes', reg.id, { status: 'entregue', aprovado: calc, aprovadoEm: reg.aprovadoEm || new Date().toISOString(), entregueEm: new Date().toISOString() });
-    res.json({ linha: linhaDe(u, req.params.comp) });
+    // Com o Integra ligado, transmite o PGDAS-D zerado na Receita (?validar=1 só confere, sem gravar)
+    let entrega = null;
+    if (integra.situacao().ativo && req.query.local !== '1') {
+      try {
+        const r = await integra.entregaSemMovimento(u.cnpj, req.params.comp, { transmitir: req.query.validar !== '1' });
+        if (r.validado) return res.json({ validado: true, mensagens: r.mensagens, valoresDevidos: r.valoresDevidos });
+        fs.mkdirSync(path.join(DADOS_DIR, 'das'), { recursive: true });
+        const guarda = (buf) => { if (!buf) return ''; const t = crypto.randomBytes(12).toString('base64url'); fs.writeFileSync(path.join(DADOS_DIR, 'das', `${t}.pdf`), buf); return `${site}/das/${t}`; };
+        entrega = {
+          idDeclaracao: r.idDeclaracao, transmitidaEm: r.transmitidaEm, mensagens: r.mensagens,
+          declaracao: guarda(r.declaracao), recibo: guarda(r.recibo),
+          multa: r.multa ? { ...r.multa, notificacao: guarda(r.notificacaoMaed), darf: guarda(r.darfMaed) } : null,
+        };
+      } catch (err) { return res.status(502).json({ erro: `A Receita não aceitou a declaração: ${err.message}` }); }
+    }
+    db.atualiza('apuracoes', reg.id, { status: 'entregue', aprovado: calc, aprovadoEm: reg.aprovadoEm || new Date().toISOString(), entregueEm: new Date().toISOString(), ...(entrega ? { entrega } : {}) });
+    res.json({ linha: linhaDe(u, req.params.comp), entrega });
   });
   admin.post('/apuracoes/:id/:comp/das', express.json({ limit: '4mb' }), (req, res) => {
     const u = alvoApu(req, res);

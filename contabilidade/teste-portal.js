@@ -628,6 +628,28 @@ const notas = require('./portal/notas');
       assert.strictEqual(sit['2026-08'], 'sem_movimento');
       assert.strictEqual(sit['2026-10'], 'nao_declarada');
       console.log('ok movimento');
+      // Entrega do PGDAS-D sem movimento pelo Integra (TRANSDECLARACAO11), atrasado com MAED
+      const enviados = [];
+      const pdfB64 = Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.alloc(100, 32)]).toString('base64');
+      integra._setTransporte(async ({ url, body }) => {
+        enviados.push({ url, body });
+        const dd = JSON.parse(body.pedidoDados.dados);
+        if (!dd.indicadorTransmissao) return { status: 200, json: { status: 200, mensagens: [{ codigo: 'Sucesso-PGDASD', texto: 'ok' }], dados: JSON.stringify([{ valoresDevidos: [] }]) } };
+        return { status: 200, json: { status: 200, mensagens: [{ codigo: 'Aviso-PGDASD-MSG_ISN_034', texto: 'Declaração entregue em atraso.' }], dados: JSON.stringify([{ idDeclaracao: '00000000202605001', dataHoraTransmissao: '20261118120000', valoresDevidos: [], declaracao: pdfB64, recibo: pdfB64, notificacaoMaed: pdfB64, darf: pdfB64, detalhamentoDarfMaed: { periodoApuracao: '202605', numeroDocumento: '07202600000000099', dataVencimento: '20261218', valores: { principal: 50, multa: 0, juros: 0, total: 25 } } }]) } };
+      });
+      r = await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-05/zerada?validar=1`, null, admin);
+      assert.strictEqual(r.json.validado, true, JSON.stringify(r.json));
+      const dz = JSON.parse(enviados[0].body.pedidoDados.dados);
+      assert.ok(enviados[0].url.endsWith('/Declarar') && enviados[0].body.pedidoDados.idServico === 'TRANSDECLARACAO11');
+      assert.deepStrictEqual([dz.pa, dz.indicadorTransmissao, dz.declaracao.receitaPaCompetenciaInterno, dz.declaracao.estabelecimentos.length], [202605, false, 0, 1]);
+      assert.strictEqual(dz.declaracao.estabelecimentos[0].atividades, undefined, 'sem atividades no mês zerado');
+      r = await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-05/zerada`, null, admin);
+      assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+      assert.strictEqual(r.json.entrega.idDeclaracao, '00000000202605001');
+      assert.strictEqual(r.json.entrega.multa.total, 25);
+      assert.strictEqual((await fetch(base + new URL(r.json.entrega.recibo).pathname)).status, 200, 'recibo abre pelo link');
+      assert.strictEqual((await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-05/zerada`, null, admin)).status, 409, 'não entrega duas vezes');
+      console.log('ok entrega sem movimento');
       integra._setTransporte(null);
       delete process.env.INTEGRA_TRIAL;
     }
