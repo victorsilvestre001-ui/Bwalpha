@@ -80,6 +80,20 @@ input:focus, select:focus, textarea:focus { border-color: var(--marca-2); box-sh
 .comando > svg { color: var(--destaque); }
 .comando input { border: 0; box-shadow: none !important; padding: 10px 4px; font-size: 1rem; }
 
+/* Aba Pedidos */
+.pedido { margin-bottom: 18px; border: 1.5px solid var(--destaque); }
+.pedido textarea { border: 0; box-shadow: none !important; font-size: 1.05rem; resize: vertical; padding: 4px 2px; }
+.pedido-pe { display: flex; gap: 12px; align-items: flex-end; justify-content: space-between; border-top: 1px solid var(--linha); padding-top: 12px; margin-top: 8px; }
+.pedido-pe .chips-freq { margin: 0; }
+.hist { list-style: none; margin: 0; padding: 0; }
+.hist .ped { padding: 12px 0; border-bottom: 1px solid var(--linha); display: grid; gap: 6px; }
+.hist .ped:last-child { border-bottom: 0; }
+.ped-q { font-weight: 700; display: flex; justify-content: space-between; gap: 12px; }
+.ped-q small { font-weight: 500; white-space: nowrap; }
+.ped-r { display: flex; gap: 8px; align-items: flex-start; font-size: .92rem; }
+.ped.ok .ped-r svg { color: var(--ok); }
+.ped.erro .ped-r { color: var(--erro); }
+
 /* Ferramentas da lista */
 .ferramentas { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
 .busca { position: relative; flex: 1; min-width: 240px; max-width: 420px; }

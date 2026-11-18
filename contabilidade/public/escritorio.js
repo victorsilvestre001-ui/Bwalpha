@@ -80,11 +80,13 @@ window.addEventListener('hashchange', rota);
 
 function rota() {
   const partes = location.hash.replace(/^#\/?/, '').split('/');
-  $$('.lateral [data-menu]').forEach((a) => a.classList.toggle('ativo', a.dataset.menu === (partes[0] === 'empresa' ? 'empresas' : (partes[0] || 'empresas'))));
+  $$('.lateral [data-menu]').forEach((a) => a.classList.toggle('ativo', a.dataset.menu === (partes[0] === 'empresa' ? 'empresas' : (partes[0] || 'assistente'))));
   if (partes[0] === 'empresa' && partes[1]) return telaEmpresa(partes[1], partes[2] || 'notas');
   if (partes[0] === 'pedidos') return telaPedidos();
   if (partes[0] === 'integra') return telaIntegra();
-  return telaEmpresas();
+  if (partes[0] === 'assistente') return telaAssistente();
+  if (partes[0] === 'empresas') return telaEmpresas();
+  return telaAssistente();
 }
 
 async function contaPedidos() {
@@ -116,7 +118,6 @@ async function telaEmpresas() {
       <div class="kpi"><span>Notas no mês</span><b>${brl(faturado)}</b><small>${empresas.reduce((t, e) => t + e.notasMes.quantidade, 0)} nota(s)</small></div>
       <div class="kpi"><span>DAS a conferir</span><b>${dasPend}</b><small>competência anterior</small></div>
     </div>
-    <form class="comando" id="formCmd">${icone('raio')}<input id="cmd" placeholder='Diga o que fazer. Ex.: "puxar guia da AGEN", "puxar DAS de outubro da LH Motos", "emitir nota da THG"' autocomplete="off"><button class="btn ouro">Fazer</button></form>
     <div class="ferramentas">
       <div class="busca">${icone('busca')}<input id="buscaEmp" placeholder="Buscar por nome ou CNPJ"></div>
       <div class="filtros">${[['todas', 'Todas'], ['ligada', 'Emissão ligada'], ['semcert', 'Sem certificado'], ['das', 'DAS a conferir']].map(([v, t]) => `<button class="filtro ${filtroEmp === v ? 'ativo' : ''}" data-f="${v}">${t}</button>`).join('')}</div>
@@ -141,14 +142,6 @@ async function telaEmpresas() {
   $('#buscaEmp').addEventListener('input', desenha);
   $$('[data-f]').forEach((b) => b.addEventListener('click', () => { filtroEmp = b.dataset.f; $$('[data-f]').forEach((x) => x.classList.toggle('ativo', x === b)); desenha(); }));
   $('#novaEmp').addEventListener('click', cadastraEmpresa);
-  $('#formCmd').addEventListener('submit', async (ev) => {
-    ev.preventDefault();
-    const txt = $('#cmd').value.trim();
-    if (!txt) return;
-    const btn = ev.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Fazendo…';
-    try { await executaComando(txt, empresas); $('#cmd').value = ''; } catch (err) { aviso(esc(err.message), 'erro'); }
-    btn.disabled = false; btn.textContent = 'Fazer';
-  });
   desenha();
 }
 
@@ -286,7 +279,14 @@ function ligaFormNota(d) {
   try {
     const pre = JSON.parse(sessionStorage.getItem('preNota') || 'null');
     sessionStorage.removeItem('preNota');
-    if (pre && pre.empresa === e.id) { const i = d.clientes.findIndex((x) => x.documento === pre.documento); if (i >= 0) { $('#nCliente').value = String(i); $('#nCliente').dispatchEvent(new Event('change')); } }
+    if (pre && pre.empresa === e.id) {
+      const i = d.clientes.findIndex((x) => x.documento === pre.documento);
+      if (i >= 0) { $('#nCliente').value = String(i); $('#nCliente').dispatchEvent(new Event('change')); }
+      // Valor e descrição ditos no pedido valem mais que os padrões do cliente
+      if (pre.valor) $('#nValor').value = mascaraValor(Math.round(pre.valor * 100));
+      if (pre.descricao) $('#nDesc').value = pre.descricao;
+      if (i < 0) $('#nDoc').focus();
+    }
   } catch { /* ok */ }
   $$('[data-repetir]').forEach((b) => b.addEventListener('click', () => { const n = d.notas.find((x) => x.id === b.dataset.repetir); preenche({ documento: n.tomador.cnpj || n.tomador.cpf, nome: n.tomador.nome, descricao: n.descricao, valor: n.valor }); window.scrollTo({ top: 0, behavior: 'smooth' }); }));
   $$('[data-cancelar]').forEach((b) => b.addEventListener('click', () => cancelaNota(e, d.notas.find((x) => x.id === b.dataset.cancelar))));
@@ -444,28 +444,85 @@ async function puxaGuia(e, competencia) {
   });
 }
 
-// Barra de comandos: "puxar guia da AGEN", "puxar DAS de outubro da LH Motos", "emitir nota da THG"
+/// ---------- Aba Pedidos: tudo por mensagem ----------
+// Exemplos: "puxar guia da AGEN", "puxar DAS de outubro da LH Motos",
+// "emitir nota da AGEN para VIMARI de 2.750,00 manutenção do motor", "cadastrar empresa 12.345.678/0001-90"
 const MESES_NOME = { jan: '01', fev: '02', mar: '03', abr: '04', mai: '05', jun: '06', jul: '07', ago: '08', set: '09', out: '10', nov: '11', dez: '12' };
 const semAcento = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-async function executaComando(texto, empresas) {
+const IGNORAR = ['puxar', 'puxa', 'guia', 'gerar', 'emitir', 'emite', 'nota', 'fiscal', 'cliente', 'empresa', 'para', 'pagar', 'mandar', 'manda', 'enviar', 'envia', 'vencida', 'ltda', 'das', 'servicos', 'servico', 'referente', 'valor', 'reais', 'cadastrar'];
+const palavrasDe = (q) => q.split(/[^a-z0-9]+/).filter((p) => p.length >= 3 && !IGNORAR.includes(p) && !MESES_NOME[p.slice(0, 3)]);
+const melhor = (lista, nomeDe, palavras) => lista.map((x) => [x, palavras.filter((p) => semAcento(nomeDe(x)).includes(p)).length]).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1])[0];
+
+// Executa o pedido e devolve { texto, link? } para o histórico
+async function executaPedido(texto) {
   const q = semAcento(texto);
-  const palavras = q.split(/[^a-z0-9]+/).filter((p) => p.length >= 3 && !['puxar', 'puxa', 'guia', 'gerar', 'emitir', 'nota', 'fiscal', 'cliente', 'empresa', 'para', 'pagar', 'mandar', 'enviar', 'vencida', 'ltda'].includes(p) && !MESES_NOME[p.slice(0, 3)]);
-  const pontua = (e) => palavras.filter((p) => semAcento(`${e.nome} ${e.fantasia}`).includes(p) || e.cnpj.includes(p)).length;
-  const alvo = empresas.map((e) => [e, pontua(e)]).filter(([, p]) => p > 0).sort((a, b) => b[1] - a[1])[0];
-  if (!alvo) throw new Error('Não achei a empresa. Escreva o nome como está no cadastro, por exemplo "puxar guia da AGEN".');
+  const { empresas } = await api('/escritorio/empresas');
+  // Cadastrar empresa pelo CNPJ
+  const cnpj = (texto.match(/\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/) || [])[0];
+  if (/cadastr/.test(q) && cnpj) {
+    const r = await api('/empresas', { body: { cnpj } });
+    return { texto: `Empresa ${r.usuario.empresa ? r.usuario.empresa.razaoSocial : doc(r.usuario.cnpj)} cadastrada${r.preenchidos && r.preenchidos.length ? ' com ' + r.preenchidos.join(', ') : ''}.`, link: `#/empresa/${r.usuario.id}/config` };
+  }
+  // Empresa: o que vem antes de "para" (depois é o tomador da nota)
+  const [antes, depois = ''] = q.split(/\bpara\b/);
+  const alvo = melhor(empresas, (e) => `${e.nome} ${e.fantasia} ${e.cnpj}`, palavrasDe(antes)) || melhor(empresas, (e) => `${e.nome} ${e.fantasia}`, palavrasDe(q));
+  if (!alvo) throw new Error('Não achei a empresa. Use o nome do cadastro, por exemplo "puxar guia da AGEN".');
   const e = alvo[0];
-  if (/nota|nf/.test(q) && !/das|guia/.test(q)) { location.hash = `#/empresa/${e.id}/notas`; return; }
   const d = await api(`/escritorio/empresas/${e.id}`);
+  // Emitir nota: cliente (tomador), valor e descrição; abre a conferência
+  if (/\bnota|\bnf/.test(q) && !/\bguia|\bdas\b/.test(q)) {
+    const cli = depois ? melhor(d.clientes, (c) => `${c.nome} ${c.fantasia || ''} ${c.documento}`, palavrasDe(depois)) : null;
+    const valorTxt = (texto.match(/(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2}|\d{2,})(?![\d/.])/) || [])[1];
+    const valor = valorTxt ? Number(valorTxt.replace(/\./g, '').replace(',', '.')) : 0;
+    const desc = valorTxt ? texto.slice(texto.indexOf(valorTxt) + valorTxt.length).replace(/^\s*(reais|,|-|de|referente a|ref\.?)\s*/i, '').trim() : '';
+    try { sessionStorage.setItem('preNota', JSON.stringify({ empresa: e.id, documento: cli ? cli[0].documento : '', valor, descricao: desc.length >= 5 ? desc : '' })); } catch { /* ok */ }
+    location.hash = `#/empresa/${e.id}/notas`;
+    return { texto: `Nota da ${e.nome}${cli ? ' para ' + cli[0].nome : ''}${valor ? ' de ' + brl(valor) : ''} aberta para conferir e emitir.`, link: `#/empresa/${e.id}/notas` };
+  }
+  // Puxar guia do DAS
   if (!d.apuracao) throw new Error(`${e.nome} não está no Simples Nacional.`);
   const mesTxt = Object.keys(MESES_NOME).find((m) => new RegExp(`\\b${m}`).test(q));
   const ano = (q.match(/\b(20\d{2})\b/) || [])[1];
   let m = mesTxt ? d.apuracao.meses.find((x) => x.competencia.slice(5) === MESES_NOME[mesTxt] && (!ano || x.competencia.startsWith(ano))) : null;
-  // Sem mês: a guia em aberto mais antiga (vencida primeiro)
   if (!m) m = d.apuracao.meses.slice().reverse().find((x) => !['paga', 'entregue'].includes(x.status) && (x.das ? x.das.valor : x.valor) > 0);
   if (!m) throw new Error(`${e.nome} não tem DAS em aberto.`);
-  if (!INTEGRA.ativo) { location.hash = `#/empresa/${e.id}/das`; throw new Error('O Integra Contador ainda não está ligado: abri o PGDAS-D da empresa para gerar a guia manualmente.'); }
+  if (!INTEGRA.ativo) throw new Error(`O Integra Contador ainda não está ligado. A guia de ${comp(m.competencia)} da ${e.nome} precisa ser gerada em PGDAS-D e DAS.`);
   await puxaGuia(d.empresa, m.competencia);
-  telaEmpresa(e.id, 'das');
+  return { texto: `Guia de ${comp(m.competencia)} da ${e.nome} puxada e enviada ao cliente.`, link: `#/empresa/${e.id}/das` };
+}
+
+const HIST = 'vj-pedidos';
+const leHist = () => { try { return JSON.parse(localStorage.getItem(HIST) || '[]'); } catch { return []; } };
+const gravaHist = (h) => { try { localStorage.setItem(HIST, JSON.stringify(h.slice(0, 50))); } catch { /* ok */ } };
+
+function telaAssistente() {
+  const el = $('#conteudo');
+  const exemplos = ['puxar guia da AGEN', 'puxar DAS de outubro da LH Motos', 'emitir nota da AGEN para VIMARI de 2.750,00 manutenção dos motores', 'cadastrar empresa 00.000.000/0000-00'];
+  const desenha = () => {
+    const h = leHist();
+    $('#histPedidos').innerHTML = h.length ? h.map((p) => `<li class="ped ${p.ok ? 'ok' : 'erro'}"><div class="ped-q">${esc(p.pedido)}<small>${new Date(p.em).toLocaleString('pt-BR')}</small></div><div class="ped-r">${p.ok ? icone('check') : '⚠'} <span>${esc(p.resposta)}</span>${p.link ? ` <a href="${esc(p.link)}">Abrir</a>` : ''}</div></li>`).join('') : '<li class="vazio">Seus pedidos aparecem aqui.</li>';
+  };
+  el.innerHTML = `
+    <div class="cab"><div><h1>Pedidos</h1><p>Escreva o que precisa, como numa mensagem. O painel faz.</p></div></div>
+    <form class="card pedido" id="formPedido">
+      <textarea id="pedido" rows="3" placeholder="Ex.: puxar guia da AGEN"></textarea>
+      <div class="pedido-pe"><div class="chips-freq">${exemplos.map((x) => `<button type="button" data-ex="${esc(x)}">${esc(x)}</button>`).join('')}</div><button class="btn ouro">${icone('raio')} Fazer</button></div>
+    </form>
+    <div class="card"><h2>Histórico</h2><ul class="hist" id="histPedidos"></ul></div>`;
+  $$('[data-ex]').forEach((b) => b.addEventListener('click', () => { $('#pedido').value = b.dataset.ex; $('#pedido').focus(); }));
+  $('#pedido').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); $('#formPedido').requestSubmit(); } });
+  $('#formPedido').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const pedido = $('#pedido').value.trim();
+    if (!pedido) return;
+    const btn = ev.target.querySelector('button.ouro'); btn.disabled = true; btn.textContent = 'Fazendo…';
+    let reg;
+    try { const r = await executaPedido(pedido); reg = { pedido, ok: true, resposta: r.texto, link: r.link }; } catch (err) { reg = { pedido, ok: false, resposta: err.message }; }
+    gravaHist([{ ...reg, em: new Date().toISOString() }, ...leHist()]);
+    if (location.hash.startsWith('#/assistente')) { $('#pedido').value = ''; desenha(); btn.disabled = false; btn.innerHTML = `${icone('raio')} Fazer`; if (!reg.ok) aviso(esc(reg.resposta), 'erro'); }
+  });
+  desenha();
+  $('#pedido').focus();
 }
 
 async function telaIntegra() {
