@@ -168,7 +168,7 @@ async function cadastraEmpresa() {
             <label class="campo"><span>WhatsApp do cliente (opcional)</span><input id="dTel" placeholder="(11) 99999-9999"></label>`,
     botoes: [{ texto: 'Cancelar', valor: null }, { texto: 'Cadastrar', classe: 'primario', acao: async (d) => api('/empresas', { body: { cnpj: $('#dCnpj', d).value, telefone: $('#dTel', d).value } }) }],
   });
-  if (r && r.usuario) { aviso('Empresa cadastrada.'); location.hash = `#/empresa/${r.usuario.id}/config`; }
+  if (r && r.usuario) { aviso(r.preenchidos && r.preenchidos.length ? `Empresa cadastrada com ${r.preenchidos.join(', ')} preenchidos. Confira na Configuração.` : 'Empresa cadastrada.'); location.hash = `#/empresa/${r.usuario.id}/config`; }
 }
 
 // ---------- Empresa ----------
@@ -608,12 +608,13 @@ function abaConfig(d) {
         </div>
         <div class="form-2">
           <label class="campo"><span>Município (código IBGE)</span><input id="fMun" maxlength="7" value="${esc(f.codigoMunicipio || '')}" placeholder="Ex.: 3534401"></label>
-          <label class="campo"><span>Código do serviço (nacional)</span><input id="fServ" maxlength="6" value="${esc(f.codigoServico || '')}" placeholder="Ex.: 140101"></label>
+          <label class="campo"><span>Código do serviço (nacional)</span><input id="fServ" maxlength="60" list="listaServ" value="${esc(f.codigoServico || '')}" placeholder="Código ou palavra (ex.: manutenção)" autocomplete="off"><datalist id="listaServ"></datalist></label>
           <label class="campo"><span>Série da DPS</span><input id="fSerie" value="${esc(f.serieDps || 900)}"></label>
           <label class="campo"><span>Próximo número</span><input id="fNum" value="${esc(e.proximoDps || 1)}"></label>
           <label class="campo"><span>Alíquota do Simples (%)</span><input id="fAliq" value="${esc(String(f.aliquotaSN || 6).replace('.', ','))}"></label>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primario">Salvar</button>${e.emissao === 'homologacao' ? '<button type="button" class="btn" id="btnTeste">Testar emissão (R$ 1,00)</button>' : ''}</div>
+        <p id="descServ" class="suave" style="font-size:.82rem;margin:-6px 0 14px"></p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primario">Salvar</button><button type="button" class="btn" id="btnPreencher">${icone('raio')} Preencher pelo CNPJ</button>${e.emissao === 'homologacao' ? '<button type="button" class="btn" id="btnTeste">Testar emissão (R$ 1,00)</button>' : ''}</div>
         ${t ? `<p class="msg ${t.status === 'emitida' ? 'ok' : 'erro'}">Último teste (${new Date(t.enviadaEm).toLocaleString('pt-BR')}): ${t.status === 'emitida' ? `nota ${esc(t.numero)} gerada${t.pdf ? ` · <a href="${esc(t.pdf)}" target="_blank" rel="noopener">ver PDF</a>` : ''}` : esc(t.erro || t.status)}</p>` : ''}
       </form>
       <div>
@@ -640,9 +641,37 @@ function abaConfig(d) {
       if (!seguir) return;
     }
     try {
-      await api(`/assinantes/${e.id}/fiscal`, { body: { codigoMunicipio: $('#fMun').value, codigoServico: $('#fServ').value, serieDps: $('#fSerie').value, proximoDps: $('#fNum').value, aliquotaSN: $('#fAliq').value, emissao } });
+      await api(`/assinantes/${e.id}/fiscal`, { body: { codigoMunicipio: $('#fMun').value, codigoServico: $('#fServ').value.replace(/\D/g, '').slice(0, 6), serieDps: $('#fSerie').value, proximoDps: $('#fNum').value, aliquotaSN: $('#fAliq').value, emissao } });
       aviso('Configuração salva.'); telaEmpresa(e.id, 'config');
     } catch (err) { aviso(esc(err.message), 'erro'); }
+  });
+  // Código do serviço: busca na lista oficial e mostra a descrição do código escolhido
+  const mostraServico = async () => {
+    const c = $('#fServ').value.replace(/\D/g, '').slice(0, 6);
+    if (c.length !== 6) { $('#descServ').textContent = ''; return; }
+    try { const { servicos } = await api('/escritorio/servicos?q=' + c); const s = servicos.find((x) => x.codigo === c); $('#descServ').textContent = s ? `${s.item} · ${s.descricao}` : 'Código não encontrado na lista nacional.'; } catch { /* ok */ }
+  };
+  let tServ;
+  $('#fServ').addEventListener('input', () => {
+    clearTimeout(tServ);
+    tServ = setTimeout(async () => {
+      const q = $('#fServ').value.trim();
+      if (/^\d{6}\b/.test(q)) { $('#fServ').value = q.slice(0, 6); mostraServico(); return; }
+      if (q.length < 3) return;
+      const { servicos } = await api('/escritorio/servicos?q=' + encodeURIComponent(q));
+      $('#listaServ').innerHTML = servicos.map((s) => `<option value="${s.codigo} - ${esc(s.descricao.slice(0, 90))}">`).join('');
+    }, 250);
+  });
+  mostraServico();
+  $('#btnPreencher').addEventListener('click', async (ev) => {
+    ev.target.disabled = true;
+    try {
+      const r = await api(`/escritorio/empresas/${e.id}/preencher`, { method: 'POST' });
+      $('#fMun').value = r.fiscal.codigoMunicipio || ''; $('#fServ').value = r.fiscal.codigoServico || ''; $('#fAliq').value = String(r.fiscal.aliquotaSN || '').replace('.', ',');
+      mostraServico();
+      aviso(r.servico ? `Preenchido pelo CNAE ${esc(r.cnae)} (${esc(r.atividade.slice(0, 60))}). Confira e salve.` : `Município e alíquota preenchidos. O CNAE ${esc(r.cnae)} não tem código sugerido: busque o serviço na lista.`, r.servico ? 'ok' : 'erro');
+    } catch (err) { aviso(esc(err.message), 'erro'); }
+    ev.target.disabled = false;
   });
   if ($('#btnTeste')) $('#btnTeste').addEventListener('click', async (ev) => {
     ev.target.disabled = true; ev.target.textContent = 'Enviando para a Receita…';

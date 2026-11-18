@@ -344,6 +344,20 @@ const notas = require('./portal/notas');
       assert.strictEqual(ut.chaveAcesso, chave);
       assert.ok(/\/nf\//.test(ut.pdf), 'link do PDF da nota de teste no /admin');
 
+      // Códigos de emissão a partir do CNPJ (empresa de demonstração: Campinas, padaria)
+      const sv = require('./portal/servicos');
+      assert.strictEqual(sv.sugereServico('3313901').codigo, '140101', 'manutenção de motores -> 14.01');
+      assert.strictEqual(sv.sugereServico('8630504').codigo, '041201', 'odontologia -> 04.12');
+      assert.strictEqual(sv.sugereServico('6920601').codigo, '171901', 'contabilidade -> 17.19');
+      assert.strictEqual(sv.sugereServico('8211300').codigo, '170202', 'apoio administrativo -> 17.02');
+      assert.strictEqual(sv.sugereServico('4520001').codigo, '140101', 'oficina de veículos -> 14.01');
+      assert.ok(sv.LISTA.length > 300, 'lista oficial carregada');
+      assert.ok(sv.buscaServicos('odontologia').some((s) => s.codigo === '041201'));
+      r = await req('POST', `/api/admin/portal/escritorio/empresas/${idMaria}/preencher`, null, admin);
+      assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+      assert.match(r.json.fiscal.codigoMunicipio, /^\d{7}$/, 'IBGE do município');
+      assert.ok(r.json.fiscal.aliquotaSN > 0);
+
       // Cadastro de clientes (tomadores) da empresa no painel do escritório
       const baseCli = `/api/admin/portal/escritorio/empresas/${idMaria}/clientes`;
       r = await req('GET', baseCli, null, admin);

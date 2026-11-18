@@ -15,6 +15,7 @@ const captura = require('./captura');
 const apuracao = require('./apuracao');
 const nacional = require('./nfse-nacional');
 const integra = require('./integra');
+const servicos = require('./servicos');
 const fs = require('fs');
 const path = require('path');
 const { DADOS_DIR } = require('../pgfn/formato');
@@ -484,7 +485,9 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     const existe = db.acha('usuarios', (x) => x.cnpj === cnpj);
     if (existe) return res.status(409).json({ erro: 'Esta empresa já está na carteira.', id: existe.id });
     const u = await criaEmpresaCarteira(cnpj, { nome: txt(req.body.nome, 120), telefone: txt(req.body.telefone, 20).replace(/\D/g, '') });
-    res.json({ usuario: auth.publico(u) });
+    // Já traz os códigos de emissão (município IBGE, código do serviço pelo CNAE e alíquota do Simples)
+    const r = await preencheFiscal(u).catch(() => ({ usuario: u, preenchidos: [] }));
+    res.json({ usuario: auth.publico(r.usuario), preenchidos: r.preenchidos, servico: r.servico || null });
   });
   const empresaDe = (req, res) => {
     const u = db.acha('usuarios', (x) => x.id === req.params.id);
@@ -535,6 +538,47 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (!e) return res.status(404).json({ erro: 'CNPJ não encontrado na Receita.' });
     res.json({ cnpj: doc, nome: e.razaoSocial, fantasia: e.nomeFantasia || '', municipio: e.municipio || '', uf: e.uf || '', situacao: e.situacao || '' });
   });
+  // ---- Códigos de emissão a partir do CNPJ (município IBGE, código do serviço, alíquota do Simples) ----
+  const cacheIbge = {};
+  async function codigoIbgeDe(emp) {
+    if (emp && /^\d{7}$/.test(String(emp.codigoIbge || ''))) return String(emp.codigoIbge);
+    if (!emp || !emp.uf || !emp.municipio) return '';
+    const sem = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z ]/g, '').trim();
+    try {
+      if (!cacheIbge[emp.uf]) cacheIbge[emp.uf] = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${emp.uf}/municipios`, { signal: AbortSignal.timeout(10000) }).then((r) => r.json());
+      const m = cacheIbge[emp.uf].find((x) => sem(x.nome) === sem(emp.municipio));
+      return m ? String(m.id) : '';
+    } catch { return ''; }
+  }
+  async function preencheFiscal(u, { forcar = false } = {}) {
+    let emp = null;
+    try { emp = await buscaEmpresa(u.cnpj); } catch { /* usa o que já temos */ }
+    const base = emp || u.empresa || {};
+    const f = { ...(u.fiscal || {}) };
+    const preenchidos = [];
+    const ibge = await codigoIbgeDe(base);
+    if (ibge && (forcar || !f.codigoMunicipio)) { f.codigoMunicipio = ibge; preenchidos.push('município'); }
+    const sug = servicos.sugereServico(base.cnae || (u.empresa && u.empresa.cnae), base.cnaesSecundarios || []);
+    if (sug && (forcar || !f.codigoServico)) { f.codigoServico = sug.codigo; preenchidos.push('código do serviço'); }
+    if (forcar || !f.aliquotaSN) {
+      const anexo = apuracao.anexosDa(u).servicos;
+      let al = servicos.aliquotaInicial(anexo);
+      try { const ult = apuracao.painel(u, { quantas: 3 }).find((m) => m.partes.length); if (ult) al = Math.round(ult.partes[0].aliquota * 10000) / 100; } catch { /* sem faturamento */ }
+      f.aliquotaSN = al; preenchidos.push('alíquota do Simples');
+    }
+    if (!f.serieDps) f.serieDps = 900;
+    const patch = { fiscal: f, ...(emp ? { empresa: { ...(u.empresa || {}), codigoIbge: ibge || (u.empresa && u.empresa.codigoIbge) || '', cnae: emp.cnae, atividade: emp.atividade, municipio: emp.municipio, uf: emp.uf } } : {}) };
+    const novo = db.atualiza('usuarios', u.id, patch);
+    return { usuario: novo, preenchidos, servico: sug, atividade: base.atividade || '', cnae: base.cnae || '' };
+  }
+  admin.post('/escritorio/empresas/:id/preencher', async (req, res) => {
+    const u = empresaDe(req, res);
+    if (!u) return;
+    const r = await preencheFiscal(u, { forcar: true });
+    res.json({ fiscal: r.usuario.fiscal, preenchidos: r.preenchidos, servico: r.servico, atividade: r.atividade, cnae: r.cnae });
+  });
+  admin.get('/escritorio/servicos', (req, res) => res.json({ servicos: servicos.buscaServicos(String(req.query.q || '').slice(0, 80)) }));
+
   // ---- Clientes (tomadores) de cada empresa ----
   // Cadastro próprio + os que já receberam nota (entram como "das notas" até serem salvos)
   function clientesDa(u) {
