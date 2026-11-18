@@ -1,0 +1,821 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Briefing Interno — Vero</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Cormorant+Garamond:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0e13;--panel:#121821;--panel2:#18202b;--line:#253041;--fg:#e8edf3;--mut:#8b97a8;--acc:#e3b341;--red:#ef5350;--blue:#3fa9ff;--grn:#4cc38a;--cop:#ff8a3d}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--fg);font-family:Inter,system-ui,sans-serif;overflow:hidden}
+#viewport{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+#stage{width:1920px;height:1080px;position:relative;transform-origin:center center;flex:none}
+.slide{position:absolute;inset:0;padding:90px 110px 110px;opacity:0;pointer-events:none;transition:opacity .6s ease, transform .6s ease;transform:translateX(40px);
+  background:radial-gradient(1200px 700px at 85% 0%,#16202d 0%,transparent 60%),var(--bg)}
+.slide.on{opacity:1;pointer-events:auto;transform:none}
+.slide.prev{transform:translateX(-40px)}
+.kicker{font:600 20px 'JetBrains Mono',monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--acc);margin-bottom:22px;display:flex;gap:14px;align-items:center}
+.kicker:before{content:"";width:40px;height:2px;background:var(--acc)}
+h1{font-size:96px;font-weight:800;letter-spacing:-.03em;line-height:1}
+h2{font-size:64px;font-weight:700;letter-spacing:-.02em;line-height:1.05;margin-bottom:18px}
+.lead{font-size:28px;color:var(--mut);line-height:1.45;max-width:1100px;font-weight:300}
+.mono{font-family:'JetBrains Mono',monospace}
+.foot{position:absolute;left:110px;right:110px;bottom:44px;display:flex;justify-content:space-between;font:500 17px 'JetBrains Mono',monospace;color:#56637a;letter-spacing:.06em}
+.brand{font-family:'Cormorant Garamond',serif;font-size:26px;letter-spacing:.12em;color:#c9cfd8}
+.three-slot{position:absolute;border-radius:24px;overflow:hidden;background:radial-gradient(circle at 50% 40%,#16202c,#0b1016)}
+#three-host{position:absolute;inset:0}
+.btns{display:flex;gap:12px;flex-wrap:wrap}
+.btn{text-align:left;justify-content:flex-start;font:600 20px Inter;color:var(--fg);background:var(--panel2);border:1px solid var(--line);padding:14px 22px;border-radius:12px;cursor:pointer;transition:.2s;display:flex;align-items:center;gap:10px}
+.btn:hover{border-color:#3a4a60}
+.btn.on{background:var(--acc);color:#111;border-color:var(--acc)}
+.dot{width:12px;height:12px;border-radius:50%;display:inline-block}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:30px}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+.kpi .v{font-size:54px;font-weight:700;letter-spacing:-.02em;margin-top:8px}
+.kpi .l{font:500 18px 'JetBrains Mono';color:var(--mut);text-transform:uppercase;letter-spacing:.1em}
+.kpi .s{font-size:19px;color:var(--mut);margin-top:6px}
+.legend{display:flex;flex-direction:column;gap:14px;font-size:22px}
+.legend div{display:flex;gap:14px;align-items:center}
+.sw{width:22px;height:22px;border-radius:6px}
+/* nav */
+#nav{position:fixed;top:14px;right:18px;display:flex;gap:8px;align-items:center;z-index:5;font:500 14px 'JetBrains Mono';color:#7d8899}
+#nav button{background:#141b25;color:#cfd6df;border:1px solid #263142;border-radius:10px;width:42px;height:38px;cursor:pointer;font-size:18px}
+#progress{position:fixed;left:0;top:0;height:3px;background:var(--acc);transition:width .5s;z-index:5}
+/* gantt */
+.gantt{display:grid;grid-template-columns:380px repeat(12,1fr);row-gap:10px;font-size:20px;align-items:center}
+.gantt .h{font:600 16px 'JetBrains Mono';color:var(--mut);text-align:center}
+.gantt .h small{display:block;font-weight:400;color:#5d6a7f;font-size:13px;margin-top:3px}
+.gantt .lab{color:#c8d0db}
+.bar{height:26px;border-radius:7px;background:linear-gradient(90deg,var(--acc),#f0c869);transform-origin:left;transform:scaleX(0);transition:transform .9s cubic-bezier(.2,.8,.2,1)}
+.on .bar{transform:scaleX(1)}
+.phase{position:absolute;top:-8px;bottom:-8px;border-radius:12px}
+/* costs */
+.crow{display:grid;grid-template-columns:420px 1fr 190px 90px;gap:20px;align-items:center;font-size:20px;padding:7px 0;border-bottom:1px solid #18212c}
+.crow .track{height:20px;background:#141c26;border-radius:6px;overflow:hidden}
+.crow .fill{height:100%;border-radius:6px;transform-origin:left;transform:scaleX(0);transition:transform 1s cubic-bezier(.2,.8,.2,1)}
+.on .crow .fill{transform:scaleX(1)}
+.crow .val{text-align:right;font-family:'JetBrains Mono'}
+.crow .pc{text-align:right;color:var(--mut);font-family:'JetBrains Mono'}
+/* cash */
+.cols{display:flex;align-items:flex-end;gap:16px;height:440px;border-bottom:1px solid var(--line);padding:0 10px}
+.col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:10px}
+.col .b{width:100%;border-radius:10px 10px 4px 4px;background:linear-gradient(180deg,#f0c869,var(--acc));transform-origin:bottom;transform:scaleY(0);transition:transform 1s cubic-bezier(.2,.8,.2,1)}
+.col .b.ent{background:linear-gradient(180deg,#7fd8ae,var(--grn))}
+.on .col .b{transform:scaleY(1)}
+.col .t{font:600 16px 'JetBrains Mono';color:#c8d0db;white-space:nowrap}
+.xl{display:flex;gap:16px;padding:12px 10px 0}
+.xl div{flex:1;text-align:center;font:600 16px 'JetBrains Mono';color:var(--mut)}
+.xl small{display:block;font-weight:400;font-size:13px;color:#5d6a7f}
+/* risks */
+.risk{display:grid;grid-template-columns:120px 1fr;gap:22px;padding:22px 26px;border-radius:16px;background:var(--panel);border:1px solid var(--line);align-items:start}
+.tag{font:700 15px 'JetBrains Mono';padding:8px 10px;border-radius:8px;text-align:center;letter-spacing:.06em}
+.alta{background:#3a1717;color:#ff8a86}.media{background:#3a2e12;color:#f3c55a}.baixa{background:#123024;color:#7fd8ae}
+.risk b{font-size:24px;display:block;margin-bottom:6px}
+.risk p{font-size:19px;color:var(--mut);line-height:1.45}
+/* scope */
+.chk{display:grid;grid-template-columns:1fr 1fr 1fr;gap:22px}
+.chk ul{list-style:none;display:flex;flex-direction:column;gap:12px;font-size:19px;color:#c8d0db;line-height:1.35}
+.chk li{display:flex;gap:12px}
+.chk li:before{content:"✓";color:var(--grn);font-weight:700}
+.chk li.x:before{content:"✕";color:var(--red)}
+.chk h3{font-size:24px;margin-bottom:18px;display:flex;justify-content:space-between}
+.norm{display:inline-block;font:600 17px 'JetBrains Mono';padding:9px 14px;border:1px solid var(--line);border-radius:10px;margin:0 10px 10px 0;color:#c8d0db}
+/* obras */
+.obras{display:grid;grid-template-columns:repeat(2,1fr);gap:22px}
+.obra{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:26px 30px;position:relative}
+.obra.atual{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc) inset}
+.obra.ph{border-style:dashed;opacity:.62}
+.obra .st{position:absolute;top:22px;right:24px;font:700 14px 'JetBrains Mono';padding:7px 10px;border-radius:8px;background:#1d2633;color:var(--mut);letter-spacing:.06em;text-transform:uppercase}
+.obra.atual .st{background:var(--acc);color:#111}
+.obra h4{font-size:28px;margin-bottom:4px;padding-right:200px}
+.obra .tp{color:var(--mut);font-size:19px;margin-bottom:16px}
+.obra dl{display:grid;grid-template-columns:repeat(4,auto);gap:6px 26px;font-size:18px;margin-bottom:14px}
+.obra dt{font:500 13px 'JetBrains Mono';color:#5d6a7f;text-transform:uppercase;letter-spacing:.1em}
+.obra dd{color:#dfe5ec}
+.obra .loc{font-size:19px;color:#dfe5ec;margin-bottom:14px;display:flex;gap:10px;align-items:center}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips span{font-size:15px;padding:6px 11px;border-radius:999px;background:#1a2330;color:#b8c2cf}
+.note{font-size:17px;color:#5d6a7f;margin-top:14px}
+.hint{position:absolute;font:500 16px 'JetBrains Mono';color:#6b788c;bottom:18px;left:24px;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div id="viewport"><div id="stage">
+
+<!-- 1 CAPA -->
+<section class="slide" data-3d="cover">
+  <div class="three-slot" style="left:820px;top:60px;width:1050px;height:900px;background:none"></div>
+  <div style="position:relative;z-index:2;max-width:760px;margin-top:120px">
+    <div class="kicker">Briefing interno · Uso da equipe</div>
+    <h1>Reforma<br>Ronald Leite</h1>
+    <p class="lead" style="margin-top:34px">Apartamento de 198 m² no Jardim Europa, São Paulo/SP. Leitura técnica, financeira e de riscos da proposta, com o modelo 3D do novo layout.</p>
+    <div style="display:flex;gap:40px;margin-top:60px">
+      <div><div class="mono" style="color:var(--mut);font-size:16px;letter-spacing:.1em">INVESTIMENTO</div><div style="font-size:40px;font-weight:700;margin-top:6px">R$ 848.052,96</div></div>
+      <div><div class="mono" style="color:var(--mut);font-size:16px;letter-spacing:.1em">PRAZO</div><div style="font-size:40px;font-weight:700;margin-top:6px">24 semanas</div></div>
+    </div>
+  </div>
+  <div class="foot"><span class="brand">VERO ENGENHARIA</span><span>PROPOSTA · NOV/2026 · CONFIDENCIAL</span></div>
+</section>
+
+<!-- 2 FICHA DA OBRA -->
+<section class="slide">
+  <div class="kicker">01 · Ficha da obra</div>
+  <h2>Onde, o quê e quando</h2>
+  <div style="display:grid;grid-template-columns:1.05fr 1fr;gap:28px;margin-top:40px">
+    <div class="card" style="padding:38px 42px">
+      <div class="mono" style="color:var(--acc);font-size:16px;letter-spacing:.14em">LOCALIZAÇÃO</div>
+      <div style="font-size:38px;font-weight:700;margin:10px 0 4px">Rua Embaixador Raul Fernandes</div>
+      <div style="font-size:26px;color:var(--mut)">Jardim Europa · São Paulo/SP</div>
+      <div style="height:1px;background:var(--line);margin:30px 0"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:26px 30px;font-size:22px">
+        <div><div class="kpi"><div class="l">Cliente</div></div>Ronald Leite</div>
+        <div><div class="kpi"><div class="l">Tipologia</div></div>Apartamento · reforma completa</div>
+        <div><div class="kpi"><div class="l">Padrão</div></div>Alto</div>
+        <div><div class="kpi"><div class="l">Responsável</div></div>Eng. Fernando Fantagucci</div>
+        <div><div class="kpi"><div class="l">Projetos</div></div>07/12/2026 → 03/01/2027</div>
+        <div><div class="kpi"><div class="l">Obra</div></div>04/01/2027 → 23/05/2027</div>
+        <div><div class="kpi"><div class="l">Condição</div></div>Aprovação do condomínio (NBR 16.280)</div>
+        <div><div class="kpi"><div class="l">Validade</div></div>15 dias</div>
+      </div>
+    </div>
+    <div class="kpis" style="grid-template-columns:1fr 1fr;align-content:start">
+      <div class="card kpi"><div class="l">Área</div><div class="v">198 m²</div><div class="s">Apartamento inteiro</div></div>
+      <div class="card kpi"><div class="l">Custo / m²</div><div class="v">R$ 4.283</div><div class="s">Total ÷ 198 m²</div></div>
+      <div class="card kpi"><div class="l">Investimento</div><div class="v" style="font-size:44px">R$ 848.053</div><div class="s">Impostos inclusos (Simples)</div></div>
+      <div class="card kpi"><div class="l">Entrada 20%</div><div class="v" style="font-size:44px">R$ 169.611</div><div class="s">Na assinatura</div></div>
+      <div class="card kpi"><div class="l">Prazo</div><div class="v">24 sem.</div><div class="s">4 projetos + 20 obra</div></div>
+      <div class="card kpi"><div class="l">Medições</div><div class="v">12</div><div class="s">Quinzenais · 80% do medido</div></div>
+    </div>
+  </div>
+  <div class="foot"><span class="brand">VERO ENGENHARIA</span><span>02</span></div>
+</section>
+
+<!-- 3 LAYOUT 3D -->
+<section class="slide" data-3d="layout">
+  <div style="display:grid;grid-template-columns:560px 1fr;gap:50px;height:100%">
+    <div>
+      <div class="kicker">02 · Novo layout em 3D</div>
+      <h2>3 paredes novas,<br>1 curva a sair</h2>
+      <p class="lead" style="font-size:23px">Escolha a fase para animar o modelo. Arraste para girar e use a roda do mouse para zoom.</p>
+      <div class="btns" id="layoutBtns" style="margin:34px 0 40px">
+        <button class="btn" data-s="existente">Existente</button>
+        <button class="btn" data-s="demolicao">Demolição</button>
+        <button class="btn on" data-s="proposto">Proposto</button>
+      </div>
+      <div class="legend">
+        <div><span class="sw" style="background:var(--red)"></span><span><b>Parede curva</b> · demolir após parecer estrutural</span></div>
+        <div><span class="sw" style="background:var(--acc)"></span><span><b>Fechamento da sala de TV</b></span></div>
+        <div><span class="sw" style="background:var(--acc)"></span><span><b>Parede reta</b> no lugar da curva</span></div>
+        <div><span class="sw" style="background:var(--acc)"></span><span><b>Dependência</b> com nova parede e vão</span></div>
+      </div>
+      <p class="note">Modelo ilustrativo e fora de escala exata. O layout final sai do levantamento cadastral e do projeto executivo.</p>
+    </div>
+    <div class="three-slot" style="position:relative;height:860px"><span class="hint">↻ arraste · ⇕ zoom</span></div>
+  </div>
+</section>
+
+<!-- 4 INSTALAÇÕES 3D -->
+<section class="slide" data-3d="inst">
+  <div style="display:grid;grid-template-columns:1fr 560px;gap:50px;height:100%">
+    <div class="three-slot" style="position:relative;height:860px"><span class="hint">↻ arraste · ⇕ zoom</span></div>
+    <div>
+      <div class="kicker">03 · Instalações</div>
+      <h2>Tudo novo por dentro</h2>
+      <p class="lead" style="font-size:23px">Ligue as camadas para ver como as disciplinas se cruzam e onde precisam ser compatibilizadas.</p>
+      <div class="btns" id="layerBtns" style="flex-direction:column;margin-top:34px">
+        <button class="btn on" data-l="elec"><span class="dot" style="background:#ffb020"></span>Elétrica, dados e iluminação · NBR 5410</button>
+        <button class="btn on" data-l="hidro"><span class="dot" style="background:#3fa9ff"></span>Água fria/quente, esgoto e gás · NBR 5626/8160/15526</button>
+        <button class="btn on" data-l="ac"><span class="dot" style="background:#ff8a3d"></span>Infra de ar-condicionado · NBR 16401</button>
+        <button class="btn" data-l="forro"><span class="dot" style="background:#fff"></span>Forros de gesso e sancas</button>
+        <button class="btn" data-l="labels"><span class="dot" style="background:#8b97a8"></span>Nomes dos ambientes</button>
+      </div>
+      <p class="note">Traçados esquemáticos, apenas para leitura de interferências. Os equipamentos de ar-condicionado estão fora do escopo; a infraestrutura está incluída.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 5 CUSTOS -->
+<section class="slide">
+  <div class="kicker">04 · Composição de custos</div>
+  <div style="display:flex;justify-content:space-between;align-items:end;margin-bottom:26px">
+    <h2 style="margin:0">Para onde vai cada real</h2>
+    <div class="btns" id="costBtns"><button class="btn on" data-m="item">Por item</button><button class="btn" data-m="grupo">Por grupo</button></div>
+  </div>
+  <div id="costs"></div>
+  <div class="foot"><span class="brand">VERO ENGENHARIA</span><span>TOTAL R$ 848.052,96 · 15 ITENS</span></div>
+</section>
+
+<!-- 6 CRONOGRAMA -->
+<section class="slide">
+  <div class="kicker">05 · Cronograma</div>
+  <h2>12 quinzenas, 4 fases</h2>
+  <p class="lead" style="font-size:22px;margin-bottom:36px">Projetos e aprovação nas 4 primeiras semanas, incluindo o recesso do condomínio. A obra começa em 04/01/2027.</p>
+  <div style="position:relative" id="ganttWrap"><div class="gantt" id="gantt"></div></div>
+  <div class="foot"><span class="brand">VERO ENGENHARIA</span><span>07/12/2026 → 23/05/2027</span></div>
+</section>
+
+<!-- 7 FLUXO -->
+<section class="slide">
+  <div class="kicker">06 · Fluxo de recebimento</div>
+  <h2>Entrada + 12 medições</h2>
+  <p class="lead" style="font-size:22px;margin-bottom:40px">Estimativa interna: o valor de cada item foi espalhado pelas quinzenas em que ele aparece no cronograma, e cada medição paga 80% do executado. <b style="color:var(--fg);font-weight:600">Não substitui o físico-financeiro anexo.</b></p>
+  <div class="cols" id="cash"></div>
+  <div class="xl" id="cashX"></div>
+  <div style="display:flex;gap:40px;margin-top:34px;font-size:21px;color:var(--mut)" id="cashSum"></div>
+</section>
+
+<!-- 8 RISCOS -->
+<section class="slide">
+  <div class="kicker">07 · Pontos de atenção</div>
+  <h2>O que pode mexer no prazo e na margem</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:34px">
+    <div class="risk"><span class="tag alta">ALTA</span><div><b>Aprovação do condomínio</b><p>O início da obra depende dela. O recesso de fim de ano já está nas 4 primeiras semanas, então qualquer atraso empurra todas as medições.</p></div></div>
+    <div class="risk"><span class="tag alta">ALTA</span><div><b>Parecer estrutural da parede curva</b><p>A demolição está condicionada ao parecer. Se houver reforço além do previsto, ele fica fora do escopo e vira aditivo.</p></div></div>
+    <div class="risk"><span class="tag media">MÉDIA</span><div><b>Imprevistos ocultos</b><p>Instalações antigas e estrutura podem esconder surpresas. A proposta já prevê orçamento à parte; vale registrar tudo na vistoria cautelar.</p></div></div>
+    <div class="risk"><span class="tag media">MÉDIA</span><div><b>Definição de acabamentos</b><p>Pisos e esquadrias começam na Q8. O cliente precisa aprovar acabamentos e verbas antes disso para não travar compras.</p></div></div>
+    <div class="risk"><span class="tag media">MÉDIA</span><div><b>Verbas (marcenaria, louças, luminárias)</b><p>Marcenaria é 14,2% do total. O que passar das verbas da planilha é do cliente; deixar isso claro na assinatura.</p></div></div>
+    <div class="risk"><span class="tag baixa">BAIXA</span><div><b>Logística do condomínio</b><p>Horário de obra, elevador e caçambas definidos pelo condomínio. Proteção contínua de áreas comuns já está no escopo.</p></div></div>
+  </div>
+</section>
+
+<!-- 9 ESCOPO -->
+<section class="slide">
+  <div class="kicker">08 · Escopo e normas</div>
+  <h2>Incluso, não incluso e responsabilidades</h2>
+  <div class="chk" style="margin-top:34px">
+    <div class="card"><h3>Incluso <span class="mono" style="color:var(--grn);font-size:18px">ESCOPO</span></h3><ul>
+      <li>Projetos arquitetônico e complementares, com ART/RRT</li><li>Engenheiro civil residente e gestão Vero</li><li>Demolições, 3 paredes novas e regularização</li><li>Elétrica, dados, hidráulica e gás novos</li><li>Impermeabilização com teste de estanqueidade</li><li>Infraestrutura completa de ar-condicionado</li><li>Pisos, forros, esquadrias, louças, metais e pintura</li><li>Marcenaria sob medida (verba)</li><li>As built, limpeza final e vistoria de entrega</li></ul></div>
+    <div class="card"><h3>Não incluso <span class="mono" style="color:var(--red);font-size:18px">FORA</span></h3><ul>
+      <li class="x">Equipamentos e instalação final de ar-condicionado</li><li class="x">Mobiliário solto, eletros, cortinas, decoração e paisagismo</li><li class="x">Luminárias, pedras, louças, metais e esquadrias acima das verbas</li><li class="x">Reforços estruturais além do previsto</li><li class="x">Taxas do condomínio, mudança e guarda de móveis</li></ul></div>
+    <div class="card"><h3>Contratante <span class="mono" style="color:var(--acc);font-size:18px">CLIENTE</span></h3><ul>
+      <li>Obter a aprovação do condomínio</li><li>Liberar acesso, elevador e horários</li><li>Entregar o imóvel desocupado</li><li>Aprovar acabamentos e verbas no prazo</li></ul>
+      <div style="margin-top:26px"><span class="norm">NBR 16.280</span><span class="norm">NBR 5410</span><span class="norm">NBR 5626</span><span class="norm">NBR 8160</span><span class="norm">NBR 15526</span><span class="norm">NBR 16401</span><span class="norm">NBR 17170</span></div></div>
+  </div>
+</section>
+
+<!-- 10 OBRAS -->
+<section class="slide">
+  <div class="kicker">09 · Portfólio de obras</div>
+  <div style="display:flex;justify-content:space-between;align-items:end">
+    <h2 style="margin:0">Cada obra, com endereço e ficha</h2>
+    <div class="mono" style="color:var(--mut);font-size:18px">100+ OBRAS ENTREGUES</div>
+  </div>
+  <div class="obras" id="obras" style="margin-top:32px"></div>
+  <p class="note">As fichas tracejadas são modelos: preencha a lista <span class="mono">OBRAS</span> no início do arquivo. Elas não aparecem na versão do cliente enquanto estiverem marcadas como "a preencher".</p>
+</section>
+
+<!-- 11 PRÓXIMOS PASSOS -->
+<section class="slide" data-3d="end">
+  <div class="three-slot" style="left:900px;top:80px;width:980px;height:860px;background:none"></div>
+  <div style="position:relative;z-index:2;max-width:800px">
+    <div class="kicker">10 · Próximos passos</div>
+    <h2>Para fechar</h2>
+    <ol style="list-style:none;display:flex;flex-direction:column;gap:22px;margin-top:40px;counter-reset:s">
+      <li class="card" style="display:flex;gap:22px;align-items:center;padding:24px 28px"><span class="mono" style="color:var(--acc);font-size:30px;font-weight:700">01</span><span style="font-size:23px">Apresentar ao cliente e tirar dúvidas de escopo e verbas</span></li>
+      <li class="card" style="display:flex;gap:22px;align-items:center;padding:24px 28px"><span class="mono" style="color:var(--acc);font-size:30px;font-weight:700">02</span><span style="font-size:23px">Assinatura e entrada de R$ 169.610,59 (validade de 15 dias)</span></li>
+      <li class="card" style="display:flex;gap:22px;align-items:center;padding:24px 28px"><span class="mono" style="color:var(--acc);font-size:30px;font-weight:700">03</span><span style="font-size:23px">Levantamento cadastral, vistoria cautelar e parecer estrutural</span></li>
+      <li class="card" style="display:flex;gap:22px;align-items:center;padding:24px 28px"><span class="mono" style="color:var(--acc);font-size:30px;font-weight:700">04</span><span style="font-size:23px">Plano de reforma (NBR 16.280) protocolado no condomínio</span></li>
+    </ol>
+    <p style="margin-top:40px;font-size:21px;color:var(--mut);line-height:1.6">Fernando Fantagucci · Engenheiro Civil & Diretor de Obras<br>(11) 94965-8901 · contato@veroengenharia.com.br</p>
+  </div>
+  <div class="foot"><span class="brand">VERO ENGENHARIA</span><span>@veroengenharia.sp</span></div>
+</section>
+
+</div></div>
+<div id="three-host"></div>
+<div id="nav"><span id="count"></span><button id="bp" aria-label="Anterior">‹</button><button id="bn" aria-label="Próximo">›</button></div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+/* ================================================================
+   DADOS DA PROPOSTA E PORTFÓLIO — edite aqui
+   ----------------------------------------------------------------
+   OBRAS: cada item vira uma ficha no portfólio.
+   - atual: true  → é a obra desta proposta
+   - preencher: true → ficha modelo (aparece só na versão interna,
+     marcada "a preencher"; NÃO aparece na versão do cliente)
+   Para adicionar uma obra real: copie um bloco, preencha os campos
+   e troque preencher: true por preencher: false.
+   ================================================================ */
+const OBRAS = [
+  {
+    atual: true, preencher: false,
+    nome: 'Residência Ronald Leite',
+    tipo: 'Reforma completa de apartamento',
+    local: 'Rua Embaixador Raul Fernandes',
+    bairro: 'Jardim Europa',
+    cidade: 'São Paulo/SP',
+    area: '198 m²',
+    padrao: 'Alto',
+    prazo: '24 semanas (12 quinzenas)',
+    periodo: '07/12/2026 → 23/05/2027',
+    status: 'Proposta em análise',
+    destaques: ['3 paredes novas (novo layout)', 'Elétrica, dados e hidráulica novas', 'Infraestrutura de ar-condicionado', 'Marcenaria sob medida', 'Engenheiro residente diário']
+  },
+  {
+    atual: false, preencher: true,
+    nome: 'Nome da obra', tipo: 'Tipo (ex.: construção de residência)',
+    local: 'Rua / condomínio', bairro: 'Bairro', cidade: 'Cidade/UF',
+    area: '— m²', padrao: '—', prazo: '— semanas', periodo: 'mês/ano → mês/ano', status: 'Entregue',
+    destaques: ['Destaque 1', 'Destaque 2', 'Destaque 3']
+  },
+  {
+    atual: false, preencher: true,
+    nome: 'Nome da obra', tipo: 'Tipo (ex.: reforma de cobertura)',
+    local: 'Rua / condomínio', bairro: 'Bairro', cidade: 'Cidade/UF',
+    area: '— m²', padrao: '—', prazo: '— semanas', periodo: 'mês/ano → mês/ano', status: 'Entregue',
+    destaques: ['Destaque 1', 'Destaque 2', 'Destaque 3']
+  },
+  {
+    atual: false, preencher: true,
+    nome: 'Nome da obra', tipo: 'Tipo (ex.: casa em condomínio)',
+    local: 'Rua / condomínio', bairro: 'Bairro', cidade: 'Cidade/UF',
+    area: '— m²', padrao: '—', prazo: '— semanas', periodo: 'mês/ano → mês/ano', status: 'Entregue',
+    destaques: ['Destaque 1', 'Destaque 2', 'Destaque 3']
+  }
+];
+
+/* Planilha de preços (proposta) — [descrição, valor, quinzenas do cronograma] */
+const ITENS = [
+  ['Projetos e legalização', 56700.63, [1, 2, 3], 'Projetos'],
+  ['Canteiro, mobilização e gestão', 113089.79, [3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 'Gestão'],
+  ['Demolições', 41187.92, [3, 4], 'Obra civil'],
+  ['Alvenarias e paredes novas', 18484.91, [4, 5, 6], 'Obra civil'],
+  ['Elétrica, dados e iluminação', 98827.78, [5, 6, 7, 8, 11, 12], 'Instalações'],
+  ['Hidrossanitário, gás e impermeab.', 51183.91, [5, 6, 7, 8], 'Instalações'],
+  ['Infraestrutura de ar-condicionado', 34957.20, [6, 7, 8, 9], 'Instalações'],
+  ['Pisos e revestimentos', 135916.19, [8, 9, 10, 11, 12], 'Acabamentos'],
+  ['Forros de gesso', 35939.55, [8, 9, 10], 'Acabamentos'],
+  ['Esquadrias, portas e vidros', 44624.95, [8, 9, 10, 11, 12], 'Acabamentos'],
+  ['Louças e metais', 30069.43, [11, 12], 'Acabamentos'],
+  ['Pintura', 32014.96, [9, 10, 11], 'Acabamentos'],
+  ['Limpeza e entrega', 5002.78, [12], 'Obra civil'],
+  ['Marcenaria (verba)', 120042.37, [10, 11, 12], 'Marcenaria'],
+  ['Gestão de obra e impostos', 30010.59, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 'Gestão']
+];
+const TOTAL = 848052.96, AREA = 198, ENTRADA = 169610.59;
+
+/* Cronograma (conforme proposta) — [etapa, quinzenas] */
+const GANTT = [
+  ['Projetos e legalização', [1, 3]],
+  ['Canteiro e gestão', [3, 12]],
+  ['Demolições', [3, 4]],
+  ['Paredes novas', [4, 6]],
+  ['Elétrica e dados', [5, 8], [11, 12]],
+  ['Hidrossanitário e gás', [5, 8]],
+  ['Infra de ar-condicionado', [6, 9]],
+  ['Pisos e revestimentos', [8, 12]],
+  ['Forros de gesso', [8, 10]],
+  ['Esquadrias e portas', [8, 12]],
+  ['Louças e metais', [11, 12]],
+  ['Pintura', [9, 11]],
+  ['Limpeza e entrega', [12, 12]]
+];
+
+const BRL = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const BRLk = v => 'R$ ' + (v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil';
+function quinzena(q) { // Q1 começa em 07/12/2026
+  const s = new Date(2026, 11, 7 + (q - 1) * 14), e = new Date(2026, 11, 7 + q * 14 - 1);
+  const f = d => String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
+  return { ini: f(s), fim: f(e), mes: s.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '') };
+}
+
+/* ===== Modelo 3D ilustrativo do apartamento (198 m²) — compartilhado ===== */
+(function () {
+  const H = 2.7, T = 0.14;
+
+  function ease(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+
+  function buildApartment(theme) {
+    const root = new THREE.Group();
+    const anim = [];           // objetos animáveis
+    const floors = [];
+    const labels = [];
+    const P = { xray: 0, xrayT: 0, finish: theme.startFinish ?? 1, finishT: theme.startFinish ?? 1, hl: 1, hlT: 1, demo: 0, demoT: 0 };
+
+    const M = (c, o = {}) => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.85, metalness: 0 }, o));
+    const wallMat = M(theme.wall, { transparent: true });
+    const glassMat = M(theme.glass, { transparent: true, opacity: 0.28, roughness: 0.1, metalness: 0.2 });
+    const edgeMat = theme.edge ? new THREE.LineBasicMaterial({ color: theme.edge, transparent: true, opacity: theme.edgeOpacity ?? 0.6 }) : null;
+
+    function reg(obj, kind, group, v = 1) {
+      obj.userData.kind = kind; obj.userData.group = group; obj.userData.v = v; obj.userData.tv = v;
+      anim.push(obj); return obj;
+    }
+
+    function box(w, h, d, mat, shadow = true) {
+      const g = new THREE.BoxGeometry(w, h, d); g.translate(0, h / 2, 0);
+      const m = new THREE.Mesh(g, mat);
+      m.castShadow = shadow; m.receiveShadow = true;
+      if (edgeMat) m.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), edgeMat));
+      return m;
+    }
+
+    // parede entre (x1,z1)-(x2,z2), da altura y0 a y1
+    function wall(x1, z1, x2, z2, opt = {}) {
+      const y0 = opt.y0 ?? 0, y1 = opt.y1 ?? H;
+      const len = Math.hypot(x2 - x1, z2 - z1);
+      const m = box(len + (opt.glass ? 0 : T), y1 - y0, opt.glass ? 0.04 : T, opt.mat || wallMat, !opt.glass);
+      m.position.set((x1 + x2) / 2, y0, (z1 + z2) / 2);
+      m.rotation.y = -Math.atan2(z2 - z1, x2 - x1);
+      m.userData.y0 = y0;
+      root.add(m);
+      return m;
+    }
+    function winWall(x1, z1, x2, z2, grp = 'shell') {
+      reg(wall(x1, z1, x2, z2, { y1: 0.95 }), 'grow', grp);
+      reg(wall(x1, z1, x2, z2, { y0: 0.95, y1: 2.25, glass: true, mat: glassMat }), 'grow', grp);
+      reg(wall(x1, z1, x2, z2, { y0: 2.25 }), 'grow', grp);
+    }
+    const W = (x1, z1, x2, z2, grp = 'wall') => reg(wall(x1, z1, x2, z2), 'grow', grp);
+
+    // ---------- pisos / ambientes ----------
+    const rooms = [
+      ['Varanda', 0, 0, 8, 1.8, 'deck'],
+      ['Living / Jantar', 0, 1.8, 8, 6.5, 'wood'],
+      ['Sala de TV', 0, 6.5, 4, 11, 'wood'],
+      ['Hall', 4, 6.5, 8, 9, 'stone'],
+      ['Hall', 5.5, 9, 8, 11, 'stone', true],
+      ['Lavabo', 4, 9, 5.5, 11, 'wet'],
+      ['Cozinha', 8, 0, 12, 5, 'wet'],
+      ['Serviço', 12, 0, 14, 3, 'wet'],
+      ['Dependência', 12, 3, 14, 5, 'wood'],
+      ['Circulação', 8, 5, 14, 6.5, 'wood'],
+      ['Suíte 1', 8, 6.5, 11.5, 9.3, 'wood'],
+      ['Banho', 8, 9.3, 9.8, 11, 'wet', true],
+      ['', 9.8, 9.3, 11.5, 11, 'wood', true],
+      ['Suíte 2', 11.5, 6.5, 14, 9.3, 'wood'],
+      ['', 11.5, 9.3, 12.2, 11, 'wood', true],
+      ['Banho', 12.2, 9.3, 14, 11, 'wet', true],
+      ['Suíte Master', 14, 4, 18, 11, 'wood'],
+      ['Closet', 14, 0, 16, 4, 'wood'],
+      ['Banho Master', 16, 0, 18, 4, 'wet']
+    ];
+    const finishCol = { wood: theme.wood, wet: theme.porcelain, stone: theme.stone, deck: theme.deck };
+    rooms.forEach(([name, x1, z1, x2, z2, type, nolabel]) => {
+      const g = new THREE.BoxGeometry(x2 - x1, 0.08, z2 - z1); g.translate(0, -0.04, 0);
+      const mat = M(theme.raw, { roughness: type === 'wet' ? 0.35 : 0.8 });
+      const m = new THREE.Mesh(g, mat);
+      m.position.set((x1 + x2) / 2, 0, (z1 + z2) / 2);
+      m.receiveShadow = true;
+      m.userData.raw = new THREE.Color(theme.raw);
+      m.userData.fin = new THREE.Color(finishCol[type]);
+      root.add(m); floors.push(m);
+      if (name && !nolabel && theme.labels) labels.push(makeLabel(name, (x1 + x2) / 2, (z1 + z2) / 2));
+    });
+    // laje base
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(18.6, 0.35, 11.6), M(theme.slab));
+    slab.position.set(9, -0.255, 5.5); slab.receiveShadow = true; root.add(slab);
+
+    // ---------- envoltória ----------
+    reg(wall(0, 0, 8, 0, { y1: 1.1, glass: true, mat: glassMat }), 'grow', 'shell');
+    reg(wall(0, 0, 0, 1.8, { y1: 1.1, glass: true, mat: glassMat }), 'grow', 'shell');
+    winWall(8, 0, 12, 0); winWall(12, 0, 14, 0);
+    W(14, 0, 18, 0, 'shell');
+    W(18, 0, 18, 4, 'shell'); winWall(18, 4, 18, 11);
+    winWall(0, 11, 4, 11); W(4, 11, 5.5, 11, 'shell');
+    W(5.5, 11, 6.2, 11, 'shell'); W(7.4, 11, 8, 11, 'shell');
+    winWall(8, 11, 11.5, 11); winWall(11.5, 11, 14, 11); winWall(14, 11, 18, 11);
+    winWall(0, 1.8, 0, 6.5); winWall(0, 6.5, 0, 11);
+    // porta de vidro varanda
+    reg(wall(0.2, 1.8, 7.8, 1.8, { glass: true, mat: glassMat }), 'grow', 'shell');
+
+    // ---------- paredes internas existentes ----------
+    W(8, 0, 8, 1.8); W(8, 1.8, 8, 3.4); W(8, 4.4, 8, 5);
+    W(12, 0, 12, 1.7); W(12, 2.6, 12, 5);
+    W(14, 0, 14, 5); W(14, 6.5, 14, 11);
+    W(14, 4, 15, 4); W(15.9, 4, 18, 4);
+    W(16, 0, 16, 1.4); W(16, 2.2, 16, 4);
+    W(8, 5, 12, 5); W(12, 5, 12.4, 5); W(13.3, 5, 14, 5);
+    W(4, 6.5, 4, 11); W(4, 9, 5.5, 9); W(5.5, 9, 5.5, 9.3); W(5.5, 10.1, 5.5, 11);
+    W(8, 6.5, 8, 11);
+    W(8, 6.5, 9, 6.5); W(9.9, 6.5, 12.4, 6.5); W(13.3, 6.5, 14, 6.5);
+    W(11.5, 6.5, 11.5, 11);
+    W(8, 9.3, 9.8, 9.3); W(9.8, 9.3, 9.8, 9.5); W(9.8, 10.3, 9.8, 11);
+    W(12.2, 9.3, 14, 9.3); W(12.2, 9.3, 12.2, 9.5); W(12.2, 10.3, 12.2, 11);
+
+    // ---------- parede curva (a demolir) ----------
+    const curved = new THREE.Group();
+    const demoMat = M(theme.wall, { transparent: true });
+    const cx = 6, cz = 6.5, r = 2.06, segs = 16;
+    for (let i = 0; i < segs; i++) {
+      const a0 = Math.PI + (i / segs) * Math.PI, a1 = Math.PI + ((i + 1) / segs) * Math.PI;
+      const am = (a0 + a1) / 2; if (Math.abs(am - 1.5 * Math.PI) < 0.22) continue; // vão
+      const len = r * (a1 - a0) + 0.03;
+      const m = box(len, H, T, demoMat);
+      m.position.set(cx + Math.cos(am) * r, 0, cz + Math.sin(am) * r);
+      m.rotation.y = -(am + Math.PI / 2);
+      curved.add(m);
+    }
+    root.add(curved); reg(curved, 'grow', 'curved');
+
+    // ---------- paredes novas ----------
+    const newMat = M(theme.accent, { transparent: true });
+    const NW = (x1, z1, x2, z2, id) => { const m = wall(x1, z1, x2, z2, { mat: newMat }); m.userData.nid = id; return reg(m, 'grow', 'new', 0); };
+    NW(0, 6.5, 2.6, 6.5, 'tv'); NW(3.5, 6.5, 4, 6.5, 'tv');            // fechamento sala de TV
+    NW(4, 6.5, 5.6, 6.5, 'reta'); NW(6.6, 6.5, 8, 6.5, 'reta');         // parede reta no lugar da curva
+    NW(12, 3, 14, 3, 'dep');                                            // adaptação dependência
+
+    // ---------- instalações ----------
+    function pipe(pts, rad, mat, grp) {
+      const g = new THREE.Group();
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = new THREE.Vector3(...pts[i]), b = new THREE.Vector3(...pts[i + 1]);
+        const len = a.distanceTo(b); if (len < 1e-3) continue;
+        const c = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad, len, 8), mat);
+        c.position.copy(a).lerp(b, 0.5);
+        c.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+        g.add(c);
+        const s = new THREE.Mesh(new THREE.SphereGeometry(rad * 1.25, 8, 8), mat); s.position.copy(b); g.add(s);
+      }
+      root.add(g); return reg(g, 'fade', grp, 0);
+    }
+    const em = (c) => M(c, { emissive: c, emissiveIntensity: 0.2, transparent: true, opacity: 1, roughness: 0.4 });
+    const eMat = em(theme.elec), cMat = em(theme.cold), hMat = em(theme.hot), gMat = em(theme.gas), acMat = em(theme.hvac);
+    // quadro elétrico
+    const qd = box(0.5, 0.7, 0.12, M(theme.elec, { emissive: theme.elec, emissiveIntensity: 0.6, transparent: true }));
+    qd.position.set(12.9, 1.3, 4.85); root.add(qd); reg(qd, 'fade', 'elec', 0);
+    const Y = 2.55, Q = [12.9, 2.0, 4.85];
+    [[3, 4], [2, 9], [6, 4], [10, 2.5], [9.8, 8], [12.8, 8], [16, 7.5], [17, 2], [15, 2], [6.5, 8], [4.7, 10], [13, 1.5], [3, 1]].forEach(([x, z]) =>
+      pipe([Q, [Q[0], Y, Q[2]], [Q[0], Y, 5.75], [x, Y, 5.75], [x, Y, z], [x, Y - 0.25, z]], 0.035, eMat, 'elec'));
+    // hidráulica (fria/quente) a partir do shaft
+    const S = [8.35, 0.25];
+    [[10, 0.35], [13, 0.35], [17, 0.6], [9, 10.7], [13, 10.7], [4.7, 10.6], [10.2, 2.6]].forEach(([x, z], i) => {
+      pipe([[S[0], 0.25, S[1]], [x, 0.25, S[1]], [x, 0.25, z], [x, 0.7, z]], 0.045, cMat, 'hidro');
+      pipe([[S[0] + 0.15, 0.4, S[1]], [x + 0.15, 0.4, S[1]], [x + 0.15, 0.4, z], [x + 0.15, 0.8, z]], 0.035, hMat, 'hidro');
+    });
+    pipe([[8.35, 1.6, 0.25], [11.4, 1.6, 0.25], [11.4, 1.6, 0.6], [11.4, 0.9, 0.6]], 0.03, gMat, 'hidro');
+    // ar-condicionado: evaporadoras + linhas de cobre até condensadoras na varanda
+    const cond = []; for (let i = 0; i < 5; i++) { const c = box(0.8, 0.6, 0.35, M(theme.unit, { transparent: true })); c.position.set(4.2 + i * 0.85, 0, 0.35); root.add(c); reg(c, 'fade', 'ac', 0); cond.push(c); }
+    [[0.25, 4, 'x'], [0.25, 8.6, 'x'], [8.25, 7.8, 'x'], [11.75, 7.8, 'x'], [17.75, 7.5, 'x']].forEach(([x, z], i) => {
+      const ev = box(0.22, 0.3, 0.9, M(theme.unit, { transparent: true })); ev.position.set(x, 2.2, z); root.add(ev); reg(ev, 'fade', 'ac', 0);
+      const tx = 4.2 + i * 0.85;
+      pipe([[x, 2.45, z], [x, 2.62, z], [x, 2.62, 6.0 - i * 0.12], [tx, 2.62, 6.0 - i * 0.12], [tx, 2.62, 0.35], [tx, 0.6, 0.35]], 0.03, acMat, 'ac');
+    });
+
+    // ---------- forros ----------
+    rooms.forEach(([, x1, z1, x2, z2, type]) => {
+      if (type === 'deck') return;
+      const m = new THREE.Mesh(new THREE.BoxGeometry(x2 - x1 - 0.02, 0.05, z2 - z1 - 0.02), M(theme.ceiling, { transparent: true, opacity: 0.55 }));
+      m.position.set((x1 + x2) / 2, H - 0.12, (z1 + z2) / 2); m.userData.baseY = H - 0.12; m.userData.baseOp = 0.55;
+      root.add(m); reg(m, 'drop', 'forro', 0);
+    });
+
+    // ---------- mobiliário ----------
+    const fMat = M(theme.furn), fMat2 = M(theme.furn2), bed = M(theme.bed);
+    const F = (x, z, w, h, d, mat = fMat, ry = 0) => { const m = box(w, h, d, mat); m.position.set(x, 0, z); m.rotation.y = ry; root.add(m); return reg(m, 'pop', 'furn', 0); };
+    F(2.6, 5.4, 3, 0.75, 0.95, fMat2); F(2.6, 4.2, 1.2, 0.35, 0.7); F(6, 3.4, 2.2, 0.76, 1.0);
+    for (let i = 0; i < 3; i++) { F(5.2 + i * 0.8, 2.6, 0.45, 0.9, 0.45, fMat2); F(5.2 + i * 0.8, 4.2, 0.45, 0.9, 0.45, fMat2); }
+    F(1.8, 10.3, 2.6, 0.75, 0.9, fMat2); F(1.8, 6.8, 2.4, 0.5, 0.35);
+    F(10, 0.35, 3.4, 0.92, 0.6); F(10, 2.6, 2.0, 0.92, 0.9, fMat2);
+    F(13, 0.35, 1.6, 0.92, 0.6);
+    F(9.75, 7.9, 1.6, 0.55, 2.0, bed, Math.PI / 2); F(12.75, 7.9, 1.4, 0.55, 1.9, bed, Math.PI / 2);
+    F(16, 8.3, 1.9, 0.55, 2.1, bed); F(14.35, 2, 0.6, 2.3, 3.6); F(13, 4, 0.9, 0.5, 1.9, bed, Math.PI / 2);
+
+    // ---------- rótulos ----------
+    function makeLabel(text, x, z) {
+      const cv = document.createElement('canvas'); const ctx = cv.getContext('2d');
+      const fs = 44; ctx.font = `600 ${fs}px ${theme.font || 'sans-serif'}, Arial, sans-serif`;
+      const w = Math.ceil(ctx.measureText(text).width) + 40; cv.width = w; cv.height = 72;
+      ctx.font = `600 ${fs}px ${theme.font || 'sans-serif'}, Arial, sans-serif`;
+      ctx.fillStyle = theme.labelBg; roundRect(ctx, 0, 0, w, 72, 36); ctx.fill();
+      ctx.fillStyle = theme.labelFg; ctx.textBaseline = 'middle'; ctx.fillText(text, 20, 38);
+      const tex = new THREE.CanvasTexture(cv); tex.anisotropy = 4;
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+      sp.scale.set(w / 72 * 0.42, 0.42, 1); sp.position.set(x, 3.3, z); sp.renderOrder = 10;
+      root.add(sp); return reg(sp, 'fade', 'labels', 0);
+    }
+    function roundRect(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+
+    root.position.set(-9, 0, -5.5);
+
+    // ---------- API ----------
+    function show(group, on, delayStep = 0) {
+      let i = 0;
+      anim.forEach(o => { if (o.userData.group === group) { o.userData.tv = on ? 1 : 0; o.userData.delay = on ? (i++) * delayStep : 0; } });
+    }
+    function setFinish(v) { P.finishT = v; }
+    function setHighlight(v) { P.hlT = v; }
+    function setDemo(v) { P.demoT = v; }
+    function setXray(v) { P.xrayT = v; }
+    const accentC = new THREE.Color(theme.accent), wallC = new THREE.Color(theme.wall), demoC = new THREE.Color(theme.demo);
+
+    function update(dt, t) {
+      const k = Math.min(1, dt * 3.2);
+      anim.forEach(o => {
+        const u = o.userData;
+        if (u.delay > 0) { u.delay -= dt; return; }
+        u.v += (u.tv - u.v) * k; if (Math.abs(u.tv - u.v) < 0.001) u.v = u.tv;
+        const e = ease(Math.max(0, Math.min(1, u.v)));
+        o.visible = u.v > 0.002;
+        if (u.kind === 'grow') o.scale.y = Math.max(0.001, e);
+        else if (u.kind === 'pop') o.scale.setScalar(Math.max(0.001, e));
+        else if (u.kind === 'fade' || u.kind === 'drop') {
+          const op = u.kind === 'drop' ? u.baseOp * e : e;
+          o.traverse(c => { if (c.material) { c.material.transparent = true; c.material.opacity = (c.material === glassMat ? 0.28 : 1) * op; } });
+          if (o.isSprite) o.material.opacity = e;
+          if (u.kind === 'drop') o.position.y = u.baseY + (1 - e) * 1.6;
+        }
+      });
+      P.finish += (P.finishT - P.finish) * k; P.hl += (P.hlT - P.hl) * k; P.demo += (P.demoT - P.demo) * k; P.xray += (P.xrayT - P.xray) * k;
+      const wo = 1 - 0.72 * P.xray; [wallMat, newMat, demoMat].forEach(m => { m.opacity = wo; m.depthWrite = wo > 0.97; });
+      floors.forEach(f => f.material.color.copy(f.userData.raw).lerp(f.userData.fin, P.finish));
+      newMat.color.copy(wallC).lerp(accentC, P.hl);
+      const pulse = P.demo * (0.75 + 0.25 * Math.sin(t * 6));
+      demoMat.color.copy(wallC).lerp(demoC, pulse);
+    }
+    return { root, show, setFinish, setHighlight, setDemo, setXray, update };
+  }
+
+  // ---------- visualizador ----------
+  function createViewer(container, theme, opts = {}) {
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1) * (opts.pixelBoost || 1));
+    renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = theme.exposure || 1.05;
+    container.appendChild(renderer.domElement);
+    const scene = new THREE.Scene();
+    if (theme.fog) scene.fog = new THREE.Fog(theme.fog, 30, 70);
+    const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 200);
+    camera.position.set(16, 17, 19);
+    scene.add(new THREE.HemisphereLight(theme.sky, theme.ground, theme.hemi ?? 0.75));
+    const sun = new THREE.DirectionalLight(theme.sun, theme.sunI ?? 1.1);
+    sun.position.set(-10, 22, 14); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+    Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 16, bottom: -16, near: 1, far: 60 }); sun.shadow.bias = -0.0005;
+    scene.add(sun);
+    if (theme.grid) { const gr = new THREE.GridHelper(60, 60, theme.grid, theme.grid); gr.material.transparent = true; gr.material.opacity = 0.18; gr.position.y = -0.45; scene.add(gr); }
+    if (theme.shadowFloor) { const pl = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.ShadowMaterial({ opacity: 0.12 })); pl.rotation.x = -Math.PI / 2; pl.position.y = -0.44; pl.receiveShadow = true; scene.add(pl); }
+
+    const model = buildApartment(theme);
+    scene.add(model.root);
+
+    let controls = null;
+    if (THREE.OrbitControls && opts.controls !== false) {
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true; controls.dampingFactor = 0.08; controls.enablePan = false;
+      controls.minDistance = 10; controls.maxDistance = 45; controls.maxPolarAngle = Math.PI / 2.15;
+      controls.autoRotate = !!opts.autoRotate; controls.autoRotateSpeed = opts.rotateSpeed || 0.6;
+      controls.addEventListener('start', () => { flying = null; });
+    }
+    let flying = null;
+    function fly(pos, target = [0, 0, 0]) { flying = { pos: new THREE.Vector3(...pos), tgt: new THREE.Vector3(...target) }; }
+
+    function resize() {
+      const w = container.clientWidth, h = container.clientHeight; if (!w || !h) return;
+      renderer.setSize(w, h, false); renderer.domElement.style.width = '100%'; renderer.domElement.style.height = '100%';
+      camera.aspect = w / h; camera.fov = w / h < 1 ? 52 : 36; camera.updateProjectionMatrix();
+    }
+    new ResizeObserver(resize).observe(container); resize();
+
+    let last = performance.now(), active = true;
+    if ('IntersectionObserver' in window) new IntersectionObserver(es => { active = es[0].isIntersecting; }).observe(container);
+    function loop(now) {
+      requestAnimationFrame(loop);
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      if (!active) return;
+      if (flying) {
+        camera.position.lerp(flying.pos, Math.min(1, dt * 2.4));
+        if (controls) controls.target.lerp(flying.tgt, Math.min(1, dt * 2.4));
+        if (camera.position.distanceTo(flying.pos) < 0.05) flying = null;
+      }
+      model.update(dt, now / 1000);
+      if (controls) controls.update(); else camera.lookAt(0, 0, 0);
+      renderer.render(scene, camera);
+    }
+    requestAnimationFrame(loop);
+    return { model, fly, controls, camera, resize };
+  }
+
+  window.Apto3D = { createViewer };
+})();
+
+
+// ---------- escala do palco 1920x1080 ----------
+const stage = document.getElementById('stage');
+let SCALE = 1;
+function fit() { SCALE = Math.min(innerWidth / 1920, innerHeight / 1080); stage.style.transform = `scale(${SCALE})`; }
+addEventListener('resize', fit); fit();
+
+// ---------- 3D ----------
+const theme = {
+  wall: '#d9dee6', accent: '#f0a500', demo: '#ef5350', raw: '#4f5560', wood: '#a77b52', porcelain: '#cfd3d6', stone: '#8e959e', deck: '#7d6046',
+  slab: '#1a212b', glass: '#9fd3ff', edge: '#0a0e13', edgeOpacity: .5, elec: '#ffb020', cold: '#3fa9ff', hot: '#ff5a4f', gas: '#c6f04a', hvac: '#ff8a3d',
+  unit: '#f2f4f7', ceiling: '#ffffff', furn: '#7c8794', furn2: '#596370', bed: '#c8cdd5', sky: '#c9dbff', ground: '#1a1f27', sun: '#ffffff', sunI: 1.25, hemi: .8,
+  labels: true, labelBg: 'rgba(10,14,19,.88)', labelFg: '#ffffff', font: 'Inter', grid: '#3a4656', startFinish: 1, exposure: 1.1
+};
+const host = document.getElementById('three-host');
+let V = null;
+function initViewer() {
+  if (V || !window.THREE) return;
+  V = Apto3D.createViewer(host, theme, { autoRotate: true, rotateSpeed: .5, pixelBoost: Math.max(1, SCALE) });
+}
+const presets = {
+  cover: () => { V.model.setXray(0); V.controls.autoRotate = true; V.fly([15, 15, 17]); setLayout('proposto', true); layers({}); V.model.show('furn', true, .02); V.model.show('labels', false); },
+  layout: () => { V.model.setXray(0); V.controls.autoRotate = false; V.fly([3, 19, 15], [0, 0, 0.5]); V.model.show('furn', false); V.model.show('labels', true); layers({}); setLayout(currentLayout); },
+  inst: () => { V.controls.autoRotate = false; V.fly([-12, 14, 16]); setLayout('proposto', true); V.model.show('furn', false); V.model.show('labels', false); V.model.setXray(1); applyLayers(); },
+  end: () => { V.model.setXray(0); V.controls.autoRotate = true; V.fly([17, 12, -16]); setLayout('proposto', true); layers({}); V.model.show('furn', true, .02); V.model.show('labels', false); }
+};
+let currentLayout = 'proposto';
+function setLayout(s, quiet) {
+  if (!quiet) currentLayout = s;
+  const m = V.model;
+  if (s === 'existente') { m.show('curved', true); m.show('new', false); m.setDemo(0); }
+  if (s === 'demolicao') { m.show('curved', true); m.show('new', false); m.setDemo(1); }
+  if (s === 'proposto') { m.setDemo(0); m.show('curved', false); m.show('new', true, .25); }
+  m.setHighlight(1);
+}
+document.querySelectorAll('#layoutBtns .btn').forEach(b => b.onclick = () => {
+  document.querySelectorAll('#layoutBtns .btn').forEach(x => x.classList.toggle('on', x === b));
+  setLayout(b.dataset.s);
+  if (b.dataset.s === 'demolicao') setTimeout(() => { if (currentLayout === 'demolicao') { V.model.show('curved', false); } }, 2200);
+});
+const LAYERS = { elec: 1, hidro: 1, ac: 1, forro: 0, labels: 0 };
+function layers(o) { ['elec', 'hidro', 'ac', 'forro'].forEach(k => V.model.show(k, !!o[k], .015)); }
+function applyLayers() { ['elec', 'hidro', 'ac', 'forro', 'labels'].forEach(k => V.model.show(k, !!LAYERS[k], .015)); }
+document.querySelectorAll('#layerBtns .btn').forEach(b => b.onclick = () => { LAYERS[b.dataset.l] ^= 1; b.classList.toggle('on', !!LAYERS[b.dataset.l]); applyLayers(); });
+
+// ---------- custos ----------
+const GCOL = { Projetos: '#a78bfa', Gestão: '#8b97a8', 'Obra civil': '#ef8354', Instalações: '#3fa9ff', Acabamentos: '#e3b341', Marcenaria: '#4cc38a' };
+function renderCosts(mode) {
+  let rows = mode === 'grupo'
+    ? Object.entries(ITENS.reduce((a, i) => (a[i[3]] = (a[i[3]] || 0) + i[1], a), {})).map(([g, v]) => [g, v, g])
+    : ITENS.map(i => [i[0], i[1], i[3]]);
+  rows.sort((a, b) => b[1] - a[1]);
+  const max = rows[0][1];
+  document.getElementById('costs').innerHTML = rows.map(([n, v, g], i) => `
+    <div class="crow" style="${mode === 'grupo' ? 'padding:18px 0;font-size:26px' : ''}"><span>${n}</span>
+    <div class="track" style="${mode === 'grupo' ? 'height:34px' : ''}"><div class="fill" style="width:${v / max * 100}%;background:${GCOL[g]};transition-delay:${i * 50}ms"></div></div>
+    <span class="val">${BRL(v)}</span><span class="pc">${(v / TOTAL * 100).toFixed(1)}%</span></div>`).join('') +
+    (mode === 'grupo' ? '' : `<div style="display:flex;gap:26px;margin-top:20px;font-size:18px;color:var(--mut)">${Object.entries(GCOL).map(([g, c]) => `<span style="display:flex;gap:8px;align-items:center"><span class="sw" style="width:14px;height:14px;background:${c}"></span>${g}</span>`).join('')}</div>`);
+  const s = document.getElementById('costs').closest('.slide'); if (s.classList.contains('on')) { s.classList.remove('on'); void s.offsetWidth; s.classList.add('on'); }
+}
+renderCosts('item');
+document.querySelectorAll('#costBtns .btn').forEach(b => b.onclick = () => { document.querySelectorAll('#costBtns .btn').forEach(x => x.classList.toggle('on', x === b)); renderCosts(b.dataset.m); });
+
+// ---------- gantt ----------
+(function () {
+  let h = '<div></div>';
+  for (let q = 1; q <= 12; q++) { const d = quinzena(q); h += `<div class="h">Q${q}<small>${d.ini}</small></div>`; }
+  GANTT.forEach(([n, ...rs], i) => {
+    h += `<div class="lab">${i + 1}. ${n}</div>`;
+    const cells = Array(12).fill('');
+    rs.forEach(([a, b]) => { cells[a - 1] = `<div class="bar" style="grid-column:span ${b - a + 1};transition-delay:${i * 60}ms;${n.startsWith('Projetos') ? 'background:linear-gradient(90deg,#a78bfa,#c4b5fd)' : ''}"></div>`; for (let k = a; k < b; k++) cells[k] = null; });
+    cells.forEach(c => { if (c !== null) h += c || '<div></div>'; });
+  });
+  document.getElementById('gantt').innerHTML = h;
+})();
+
+// ---------- fluxo estimado ----------
+(function () {
+  const exec = Array(12).fill(0);
+  ITENS.forEach(([, v, qs]) => qs.forEach(q => exec[q - 1] += v / qs.length));
+  const pay = exec.map(v => v * .8);
+  const vals = [ENTRADA, ...pay], max = Math.max(...vals);
+  document.getElementById('cash').innerHTML = vals.map((v, i) =>
+    `<div class="col"><span class="t">${BRLk(v)}</span><div class="b ${i ? '' : 'ent'}" style="height:${v / max * 360}px;transition-delay:${i * 60}ms"></div></div>`).join('');
+  document.getElementById('cashX').innerHTML = vals.map((v, i) => i ? `<div>Q${i}<small>${quinzena(i).fim}</small></div>` : `<div style="color:var(--grn)">Entrada<small>assinatura</small></div>`).join('');
+  const pk = pay.indexOf(Math.max(...pay));
+  document.getElementById('cashSum').innerHTML = `<span>Soma das medições: <b style="color:var(--fg)">${BRL(pay.reduce((a, b) => a + b, 0))}</b></span><span>Pico estimado: <b style="color:var(--fg)">Q${pk + 1} · ${BRL(pay[pk])}</b></span><span>Entrada + medições = <b style="color:var(--fg)">${BRL(TOTAL)}</b></span>`;
+})();
+
+// ---------- obras ----------
+document.getElementById('obras').innerHTML = OBRAS.map(o => `
+  <div class="obra ${o.atual ? 'atual' : ''} ${o.preencher ? 'ph' : ''}">
+    <span class="st">${o.preencher ? 'a preencher' : o.atual ? 'esta proposta' : o.status}</span>
+    <h4>${o.nome}</h4><div class="tp">${o.tipo}</div>
+    <div class="loc">📍 ${o.local} · ${o.bairro}, ${o.cidade}</div>
+    <dl><div><dt>Área</dt><dd>${o.area}</dd></div><div><dt>Padrão</dt><dd>${o.padrao}</dd></div><div><dt>Prazo</dt><dd>${o.prazo}</dd></div><div><dt>Período</dt><dd>${o.periodo}</dd></div></dl>
+    <div class="chips">${o.destaques.map(d => `<span>${d}</span>`).join('')}</div>
+  </div>`).join('');
+
+// ---------- navegação ----------
+const slides = [...document.querySelectorAll('.slide')];
+let cur = 0;
+function go(n) {
+  cur = Math.max(0, Math.min(slides.length - 1, n));
+  slides.forEach((s, i) => { s.classList.toggle('on', i === cur); s.classList.toggle('prev', i < cur); });
+  document.getElementById('count').textContent = `${String(cur + 1).padStart(2, '0')} / ${slides.length}`;
+  document.getElementById('progress').style.width = ((cur + 1) / slides.length * 100) + '%';
+  const s = slides[cur], slot = s.querySelector('.three-slot');
+  if (slot && window.THREE) { slot.insertBefore(host, slot.firstChild); initViewer(); V.resize(); presets[s.dataset['3d']](); }
+  try { history.replaceState(null, '', '#' + (cur + 1)); } catch (e) { }
+}
+addEventListener('keydown', e => {
+  if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); go(cur + 1); }
+  if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); go(cur - 1); }
+  if (e.key === 'f') document.documentElement.requestFullscreen?.();
+});
+document.getElementById('bp').onclick = () => go(cur - 1);
+document.getElementById('bn').onclick = () => go(cur + 1);
+let tx = null;
+addEventListener('touchstart', e => { tx = e.target.closest('canvas') ? null : e.touches[0].clientX; });
+addEventListener('touchend', e => { if (tx === null) return; const d = e.changedTouches[0].clientX - tx; if (Math.abs(d) > 50) go(cur + (d < 0 ? 1 : -1)); });
+go((parseInt(location.hash.slice(1)) || 1) - 1);
+</script>
+</body>
+</html>
