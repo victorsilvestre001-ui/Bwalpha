@@ -106,9 +106,9 @@ async function geraDas(cnpj, competencia, { vencido = false, pagarAte } = {}) {
     const pedida = pagarAte ? pagarAte.replace(/-/g, '') : '';
     dados.dataConsolidacao = pedida && pedida >= amanha ? pedida : amanha;
   }
-  const { dados: lista } = await chama('Emitir', cnpj, 'GERARDAS12', dados);
+  const { dados: lista, mensagens: msgs } = await chama('Emitir', cnpj, 'GERARDAS12', dados);
   const das = Array.isArray(lista) ? lista[0] : lista;
-  if (!das || !das.pdf) throw new ErroIntegra('O SERPRO não devolveu o PDF do DAS. Confira se o PGDAS-D desta competência já foi transmitido.');
+  if (!das || !das.pdf) throw new ErroIntegra(`A Receita não gerou o DAS${msgs ? `: ${msgs}` : '. Confira se o PGDAS-D desta competência já foi transmitido.'}`);
   const det = das.detalhamentoDas || {};
   const v = det.valores || {};
   return {
