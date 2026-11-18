@@ -942,7 +942,9 @@ function abaConfig(d) {
           <label class="campo"><span>Código do serviço (nacional)</span><input id="fServ" maxlength="60" list="listaServ" value="${esc(f.codigoServico || '')}" placeholder="Código ou palavra (ex.: manutenção)" autocomplete="off"><datalist id="listaServ"></datalist></label>
           <label class="campo"><span>Série da DPS</span><input id="fSerie" value="${esc(f.serieDps || 900)}"></label>
           <label class="campo"><span>Próximo número</span><input id="fNum" value="${esc(e.proximoDps || 1)}"></label>
-          <label class="campo"><span>Alíquota do Simples (%)</span><input id="fAliq" value="${esc(String(f.aliquotaSN || 6).replace('.', ','))}"></label>
+          ${e.regime === 'Simples Nacional' || e.regime === 'MEI' ? `<label class="campo"><span>Alíquota do Simples (%)</span><input id="fAliq" value="${esc(String(f.aliquotaSN || 6).replace('.', ','))}"></label>` : `
+          <label class="campo"><span>Tributos federais aprox. (%)</span><input id="fFed" value="${esc(String(f.pTribFed != null ? f.pTribFed : 11.33).replace('.', ','))}" title="IRPJ + CSLL + PIS + COFINS sobre o serviço"></label>
+          <label class="campo"><span>ISS aprox. (%)</span><input id="fIss" value="${esc(String(f.pTribMun != null ? f.pTribMun : 5).replace('.', ','))}"></label>`}
         </div>
         <p id="descServ" class="suave" style="font-size:.82rem;margin:-6px 0 14px"></p>
         <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primario">Salvar</button><button type="button" class="btn" id="btnPreencher">${icone('raio')} Preencher pelo CNPJ</button>${e.emissao === 'homologacao' ? '<button type="button" class="btn" id="btnTeste">Testar emissão (R$ 1,00)</button>' : ''}</div>
@@ -972,7 +974,7 @@ function abaConfig(d) {
       if (!seguir) return;
     }
     try {
-      await api(`/assinantes/${e.id}/fiscal`, { body: { codigoMunicipio: $('#fMun').value, codigoServico: $('#fServ').value.replace(/\D/g, '').slice(0, 6), serieDps: $('#fSerie').value, proximoDps: $('#fNum').value, aliquotaSN: $('#fAliq').value, emissao } });
+      await api(`/assinantes/${e.id}/fiscal`, { body: { codigoMunicipio: $('#fMun').value, codigoServico: $('#fServ').value.replace(/\D/g, '').slice(0, 6), serieDps: $('#fSerie').value, proximoDps: $('#fNum').value, aliquotaSN: $('#fAliq') ? $('#fAliq').value : undefined, pTribFed: $('#fFed') ? $('#fFed').value : undefined, pTribMun: $('#fIss') ? $('#fIss').value : undefined, emissao } });
       aviso('Configuração salva.'); telaEmpresa(e.id, 'config');
     } catch (err) { aviso(esc(err.message), 'erro'); }
   });
@@ -998,7 +1000,7 @@ function abaConfig(d) {
     ev.target.disabled = true;
     try {
       const r = await api(`/escritorio/empresas/${e.id}/preencher`, { method: 'POST' });
-      $('#fMun').value = r.fiscal.codigoMunicipio || ''; $('#fServ').value = r.fiscal.codigoServico || ''; $('#fAliq').value = String(r.fiscal.aliquotaSN || '').replace('.', ',');
+      $('#fMun').value = r.fiscal.codigoMunicipio || ''; $('#fServ').value = r.fiscal.codigoServico || ''; if ($('#fAliq')) $('#fAliq').value = String(r.fiscal.aliquotaSN || '').replace('.', ',');
       mostraServico();
       aviso(r.servico ? `Preenchido pelo CNAE ${esc(r.cnae)} (${esc(r.atividade.slice(0, 60))}). Confira e salve.` : `Município e alíquota preenchidos. O CNAE ${esc(r.cnae)} não tem código sugerido: busque o serviço na lista.`, r.servico ? 'ok' : 'erro');
     } catch (err) { aviso(esc(err.message), 'erro'); }

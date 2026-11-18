@@ -66,6 +66,14 @@ function pctSimples(v) {
   return n.toFixed(2);
 }
 
+// % aproximado dos tributos para empresa fora do Simples, quando o escritório não informou:
+// federais de serviço no Lucro Presumido (IRPJ 4,80 + CSLL 2,88 + PIS 0,65 + COFINS 3,00) e ISS de 5%
+const PCT_PADRAO = { fed: 11.33, est: 0, mun: 5 };
+function pct(v, padrao) {
+  const n = v == null || v === '' ? padrao : Math.round(Number(String(v).replace(',', '.')) * 100) / 100;
+  return (n >= 0 && n < 100 ? n : padrao).toFixed(2);
+}
+
 function idDps({ codigoMunicipio, cnpj, serie, numero }) {
   return `DPS${String(codigoMunicipio).padStart(7, '0')}2${String(cnpj).padStart(14, '0')}${String(serie).padStart(5, '0')}${String(numero).padStart(15, '0')}`;
 }
@@ -153,7 +161,11 @@ function montaDps(nota, prestador, { agora = new Date(), ambiente = 1 } = {}) {
         el('tribMun', [el('tribISSQN', '1'), el('tpRetISSQN', '1')]),
         // ME/EPP do Simples (opSimpNac 3) não pode usar indTotTrib (rejeição E0712): informa o % aproximado
         // dos tributos pela alíquota do Simples (pTotTribSN). MEI e não optantes usam indTotTrib=0.
-        el('totTrib', [op === 3 ? el('pTotTribSN', pctSimples(f.aliquotaSN)) : el('indTotTrib', '0')]),
+        // Não optante (Lucro Presumido/Real) não pode usar indTotTrib nem pTotTribSN (rejeição E0713):
+        // informa o % aproximado dos tributos federais, estaduais e municipais (Lei 12.741/2012)
+        el('totTrib', [op === 3 ? el('pTotTribSN', pctSimples(f.aliquotaSN))
+          : op === 1 ? el('pTotTrib', [el('pTotTribFed', pct(f.pTribFed, PCT_PADRAO.fed)), el('pTotTribEst', pct(f.pTribEst, PCT_PADRAO.est)), el('pTotTribMun', pct(f.pTribMun, PCT_PADRAO.mun))])
+            : el('indTotTrib', '0')]),
       ]),
     ]),
   ].join('');

@@ -129,6 +129,13 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       if (!(a > 0 && a < 100)) return res.status(400).json({ erro: 'Alíquota do Simples: informe o percentual, ex.: 6 ou 11,2.' });
       f.aliquotaSN = a;
     }
+    // Empresa fora do Simples: % aproximado dos tributos federais e municipais que sai na nota
+    for (const campo of ['pTribFed', 'pTribMun']) {
+      if (body[campo] === undefined || body[campo] === '') continue;
+      const a = Math.round(Number(String(body[campo]).replace(',', '.')) * 100) / 100;
+      if (!(a >= 0 && a < 100)) return res.status(400).json({ erro: 'Tributos aproximados: informe o percentual, ex.: 11,33 ou 5.' });
+      f[campo] = a;
+    }
     if (contador && body.emissao !== undefined) {
       if (!['desligada', 'homologacao', 'producao'].includes(body.emissao)) return res.status(400).json({ erro: 'Emissão automática: use desligada, homologacao ou producao.' });
       f.emissao = body.emissao;

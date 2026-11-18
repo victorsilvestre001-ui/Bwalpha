@@ -505,6 +505,18 @@ const notas = require('./portal/notas');
       assert.doesNotMatch(nacionalT.montaDps({ ...r.json.nota, numeroDps: 10 }, { ...prest, fiscal: fiscalAntes }).xml, /<toma>.*<end>/);
       await req('DELETE', `/api/admin/portal/escritorio/empresas/${idMaria}/notas/${r.json.nota.id}`, null, admin);
       console.log('ok endereço do tomador');
+
+      // Não optante do Simples: % aproximado dos tributos (rejeição E0713 com indTotTrib/pTotTribSN)
+      const notaNO = { descricao: 'x', valor: 10, numeroDps: 11, tomador: { cpf: '12345678909', nome: 'J' } };
+      const xmlNO = nacionalT.montaDps(notaNO, { ...prest, fiscal: fiscalAntes, empresa: { simples: false } }).xml;
+      assert.match(xmlNO, /<totTrib><pTotTrib><pTotTribFed>11\.33<\/pTotTribFed><pTotTribEst>0\.00<\/pTotTribEst><pTotTribMun>5\.00<\/pTotTribMun><\/pTotTrib><\/totTrib>/);
+      assert.doesNotMatch(xmlNO, /indTotTrib|pTotTribSN/);
+      assert.match(nacionalT.montaDps(notaNO, { ...prest, fiscal: { ...fiscalAntes, pTribFed: 13.65, pTribMun: 2 }, empresa: { simples: false } }).xml, /<pTotTribFed>13\.65<\/pTotTribFed><pTotTribEst>0\.00<\/pTotTribEst><pTotTribMun>2\.00<\/pTotTribMun>/);
+      assert.match(nacionalT.montaDps(notaNO, { ...prest, fiscal: fiscalAntes, empresa: { simples: true } }).xml, /<pTotTribSN>/);
+      assert.match(nacionalT.montaDps(notaNO, { ...prest, fiscal: fiscalAntes, empresa: { mei: true } }).xml, /<indTotTrib>0<\/indTotTrib>/);
+      assert.strictEqual((await req('POST', `/api/admin/portal/assinantes/${idMaria}/fiscal`, { ...fiscalAntes, pTribFed: '11,33', pTribMun: '3' }, admin)).json.usuario.fiscal.pTribMun, 3);
+      assert.strictEqual((await req('POST', `/api/admin/portal/assinantes/${idMaria}/fiscal`, { ...fiscalAntes, pTribFed: '150' }, admin)).status, 400);
+      console.log('ok não optante');
       nacional._setTransporte(null);
     }
     await new Promise((ok) => setTimeout(ok, 200));
