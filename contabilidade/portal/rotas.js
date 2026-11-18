@@ -223,9 +223,14 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       return guardaArquivosNacional(u, { ...n, ...base }, r, cert);
     } catch (err) {
       // Sem resposta da Receita: fica "processando" e é conferida pela DPS na próxima abertura
-      const semResposta = !(err instanceof nacional.ErroNfse) || err.semResposta || err.status >= 500;
+      // Só fica "processando" quando a nota pode ter chegado na Receita (queda de rede, timeout, 5xx).
+      // Problema do nosso lado (certificado, montagem da nota) vira erro na hora, com o motivo.
+      const rede = /^E[A-Z_]+$/.test(err.code || '') && !/^ERR_/.test(err.code || '') || /ECONNRESET|ETIMEDOUT|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|EPIPE/.test(err.message);
+      const semResposta = err instanceof nacional.ErroNfse ? (err.semResposta || err.status >= 500) : (rede || /timeout|socket hang up/i.test(err.message));
       if (semResposta) return db.atualiza('notas', n.id, { ...base, status: 'processando', erro: '' });
-      return db.atualiza('notas', n.id, { ...base, status: 'erro', erro: err.message });
+      console.warn('[nfse] emissão', n.id, err.message);
+      const motivo = err instanceof nacional.ErroNfse ? err.message : /unsupported|pkcs12|pfx|mac verify/i.test(err.message) ? 'O certificado da empresa não pôde ser usado na conexão com a Receita. Envie o certificado A1 de novo na Configuração.' : `Não foi possível montar a nota: ${err.message}`;
+      return db.atualiza('notas', n.id, { ...base, status: 'erro', erro: motivo });
     }
   }
 

@@ -5,6 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const tls = require('tls');
 const forge = require('node-forge');
 const { DADOS_DIR } = require('../pgfn/formato');
 
@@ -40,6 +41,31 @@ function le(pfx, senha) {
   return { titular: cn.split(':')[0].trim() || cn, cnpj: cnpj || '', validoDe: cert.validity.notBefore.toISOString(), validoAte: cert.validity.notAfter.toISOString() };
 }
 
+// Muitos A1 vêm cifrados com RC2-40 (formato antigo). O forge abre, mas a conexão segura do
+// Node (OpenSSL 3) recusa com "unsupported". Nesse caso remonta o .pfx com 3DES, aceito por todos.
+function modernizaPfx(pfx, senha) {
+  try { tls.createSecureContext({ pfx, passphrase: senha }); return pfx; } catch (err) {
+    if (!/unsupported/i.test(err.message)) return pfx;
+  }
+  try {
+    const p12 = forge.pkcs12.pkcs12FromAsn1(forge.asn1.fromDer(forge.util.createBuffer(pfx.toString('binary'))), false, senha);
+    const bolsas = (tipo) => p12.getBags({ bagType: tipo })[tipo] || [];
+    const chavePriv = [...bolsas(forge.pki.oids.pkcs8ShroudedKeyBag), ...bolsas(forge.pki.oids.keyBag)].map((b) => b.key).find(Boolean);
+    const certs = bolsas(forge.pki.oids.certBag).map((b) => b.cert).filter(Boolean);
+    if (!chavePriv || !certs.length) return pfx;
+    // O certificado da própria empresa (o da chave) vai primeiro, depois a cadeia
+    const proprio = certs.find((c) => c.publicKey.n && c.publicKey.n.equals(chavePriv.n)) || certs[0];
+    const ordem = [proprio, ...certs.filter((c) => c !== proprio)];
+    const asn1 = forge.pkcs12.toPkcs12Asn1(chavePriv, ordem, senha, { algorithm: '3des' });
+    const novo = Buffer.from(forge.asn1.toDer(asn1).getBytes(), 'binary');
+    tls.createSecureContext({ pfx: novo, passphrase: senha });
+    return novo;
+  } catch (err) {
+    console.warn('[certificado] não deu para converter o formato antigo:', err.message);
+    return pfx;
+  }
+}
+
 function confere(pfx, senha, cnpjEmpresa) {
   const info = le(pfx, senha);
   if (!info.cnpj) throw new ErroCertificado('Este certificado não é de empresa (e-CNPJ). Envie o certificado A1 do CNPJ.');
@@ -53,7 +79,7 @@ function guarda(id, pfx, senha) {
   if (!k) throw new ErroCertificado('Recurso ainda não ativado no servidor.');
   const iv = crypto.randomBytes(12);
   const c = crypto.createCipheriv('aes-256-gcm', k, iv);
-  const corpo = Buffer.concat([c.update(JSON.stringify({ pfx: pfx.toString('base64'), senha })), c.final()]);
+  const corpo = Buffer.concat([c.update(JSON.stringify({ pfx: modernizaPfx(pfx, senha).toString('base64'), senha })), c.final()]);
   fs.mkdirSync(PASTA, { recursive: true, mode: 0o700 });
   fs.writeFileSync(arq(id), Buffer.concat([iv, c.getAuthTag(), corpo]), { mode: 0o600 });
 }
@@ -66,7 +92,11 @@ function carrega(id) {
   const d = crypto.createDecipheriv('aes-256-gcm', k, b.subarray(0, 12));
   d.setAuthTag(b.subarray(12, 28));
   const j = JSON.parse(Buffer.concat([d.update(b.subarray(28)), d.final()]).toString('utf8'));
-  return { pfx: Buffer.from(j.pfx, 'base64'), senha: j.senha };
+  // Certificados guardados antes da conversão: converte agora e regrava (uma vez só)
+  const original = Buffer.from(j.pfx, 'base64');
+  const pfx = modernizaPfx(original, j.senha);
+  if (pfx !== original) { try { guarda(id, pfx, j.senha); } catch { /* segue com o convertido em memória */ } }
+  return { pfx, senha: j.senha };
 }
 
 const apaga = (id) => fs.rmSync(arq(id), { force: true });
