@@ -628,7 +628,8 @@ function quinzena(q) { // Q1 começa em 07/12/2026
       const pulse = P.demo * (0.75 + 0.25 * Math.sin(t * 6));
       demoMat.color.copy(wallC).lerp(demoC, pulse);
     }
-    return { root, show, setFinish, setHighlight, setDemo, setXray, update };
+    function snap(group, val) { anim.forEach(o => { if (o.userData.group === group) { o.userData.v = o.userData.tv = val; o.userData.delay = 0; } }); }
+    return { root, show, snap, setFinish, setHighlight, setDemo, setXray, update, mats: { glass: glassMat, wall: wallMat } };
   }
 
   // ---------- visualizador ----------
@@ -643,7 +644,8 @@ function quinzena(q) { // Q1 começa em 07/12/2026
     if (theme.fog) scene.fog = new THREE.Fog(theme.fog, 30, 70);
     const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 200);
     camera.position.set(16, 17, 19);
-    scene.add(new THREE.HemisphereLight(theme.sky, theme.ground, theme.hemi ?? 0.75));
+    const hemi = new THREE.HemisphereLight(theme.sky, theme.ground, theme.hemi ?? 0.75); scene.add(hemi);
+    const target = new THREE.Vector3();
     const sun = new THREE.DirectionalLight(theme.sun, theme.sunI ?? 1.1);
     sun.position.set(-10, 22, 14); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
     Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 16, bottom: -16, near: 1, far: 60 }); sun.shadow.bias = -0.0005;
@@ -684,11 +686,12 @@ function quinzena(q) { // Q1 começa em 07/12/2026
         if (camera.position.distanceTo(flying.pos) < 0.05) flying = null;
       }
       model.update(dt, now / 1000);
-      if (controls) controls.update(); else camera.lookAt(0, 0, 0);
+      if (opts.onFrame) opts.onFrame(dt, now / 1000);
+      if (controls) controls.update(); else camera.lookAt(target);
       renderer.render(scene, camera);
     }
     requestAnimationFrame(loop);
-    return { model, fly, controls, camera, resize };
+    return { model, fly, controls, camera, resize, scene, renderer, hemi, sun, target };
   }
 
   window.Apto3D = { createViewer };
