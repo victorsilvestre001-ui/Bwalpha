@@ -405,7 +405,11 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
   const admin = express.Router();
   admin.use('/analises', analises.admin());
   admin.get('/assinantes', (req, res) => {
-    res.json({ assinantes: db.lista('usuarios').map((u) => ({ ...auth.publico(u), analise: undefined })).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)) });
+    // Último teste de emissão (homologação) de cada empresa, para conferir a nota gerada
+    const testes = {};
+    for (const n of db.lista('notas', (x) => x.teste)) if (!testes[n.usuarioId] || (n.enviadaEm || '') > (testes[n.usuarioId].enviadaEm || '')) testes[n.usuarioId] = n;
+    const resumoTeste = (n) => n && { status: n.status, numero: n.numero || '', chaveAcesso: n.chaveAcesso || '', pdf: n.pdf || '', erro: n.erro || '', enviadaEm: n.enviadaEm };
+    res.json({ assinantes: db.lista('usuarios').map((u) => ({ ...auth.publico(u), analise: undefined, ultimoTeste: resumoTeste(testes[u.id]) })).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)) });
   });
   admin.post('/assinantes/:id/papel', express.json(), (req, res) => {
     const u = db.acha('usuarios', (x) => x.id === req.params.id);
