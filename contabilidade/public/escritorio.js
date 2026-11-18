@@ -425,7 +425,9 @@ function ligaFormNota(d) {
     });
     if (!r || r === 'voltar') { await api(`/escritorio/empresas/${e.id}/notas/${rasc.id}`, { method: 'DELETE' }).catch(() => {}); return; }
     const txt = { emitida: `Nota ${r.numero ? 'nº ' + esc(r.numero) + ' ' : ''}emitida pela Receita.`, processando: 'Enviada. A Receita ainda está processando.', fila: 'Pedido enviado para a fila da equipe.', erro: `A Receita recusou: ${esc(r.erro || '')}` }[r.status] || 'Enviada.';
-    if (r.status === 'emitida') await notaPronta(e, r); else aviso(txt, r.status === 'erro' ? 'erro' : 'ok');
+    if (r.status === 'emitida') await notaPronta(e, r);
+    else if (r.status === 'erro') await dialogo({ titulo: 'A Receita recusou a nota', sub: 'Nada foi emitido e o pedido não ficou no sistema. Corrija e emita de novo.', corpo: `<p class="msg erro" style="margin:0">${esc(r.erro || 'Motivo não informado.')}</p>`, botoes: [{ texto: 'Entendi', classe: 'primario', valor: true }] });
+    else aviso(txt, 'ok');
     telaEmpresa(e.id, 'notas'); contaPedidos();
   });
 }

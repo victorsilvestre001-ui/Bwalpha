@@ -410,7 +410,7 @@ async function geraRascunho(ev) {
           fila: `${icone('check')} <b>Pedido enviado!</b> A equipe V&amp;J emite a nota e o PDF aparece aqui em "Minhas notas".`,
           processando: `${icone('check')} <b>Nota enviada para a prefeitura.</b> Em instantes ela aparece como emitida, com o PDF.`,
           emitida: `${icone('check')} <b>Nota emitida!</b> O PDF está em "Minhas notas".`,
-          erro: `Não foi possível emitir: ${esc(r.nota.erro || '')}. A equipe V&amp;J foi avisada.`,
+          erro: `A Receita recusou a nota: ${esc(r.nota.erro || '')}. Nada foi emitido; confira os dados e peça de novo, ou fale com a V&amp;J no WhatsApp.`,
         }[st] || 'Pedido enviado.';
         abaNotas({ texto, tipo: st === 'erro' ? 'erro' : 'ok' });
       } catch (err) { msgNota(esc(err.message), 'erro'); $('#confirmaNota').disabled = false; }

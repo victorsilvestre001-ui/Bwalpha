@@ -163,6 +163,14 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
   });
 
   // ---------- Notas fiscais ----------
+  // Nota recusada não fica no sistema: o motivo volta para a tela na hora e o registro some
+  // (ela nunca existiu na Receita). Também limpa as recusadas que ficaram de antes.
+  function descarta(n, dados) {
+    db.remove('notas', (x) => x.id === n.id);
+    console.warn('[notas] recusada e descartada', n.id, String(dados.erro || '').slice(0, 160));
+    return { ...n, ...dados, status: 'erro', descartada: true };
+  }
+  try { db.remove('notas', (x) => x.status === 'erro'); } catch (err) { console.warn('[notas] limpeza', err.message); }
   const minhasNotas = (u) => db.lista('notas', (n) => n.usuarioId === u.id).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm));
   const usadasNoMes = (u) => {
     const mes = new Date().toISOString().slice(0, 7);
@@ -173,7 +181,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     for (const n of minhasNotas(u).filter((x) => x.status === 'processando')) {
       try {
         if (n.via === 'nacional') await retomaNacional(u, n);
-        else if (notas.ativo()) db.atualiza('notas', n.id, await notas.consulta(n));
+        else if (notas.ativo()) { const c = await notas.consulta(n); if (c.status === 'erro') descarta(n, c); else db.atualiza('notas', n.id, c); }
       } catch (err) { console.warn('[notas] consulta', n.id, err.message); }
     }
   }
@@ -243,7 +251,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       if (semResposta) return db.atualiza('notas', n.id, { ...base, status: 'processando', erro: '' });
       console.warn('[nfse] emissão', n.id, err.message);
       const motivo = err instanceof nacional.ErroNfse ? err.message : /unsupported|pkcs12|pfx|mac verify/i.test(err.message) ? 'O certificado da empresa não pôde ser usado na conexão com a Receita. Envie o certificado A1 de novo na Configuração.' : `Não foi possível montar a nota: ${err.message}`;
-      return db.atualiza('notas', n.id, { ...base, status: 'erro', erro: motivo });
+      return descarta(n, { ...base, erro: motivo });
     }
   }
 
@@ -252,7 +260,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (!cert || !n.idDps) return;
     const achou = await nacional.consultaDps(n.idDps, cert, opcoesAmb(n.ambiente));
     if (achou) await guardaArquivosNacional(u, n, { status: 'emitida', chaveAcesso: achou.chaveAcesso, emitidaEm: new Date().toISOString() }, cert);
-    else if (Date.now() - Date.parse(n.enviadaEm) > 30 * 60 * 1000) db.atualiza('notas', n.id, { status: 'erro', erro: 'A Receita não confirmou a emissão. Peça a nota de novo ou fale com a equipe V&J.' });
+    else if (Date.now() - Date.parse(n.enviadaEm) > 30 * 60 * 1000) descarta(n, { erro: 'A Receita não confirmou a emissão.' });
   }
 
   // PDF do DAS anexado pelo escritório (link com token, para o cliente baixar)
@@ -346,9 +354,10 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       db.atualiza('usuarios', u.id, { proximoDps: numeroDps + 1 });
       try {
         const r2 = await notas.emite({ ...n, numeroDps }, u);
+        if (r2.status === 'erro') return descarta(n, { ...r2, numeroDps, enviadaEm: agora });
         return db.atualiza('notas', n.id, { ...r2, numeroDps, enviadaEm: agora });
       } catch (err) {
-        return db.atualiza('notas', n.id, { status: 'erro', erro: err.message, numeroDps, enviadaEm: agora });
+        return descarta(n, { erro: err.message, numeroDps, enviadaEm: agora });
       }
     }
     // Sem integração ativa: entra na fila da equipe V&J, que emite e anexa o PDF

@@ -386,6 +386,8 @@ const notas = require('./portal/notas');
       r = await req('POST', `/api/portal/notas/${r.json.nota.id}/emitir`);
       assert.strictEqual(r.json.nota.status, 'erro');
       assert.match(r.json.nota.erro, /E0014/);
+      assert(!(await req('GET', '/api/portal/notas')).json.notas.some((x) => x.id === r.json.nota.id), 'recusada sai do sistema');
+      assert(!(await req('GET', '/api/admin/portal/notas', null, admin)).json.notas.some((x) => x.status === 'erro'), 'fila sem recusadas');
       // Cancelamento pelo evento 101101
       assert.strictEqual((await req('POST', `/api/portal/notas/${idN}/cancelar`, { justificativa: 'curto' })).status, 400);
       r = await req('POST', `/api/portal/notas/${idN}/cancelar`, { justificativa: 'Valor informado errado na nota' });
