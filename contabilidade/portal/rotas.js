@@ -13,6 +13,10 @@ const analises = require('./analises');
 const certificado = require('./certificado');
 const captura = require('./captura');
 const apuracao = require('./apuracao');
+const nacional = require('./nfse-nacional');
+const fs = require('fs');
+const path = require('path');
+const { DADOS_DIR } = require('../pgfn/formato');
 
 const DIA = 24 * 60 * 60 * 1000;
 const txt = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
@@ -140,10 +144,66 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
   };
 
   async function atualizaProcessando(u) {
-    if (!notas.ativo()) return;
     for (const n of minhasNotas(u).filter((x) => x.status === 'processando')) {
-      try { db.atualiza('notas', n.id, await notas.consulta(n)); } catch (err) { console.warn('[notas] consulta', n.id, err.message); }
+      try {
+        if (n.via === 'nacional') await retomaNacional(u, n);
+        else if (notas.ativo()) db.atualiza('notas', n.id, await notas.consulta(n));
+      } catch (err) { console.warn('[notas] consulta', n.id, err.message); }
     }
+  }
+
+  // ---------- NFS-e Nacional (direto na Receita, com o certificado A1 da empresa) ----------
+  const PASTA_NFSE = path.join(DADOS_DIR, 'nfse');
+  const arqNota = (n, ext) => path.join(PASTA_NFSE, `${String(n.id).replace(/[^\w-]/g, '')}.${ext}`);
+  const usaNacional = (u) => nacional.ligado() && certificado.ativo() && notas.configFiscalCompleta(u) && !!certificado.carrega(u.id);
+
+  // Guarda XML e PDF da nota e cria o link público do PDF (para o cliente mandar ao tomador)
+  async function guardaArquivosNacional(u, n, r, cert) {
+    fs.mkdirSync(PASTA_NFSE, { recursive: true });
+    if (r.nfseXml) { try { fs.writeFileSync(arqNota(n, 'xml'), nacional.desgz64(r.nfseXml)); } catch (err) { console.warn('[nfse] xml', err.message); } }
+    const token = n.token || crypto.randomBytes(12).toString('base64url');
+    let pdf = '';
+    try {
+      fs.writeFileSync(arqNota(n, 'pdf'), await nacional.danfse(r.chaveAcesso, cert));
+      pdf = `${site}/nf/${token}`;
+    } catch (err) {
+      console.warn('[nfse] danfse', n.id, err.message);
+      pdf = `https://www.nfse.gov.br/ConsultaPublica/?tpc=1&chave=${r.chaveAcesso}`;
+    }
+    const { nfseXml, ...resto } = r;
+    return db.atualiza('notas', n.id, { ...resto, token, pdf });
+  }
+
+  async function emiteNacional(u, n, agora) {
+    const numeroDps = u.proximoDps || 1;
+    db.atualiza('usuarios', u.id, { proximoDps: numeroDps + 1 });
+    const cert = certificado.carrega(u.id);
+    const base = { via: 'nacional', numeroDps, enviadaEm: agora, idDps: nacional.idDps({ codigoMunicipio: u.fiscal.codigoMunicipio, cnpj: u.cnpj, serie: Number(u.fiscal.serieDps || 1), numero: numeroDps }) };
+    db.atualiza('notas', n.id, { ...base, status: 'processando' });
+    try {
+      const r = await nacional.emite({ ...n, numeroDps }, u, cert);
+      return guardaArquivosNacional(u, { ...n, ...base }, r, cert);
+    } catch (err) {
+      // Sem resposta da Receita: fica "processando" e é conferida pela DPS na próxima abertura
+      const semResposta = !(err instanceof nacional.ErroNfse) || err.semResposta || err.status >= 500;
+      if (semResposta) return db.atualiza('notas', n.id, { ...base, status: 'processando', erro: '' });
+      return db.atualiza('notas', n.id, { ...base, status: 'erro', erro: err.message });
+    }
+  }
+
+  async function retomaNacional(u, n) {
+    const cert = certificado.carrega(u.id);
+    if (!cert || !n.idDps) return;
+    const achou = await nacional.consultaDps(n.idDps, cert);
+    if (achou) await guardaArquivosNacional(u, n, { status: 'emitida', chaveAcesso: achou.chaveAcesso, emitidaEm: new Date().toISOString() }, cert);
+    else if (Date.now() - Date.parse(n.enviadaEm) > 30 * 60 * 1000) db.atualiza('notas', n.id, { status: 'erro', erro: 'A Receita não confirmou a emissão. Peça a nota de novo ou fale com a equipe V&J.' });
+  }
+
+  // PDF da nota por link público (com token), para enviar ao tomador
+  function enviaPdfNota(req, res) {
+    const n = db.acha('notas', (x) => x.token && x.token === req.params.token);
+    if (!n || !fs.existsSync(arqNota(n, 'pdf'))) return res.status(404).send('Nota não encontrada.');
+    res.type('application/pdf').set('Content-Disposition', `inline; filename="NFS-e-${n.numero || n.id}.pdf"`).sendFile(arqNota(n, 'pdf'));
   }
 
   // Clientes (tomadores) para quem a empresa já emitiu, do mais recente para o mais antigo, sem repetir
@@ -205,6 +265,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (usadasNoMes(req.usuario) >= (plano.notasMes || 0)) return res.status(402).json({ erro: `Você já usou as ${plano.notasMes} notas do mês. Fale conosco para ampliar.` });
     const u = req.usuario;
     const agora = new Date().toISOString();
+    if (usaNacional(u)) return res.json({ nota: await emiteNacional(u, n, agora) });
     if (notas.ativo() && notas.configFiscalCompleta(u)) {
       const numeroDps = u.proximoDps || 1;
       db.atualiza('usuarios', u.id, { proximoDps: numeroDps + 1 });
@@ -229,6 +290,11 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (!n || n.status !== 'emitida') return res.status(404).json({ erro: 'Nota emitida não encontrada.' });
     const justificativa = txt(req.body.justificativa, 255);
     if (justificativa.length < 15) return res.status(400).json({ erro: 'Explique o motivo do cancelamento (mínimo 15 caracteres).' });
+    if (n.via === 'nacional' && n.chaveAcesso) {
+      const cert = certificado.carrega(req.usuario.id);
+      if (!cert) return res.status(409).json({ erro: 'O certificado da empresa não está conectado. Fale com a equipe V&J.' });
+      try { return res.json({ nota: db.atualiza('notas', n.id, { ...(await nacional.cancela(n, req.usuario, justificativa, cert)), cancelamentoPedido: justificativa }) }); } catch (err) { return res.status(502).json({ erro: err.message }); }
+    }
     if (!notas.ativo()) return res.json({ nota: db.atualiza('notas', n.id, { cancelamentoPedido: justificativa }) });
     try {
       res.json({ nota: db.atualiza('notas', n.id, await notas.cancela(n, justificativa)) });
@@ -539,5 +605,5 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
   // DAS do cliente: estimativa do mês e guias liberadas pelo contador
   r.get('/das', auth.exigePlano, (req, res) => res.json({ meses: apuracao.painel(req.usuario, { quantas: 6 }).map(({ ajuste, ...l }) => l) }));
   r.use('/analises', analises.portal());
-  return { portal: r, publico, admin };
+  return { portal: r, publico, admin, enviaPdfNota };
 };

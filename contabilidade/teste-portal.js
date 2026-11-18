@@ -248,6 +248,71 @@ const notas = require('./portal/notas');
     assert.ok(!JSON.stringify(r.json).includes('senha123'), 'a senha nunca volta');
     const guardado = fs.readFileSync(path.join(dir, 'certificados', fs.readdirSync(path.join(dir, 'certificados'))[0]));
     assert.ok(!guardado.includes(Buffer.from('senha123')), 'guardado cifrado');
+
+    // NFS-e Nacional: emissão direta na Receita com o certificado conectado (Sefin simulada)
+    {
+      const nacional = require('./portal/nfse-nacional');
+      const crypto = require('crypto');
+      process.env.NFSE_NACIONAL = '1';
+      const chave = '35522052123456780001950000000000000526110000000017'.slice(0, 50);
+      const enviados = [];
+      nacional._setTransporte(async ({ url, method, body, binario }) => {
+        enviados.push({ url, method, body });
+        if (method === 'POST' && url.endsWith('/nfse')) {
+          const xml = nacional.desgz64(body.dpsXmlGZipB64);
+          if (xml.includes('<nDPS>6</nDPS>')) return { status: 400, json: { erros: [{ Codigo: 'E0014', Descricao: 'Conjunto de Série e Número da DPS já existe' }] } };
+          const nfse = `<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse"><infNFSe><nNFSe>42</nNFSe></infNFSe></NFSe>`;
+          return { status: 201, json: { chaveAcesso: chave, idDps: 'x', nfseXmlGZipB64: nacional.gz64(nfse), alertas: [] } };
+        }
+        if (binario && url.includes('/danfse/')) return { status: 200, buf: Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.alloc(600, 32)]) };
+        if (method === 'POST' && url.endsWith(`/nfse/${chave}/eventos`)) return { status: 201, json: { eventoXmlGZipB64: 'x' } };
+        return { status: 404, json: {} };
+      });
+      r = await req('POST', '/api/portal/notas', { documento: '11222333000181', descricao: 'Consultoria em gestão & processos', valor: '1250' });
+      const idN = r.json.nota.id;
+      r = await req('POST', `/api/portal/notas/${idN}/emitir`);
+      assert.strictEqual(r.json.nota.status, 'emitida', JSON.stringify(r.json));
+      assert.strictEqual(r.json.nota.via, 'nacional');
+      assert.strictEqual(r.json.nota.chaveAcesso, chave);
+      assert.strictEqual(r.json.nota.numero, '42', 'número lido do XML da NFS-e');
+      assert.ok(!('nfseXml' in r.json.nota), 'XML fica em arquivo, não no banco');
+      // DPS enviada: série/número configurados, assinada, digest confere com o infDPS
+      const dps = nacional.desgz64(enviados[0].body.dpsXmlGZipB64);
+      assert.ok(dps.includes('<nDPS>5</nDPS>') && dps.includes('<cTribNac>010701</cTribNac>') && dps.includes('<cLocEmi>3552205</cLocEmi>'));
+      assert.ok(dps.includes('gestão &amp; processos'), 'texto escapado');
+      const inf = dps.match(/<infDPS[\s\S]*<\/infDPS>/)[0].replace('<infDPS Id=', '<infDPS xmlns="http://www.sped.fazenda.gov.br/nfse" Id=');
+      assert.strictEqual(crypto.createHash('sha256').update(inf).digest('base64'), dps.match(/<DigestValue>([^<]+)</)[1]);
+      const certPem = `-----BEGIN CERTIFICATE-----\n${dps.match(/<X509Certificate>([^<]+)</)[1]}\n-----END CERTIFICATE-----`;
+      const signedInfo = dps.match(/<SignedInfo[\s\S]*<\/SignedInfo>/)[0];
+      assert.ok(crypto.createVerify('RSA-SHA256').update(signedInfo).verify(certPem, dps.match(/<SignatureValue>([^<]+)</)[1], 'base64'), 'assinatura válida');
+      // PDF por link público
+      const pdfUrl = new URL(r.json.nota.pdf);
+      const p = await fetch(base + pdfUrl.pathname);
+      assert.strictEqual(p.status, 200);
+      assert.match(p.headers.get('content-type'), /pdf/);
+      assert.strictEqual((await fetch(base + '/nf/token-que-nao-existe')).status, 404);
+      // Rejeição da Receita aparece como erro com a mensagem
+      r = await req('POST', '/api/portal/notas', { documento: '11222333000181', descricao: 'Outro serviço prestado', valor: '10' });
+      r = await req('POST', `/api/portal/notas/${r.json.nota.id}/emitir`);
+      assert.strictEqual(r.json.nota.status, 'erro');
+      assert.match(r.json.nota.erro, /E0014/);
+      // Cancelamento pelo evento 101101
+      assert.strictEqual((await req('POST', `/api/portal/notas/${idN}/cancelar`, { justificativa: 'curto' })).status, 400);
+      r = await req('POST', `/api/portal/notas/${idN}/cancelar`, { justificativa: 'Valor informado errado na nota' });
+      assert.strictEqual(r.json.nota.status, 'cancelada', JSON.stringify(r.json));
+      const ev = nacional.desgz64(enviados.find((e) => e.url.endsWith('/eventos')).body.pedidoRegistroEventoXmlGZipB64);
+      assert.ok(ev.includes(`Id="PRE${chave}101101"`) && ev.includes('<xDesc>Cancelamento de NFS-e</xDesc>') && ev.includes('<Signature'));
+      // Sem resposta da Receita: fica processando e é retomada pela consulta da DPS
+      nacional._setTransporte(async ({ url, method }) => { if (method === 'POST') throw new Error('ECONNRESET'); if (url.includes('/dps/')) return { status: 200, json: { chaveAcesso: chave } }; if (url.includes('/danfse/')) return { status: 500, buf: Buffer.alloc(0) }; return { status: 404, json: {} }; });
+      r = await req('POST', '/api/portal/notas', { documento: '11222333000181', descricao: 'Serviço com queda de conexão', valor: '20' });
+      r = await req('POST', `/api/portal/notas/${r.json.nota.id}/emitir`);
+      assert.strictEqual(r.json.nota.status, 'processando');
+      const retomada = (await req('GET', '/api/portal/notas')).json.notas.find((x) => x.id === r.json.nota.id);
+      assert.strictEqual(retomada.status, 'emitida', 'retomada pela DPS');
+      assert.match(retomada.pdf, /ConsultaPublica/, 'sem DANFSe, cai no link da consulta pública');
+      nacional._setTransporte(null);
+      delete process.env.NFSE_NACIONAL;
+    }
     await new Promise((ok) => setTimeout(ok, 200));
     r = await req('GET', '/api/portal/notas-capturadas');
     assert.deepStrictEqual(r.json.notas.map((n) => [n.tipo, n.emit, n.dest, n.valor]).sort(), [['nfe', '11222333', '12345678', 400], ['nfse', '12345678', '11222333', 900]]);

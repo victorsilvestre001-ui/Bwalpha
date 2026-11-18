@@ -258,7 +258,7 @@ async function abaNotas(mensagem) {
             <td class="ocultar-cel">${esc(x.descricao.slice(0, 80))}${x.descricao.length > 80 ? '…' : ''}</td>
             <td>${brl(x.valor)}</td>
             <td><span class="status st-${x.status}">${STATUS_NOTA[x.status] || x.status}</span>${x.erro ? `<br><small style="color:var(--urgente)">${esc(x.erro)}</small>` : ''}</td>
-            <td class="acoes">${x.pdf ? `<a href="${esc(x.pdf)}" target="_blank" rel="noopener">PDF</a><a target="_blank" rel="noopener" href="${linkZap(`Olá! Segue a nota fiscal${x.numero ? ` nº ${x.numero}` : ''} no valor de ${brl(x.valor)}: ${x.pdf}`, '')}">Enviar</a>` : ''}<a href="#" data-repetir="${esc(x.id)}">Repetir</a></td>
+            <td class="acoes">${x.pdf ? `<a href="${esc(x.pdf)}" target="_blank" rel="noopener">PDF</a><a target="_blank" rel="noopener" href="${linkZap(`Olá! Segue a nota fiscal${x.numero ? ` nº ${x.numero}` : ''} no valor de ${brl(x.valor)}: ${x.pdf}`, '')}">Enviar</a>` : ''}<a href="#" data-repetir="${esc(x.id)}">Repetir</a>${x.status === 'emitida' && !x.cancelamentoPedido ? `<a href="#" data-cancelar="${esc(x.id)}" style="color:var(--urgente)">Cancelar</a>` : ''}${x.cancelamentoPedido && x.status !== 'cancelada' ? '<br><small>Cancelamento pedido</small>' : ''}</td>
           </tr>`).join('')}</tbody></table>` : '<p class="vazio">Nenhuma nota ainda. Peça a primeira aqui em cima.</p>'}
       </section>`;
     if ($('#irConta')) $('#irConta').addEventListener('click', (e) => { e.preventDefault(); abre('conta'); });
@@ -271,6 +271,16 @@ async function abaNotas(mensagem) {
       e.preventDefault();
       const x = n.notas.find((y) => y.id === a.dataset.repetir);
       if (x) preencheNota({ documento: x.tomador.cnpj || x.tomador.cpf, nome: x.tomador.nome, email: x.tomador.email, descricao: x.descricao, valor: x.valor });
+    }));
+    $$('[data-cancelar]').forEach((a) => a.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const x = n.notas.find((y) => y.id === a.dataset.cancelar);
+      const motivo = prompt(`Cancelar a nota${x.numero ? ` nº ${x.numero}` : ''} de ${brl(x.valor)} para ${x.tomador.nome}?\n\nEscreva o motivo (mínimo 15 letras):`);
+      if (motivo === null) return;
+      try {
+        const r = await api(`/notas/${x.id}/cancelar`, { method: 'POST', body: { justificativa: motivo } });
+        abaNotas({ texto: r.nota.status === 'cancelada' ? `${icone('check')} <b>Nota cancelada.</b>` : `${icone('check')} <b>Pedido de cancelamento enviado</b> para a equipe V&amp;J.`, tipo: 'ok' });
+      } catch (err) { msgNota(esc(err.message), 'erro'); }
     }));
     if (mensagem) msgNota(mensagem.texto, mensagem.tipo);
   } catch (err) { trataErro(err, el); }

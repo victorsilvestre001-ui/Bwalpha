@@ -211,5 +211,6 @@ app.use('/api/admin/portal', (req, res, next) => {
   next();
 }, portal.admin);
 app.get('/o/:token', (req, res) => res.sendFile(path.join(__dirname, 'public', 'orcamento.html')));
+app.get('/nf/:token', portal.enviaPdfNota);
 
 module.exports = app;
