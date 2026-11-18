@@ -14,6 +14,7 @@ const certificado = require('./certificado');
 const captura = require('./captura');
 const apuracao = require('./apuracao');
 const nacional = require('./nfse-nacional');
+const integra = require('./integra');
 const fs = require('fs');
 const path = require('path');
 const { DADOS_DIR } = require('../pgfn/formato');
@@ -712,6 +713,46 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     db.atualiza('apuracoes', reg.id, { status: 'aprovada', aprovado: calc, aprovadoEm: new Date().toISOString() });
     res.json({ linha: linhaDe(u, req.params.comp) });
   });
+  // ---- Integra Contador: puxa a guia do DAS direto da Receita ----
+  admin.get('/escritorio/integra', (req, res) => res.json(integra.situacao()));
+  admin.post('/escritorio/integra/certificado', express.json({ limit: '100kb' }), (req, res) => {
+    try {
+      const pfx = Buffer.from(String(req.body.pfx || ''), 'base64');
+      const info = certificado.le(pfx, String(req.body.senha || ''));
+      const cnpj = String(process.env.INTEGRA_CNPJ || '24961340000147');
+      if (!info.cnpj || info.cnpj.slice(0, 8) !== cnpj.slice(0, 8)) return res.status(400).json({ erro: `Este certificado é do CNPJ ${info.cnpj || '(sem CNPJ)'}; o contratante do Integra Contador é ${cnpj}.` });
+      if (Date.parse(info.validoAte) < Date.now()) return res.status(400).json({ erro: 'Este certificado está vencido.' });
+      certificado.guarda(integra.ID_CERT, pfx, String(req.body.senha || ''));
+      res.json({ ...integra.situacao(), titular: info.titular, validoAte: info.validoAte });
+    } catch (err) { res.status(400).json({ erro: err.message }); }
+  });
+  // Puxar guia: gera o DAS na Receita (vencido: já com multa e juros até hoje), guarda o PDF e manda ao cliente
+  admin.post('/apuracoes/:id/:comp/puxar', async (req, res) => {
+    const u = alvoApu(req, res);
+    if (!u) return;
+    if (!integra.situacao().ativo) return res.status(409).json({ erro: 'O Integra Contador ainda não está ligado: faltam as chaves do SERPRO e o e-CNPJ do escritório.' });
+    let reg = apuracao.registro(u, req.params.comp);
+    if (['paga', 'entregue'].includes(reg.status)) return res.status(409).json({ erro: 'Esta competência já foi concluída.' });
+    const vencOriginal = (reg.aprovado && reg.aprovado.vencimento) || apuracao.calcula(u, req.params.comp, apuracao.receitas(u), reg.ajuste || {}).vencimento;
+    const hojeBr = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+    let g;
+    try { g = await integra.geraDas(u.cnpj, req.params.comp, { vencido: vencOriginal < hojeBr }); } catch (err) { return res.status(502).json({ erro: err.message }); }
+    if (reg.status === 'calculada') reg = db.atualiza('apuracoes', reg.id, { status: 'aprovada', aprovado: apuracao.calcula(u, req.params.comp, apuracao.receitas(u), reg.ajuste || {}), aprovadoEm: new Date().toISOString() });
+    const tokenDas = (reg.das && reg.das.token) || crypto.randomBytes(12).toString('base64url');
+    fs.mkdirSync(path.join(DADOS_DIR, 'das'), { recursive: true });
+    fs.writeFileSync(path.join(DADOS_DIR, 'das', `${tokenDas}.pdf`), g.pdf);
+    const das = { pdf: `${site}/das/${tokenDas}`, token: tokenDas, linhaDigitavel: '', valor: g.valor || (reg.aprovado && reg.aprovado.valor) || 0, vencimento: g.pagarAte || g.vencimento || vencOriginal, principal: g.principal, multa: g.multa, juros: g.juros, numeroDocumento: g.numeroDocumento, origem: 'integra', em: new Date().toISOString() };
+    db.atualiza('apuracoes', reg.id, { status: 'das_disponivel', das });
+    const alerta = { em: new Date().toISOString(), texto: `Seu DAS de ${nomeComp(req.params.comp)} está disponível: ${brl(das.valor)}${g.multa || g.juros ? ' (com multa e juros)' : ''}, pague até ${das.vencimento.split('-').reverse().join('/')}. Veja em Minha empresa › Seu DAS.` };
+    db.atualiza('usuarios', u.id, { alertas: [alerta, ...(u.alertas || [])].slice(0, 30) });
+    // E-mail ao cliente com a guia anexa (quando o e-mail estiver configurado)
+    let envio = { ok: false, erro: 'e-mail não configurado' };
+    if (canais.emailAtivo() && u.email) {
+      envio = await canais.enviaEmail({ para: u.email, assunto: `DAS ${nomeComp(req.params.comp)} · ${brl(das.valor)} · pague até ${das.vencimento.split('-').reverse().join('/')}`, html: `<p>Segue a guia do DAS de <b>${nomeComp(req.params.comp)}</b> de ${(u.empresa && u.empresa.razaoSocial) || u.nome}.</p><p><b>Valor:</b> ${brl(das.valor)}${g.multa || g.juros ? ` (principal ${brl(g.principal)} + multa ${brl(g.multa)} + juros ${brl(g.juros)})` : ''}<br><b>Pagar até:</b> ${das.vencimento.split('-').reverse().join('/')}</p><p><a href="${das.pdf}">Abrir a guia (PDF)</a></p>`, anexos: [{ nome: `DAS ${req.params.comp}.pdf`, conteudo: g.pdf }] }).catch((err) => ({ ok: false, erro: err.message }));
+    }
+    res.json({ linha: linhaDe(u, req.params.comp), das, envio, telefone: u.telefone || '' });
+  });
+
   // Mês sem faturamento: declaração zerada, sem guia
   admin.post('/apuracoes/:id/:comp/zerada', (req, res) => {
     const u = alvoApu(req, res);

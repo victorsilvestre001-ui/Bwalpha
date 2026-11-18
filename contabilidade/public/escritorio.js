@@ -67,6 +67,7 @@ async function inicia() {
     await api('/escritorio/empresas');
     $('#telaLogin').hidden = true;
     $('#app').hidden = false;
+    await carregaIntegra();
     rota();
     contaPedidos();
   } catch (err) {
@@ -82,6 +83,7 @@ function rota() {
   $$('.lateral [data-menu]').forEach((a) => a.classList.toggle('ativo', a.dataset.menu === (partes[0] === 'empresa' ? 'empresas' : (partes[0] || 'empresas'))));
   if (partes[0] === 'empresa' && partes[1]) return telaEmpresa(partes[1], partes[2] || 'notas');
   if (partes[0] === 'pedidos') return telaPedidos();
+  if (partes[0] === 'integra') return telaIntegra();
   return telaEmpresas();
 }
 
@@ -114,6 +116,7 @@ async function telaEmpresas() {
       <div class="kpi"><span>Notas no mês</span><b>${brl(faturado)}</b><small>${empresas.reduce((t, e) => t + e.notasMes.quantidade, 0)} nota(s)</small></div>
       <div class="kpi"><span>DAS a conferir</span><b>${dasPend}</b><small>competência anterior</small></div>
     </div>
+    <form class="comando" id="formCmd">${icone('raio')}<input id="cmd" placeholder='Diga o que fazer. Ex.: "puxar guia da AGEN", "puxar DAS de outubro da LH Motos", "emitir nota da THG"' autocomplete="off"><button class="btn ouro">Fazer</button></form>
     <div class="ferramentas">
       <div class="busca">${icone('busca')}<input id="buscaEmp" placeholder="Buscar por nome ou CNPJ"></div>
       <div class="filtros">${[['todas', 'Todas'], ['ligada', 'Emissão ligada'], ['semcert', 'Sem certificado'], ['das', 'DAS a conferir']].map(([v, t]) => `<button class="filtro ${filtroEmp === v ? 'ativo' : ''}" data-f="${v}">${t}</button>`).join('')}</div>
@@ -138,6 +141,14 @@ async function telaEmpresas() {
   $('#buscaEmp').addEventListener('input', desenha);
   $$('[data-f]').forEach((b) => b.addEventListener('click', () => { filtroEmp = b.dataset.f; $$('[data-f]').forEach((x) => x.classList.toggle('ativo', x === b)); desenha(); }));
   $('#novaEmp').addEventListener('click', cadastraEmpresa);
+  $('#formCmd').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const txt = $('#cmd').value.trim();
+    if (!txt) return;
+    const btn = ev.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Fazendo…';
+    try { await executaComando(txt, empresas); $('#cmd').value = ''; } catch (err) { aviso(esc(err.message), 'erro'); }
+    btn.disabled = false; btn.textContent = 'Fazer';
+  });
   desenha();
 }
 
@@ -411,6 +422,85 @@ document.addEventListener('input', async (ev) => {
   } catch (err) { info.className = 'tomador erro'; info.textContent = err.message; }
 });
 
+// ----- Integra Contador: puxar guia e comandos -----
+let INTEGRA = { ativo: false };
+async function carregaIntegra() { try { INTEGRA = await api('/escritorio/integra'); } catch { INTEGRA = { ativo: false }; } }
+
+// Puxa o DAS da Receita e entrega: PDF, WhatsApp do cliente e link
+async function puxaGuia(e, competencia) {
+  const r = await api(`/apuracoes/${e.id}/${competencia}/puxar`, { method: 'POST' });
+  const d = r.das;
+  const texto = `Olá! Segue a guia do DAS de ${comp(competencia)} da ${e.nome}: ${brl(d.valor)}, pagar até ${dataIso(d.vencimento)}. ${d.pdf}`;
+  const zap = `https://wa.me/${String(r.telefone || e.telefone || '').replace(/\D/g, '').replace(/^(?!55)(\d{10,11})$/, '55$1')}?text=${encodeURIComponent(texto)}`;
+  await dialogo({
+    titulo: `${icone('check')} Guia de ${comp(competencia)} pronta`, sub: `${esc(e.nome)}${INTEGRA.modo === 'demonstracao' ? ' · <b>demonstração (dados fictícios)</b>' : ''}`,
+    corpo: `<dl class="confere" style="margin-bottom:14px"><dt>Total</dt><dd class="valor">${brl(d.valor)}</dd>${d.multa || d.juros ? `<dt>Composição</dt><dd><small>principal ${brl(d.principal)} + multa ${brl(d.multa)} + juros ${brl(d.juros)}</small></dd>` : ''}<dt>Pagar até</dt><dd><b>${dataIso(d.vencimento)}</b></dd></dl>
+      <div style="display:grid;gap:10px">
+        <a class="btn primario largo" href="${esc(d.pdf)}" target="_blank" rel="noopener">${icone('pdf')} Abrir a guia (PDF)</a>
+        <a class="btn largo" href="${esc(zap)}" target="_blank" rel="noopener">Enviar ao cliente no WhatsApp</a>
+      </div>
+      ${r.envio && r.envio.ok ? `<p class="msg ok">${icone('check')} Enviada por e-mail ao cliente.</p>` : '<p class="msg info">O cliente também vê a guia na Área do Cliente.</p>'}`,
+    botoes: [{ texto: 'Fechar', valor: true }],
+  });
+}
+
+// Barra de comandos: "puxar guia da AGEN", "puxar DAS de outubro da LH Motos", "emitir nota da THG"
+const MESES_NOME = { jan: '01', fev: '02', mar: '03', abr: '04', mai: '05', jun: '06', jul: '07', ago: '08', set: '09', out: '10', nov: '11', dez: '12' };
+const semAcento = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+async function executaComando(texto, empresas) {
+  const q = semAcento(texto);
+  const palavras = q.split(/[^a-z0-9]+/).filter((p) => p.length >= 3 && !['puxar', 'puxa', 'guia', 'gerar', 'emitir', 'nota', 'fiscal', 'cliente', 'empresa', 'para', 'pagar', 'mandar', 'enviar', 'vencida', 'ltda'].includes(p) && !MESES_NOME[p.slice(0, 3)]);
+  const pontua = (e) => palavras.filter((p) => semAcento(`${e.nome} ${e.fantasia}`).includes(p) || e.cnpj.includes(p)).length;
+  const alvo = empresas.map((e) => [e, pontua(e)]).filter(([, p]) => p > 0).sort((a, b) => b[1] - a[1])[0];
+  if (!alvo) throw new Error('Não achei a empresa. Escreva o nome como está no cadastro, por exemplo "puxar guia da AGEN".');
+  const e = alvo[0];
+  if (/nota|nf/.test(q) && !/das|guia/.test(q)) { location.hash = `#/empresa/${e.id}/notas`; return; }
+  const d = await api(`/escritorio/empresas/${e.id}`);
+  if (!d.apuracao) throw new Error(`${e.nome} não está no Simples Nacional.`);
+  const mesTxt = Object.keys(MESES_NOME).find((m) => new RegExp(`\\b${m}`).test(q));
+  const ano = (q.match(/\b(20\d{2})\b/) || [])[1];
+  let m = mesTxt ? d.apuracao.meses.find((x) => x.competencia.slice(5) === MESES_NOME[mesTxt] && (!ano || x.competencia.startsWith(ano))) : null;
+  // Sem mês: a guia em aberto mais antiga (vencida primeiro)
+  if (!m) m = d.apuracao.meses.slice().reverse().find((x) => !['paga', 'entregue'].includes(x.status) && (x.das ? x.das.valor : x.valor) > 0);
+  if (!m) throw new Error(`${e.nome} não tem DAS em aberto.`);
+  if (!INTEGRA.ativo) { location.hash = `#/empresa/${e.id}/das`; throw new Error('O Integra Contador ainda não está ligado: abri o PGDAS-D da empresa para gerar a guia manualmente.'); }
+  await puxaGuia(d.empresa, m.competencia);
+  telaEmpresa(e.id, 'das');
+}
+
+async function telaIntegra() {
+  const el = $('#conteudo');
+  await carregaIntegra();
+  const s = INTEGRA;
+  el.innerHTML = `
+    <div class="cab"><div><h1>Integra Contador</h1><p>Conexão com a Receita (SERPRO) para puxar as guias do DAS sozinho.</p></div></div>
+    <div class="grade-2">
+      <div class="card">
+        <h2>Situação</h2>
+        <div class="linha-info"><span class="suave">Conexão</span>${s.ativo ? (s.modo === 'demonstracao' ? '<span class="chip info">Demonstração</span>' : '<span class="chip ok">Ligada</span>') : '<span class="chip erro">Desligada</span>'}</div>
+        <div class="linha-info"><span class="suave">Contratante</span><b>${doc(s.contratante || '')}</b></div>
+        ${s.modo === 'producao' ? `<div class="linha-info"><span class="suave">Chaves do SERPRO</span>${s.chaves ? '<span class="chip ok">Configuradas</span>' : '<span class="chip erro">Faltam</span>'}</div>
+        <div class="linha-info"><span class="suave">e-CNPJ do escritório</span>${s.certificado ? '<span class="chip ok">Conectado</span>' : '<span class="chip erro">Falta</span>'}</div>` : ''}
+        ${!s.ativo ? `<p class="msg atencao">Para ligar: 1) contrato ativo na Área do Cliente SERPRO; 2) Consumer Key e Secret nas variáveis do Railway (INTEGRA_CONSUMER_KEY e INTEGRA_CONSUMER_SECRET); 3) e-CNPJ do escritório aqui ao lado.</p>` : ''}
+      </div>
+      <div class="card">
+        <h2>e-CNPJ do escritório</h2>
+        <p class="suave" style="margin-top:0">O certificado do contratante (VIMARI) autentica o site no SERPRO. Fica guardado criptografado.</p>
+        <label class="campo"><span>Arquivo (.pfx ou .p12)</span><input type="file" id="iArq" accept=".pfx,.p12"></label>
+        <label class="campo"><span>Senha do certificado</span><input type="password" id="iSenha" autocomplete="off"></label>
+        <button class="btn primario" id="iEnviar">${icone('chave')} Conectar</button>
+        <p id="iMsg" class="msg" hidden></p>
+      </div>
+    </div>`;
+  $('#iEnviar').addEventListener('click', async () => {
+    const arq = $('#iArq').files[0];
+    const msg = (t, c) => { $('#iMsg').className = `msg ${c}`; $('#iMsg').textContent = t; $('#iMsg').hidden = false; };
+    if (!arq) return msg('Escolha o arquivo do certificado.', 'erro');
+    const b64 = await new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1]); fr.readAsDataURL(arq); });
+    try { await api('/escritorio/integra/certificado', { body: { pfx: b64, senha: $('#iSenha').value } }); aviso('Certificado do escritório conectado.'); telaIntegra(); } catch (err) { msg(err.message, 'erro'); }
+  });
+}
+
 // ----- PGDAS-D e DAS -----
 // Um botão por mês, no passo certo: sem movimento -> declarar; com valor -> gerar guia; guia enviada -> marcar paga
 const PORTAL_PGDAS = 'https://www8.receita.fazenda.gov.br/SimplesNacional/Aplicacoes/ATSPO/pgdasd2018.app/';
@@ -444,8 +534,8 @@ function abaDas(d) {
       const atrasado = !['paga', 'entregue'].includes(m.status) && !zerado(m) && venc < hoje;
       const calc = m.partes.map((p) => `${p.rotulo}: Anexo ${p.anexo} · ${pct(p.aliquota)}`).join(' | ');
       let acao = '';
-      if (['calculada', 'aprovada'].includes(m.status)) acao = zerado(m) ? `<button class="btn pequeno primario" data-apu="zerada" data-c="${m.competencia}">Declarar sem movimento</button>` : `<button class="btn pequeno ouro" data-apu="guia" data-c="${m.competencia}">Gerar guia</button>`;
-      if (m.status === 'das_disponivel') acao = `${m.das && m.das.pdf ? `<a class="lnk" href="${esc(m.das.pdf)}" target="_blank" rel="noopener">${icone('pdf')} Ver guia</a> ` : ''}<button class="btn pequeno" data-apu="pago" data-c="${m.competencia}">Marcar paga</button>`;
+      if (['calculada', 'aprovada'].includes(m.status)) acao = zerado(m) ? `<button class="btn pequeno primario" data-apu="zerada" data-c="${m.competencia}">Declarar sem movimento</button>` : (INTEGRA.ativo ? `<button class="btn pequeno ouro" data-apu="puxar" data-c="${m.competencia}">${icone('raio')} Puxar guia</button>` : `<button class="btn pequeno ouro" data-apu="guia" data-c="${m.competencia}">Gerar guia</button>`);
+      if (m.status === 'das_disponivel') acao = (INTEGRA.ativo && venc < hoje ? `<button class="btn pequeno" data-apu="puxar" data-c="${m.competencia}">Atualizar guia vencida</button><br>` : '') + `${m.das && m.das.pdf ? `<a class="lnk" href="${esc(m.das.pdf)}" target="_blank" rel="noopener">${icone('pdf')} Ver guia</a> ` : ''}<button class="btn pequeno" data-apu="pago" data-c="${m.competencia}">Marcar paga</button>`;
       if (['paga', 'entregue'].includes(m.status)) acao = `<span class="suave">${icone('check')}</span>`;
       return `<tr title="${esc(calc)}">
         <td><b>${comp(m.competencia)}</b>${m.avisos.length ? `<br><small style="color:var(--atencao)" title="${esc(m.avisos.join(' '))}">⚠ conferir</small>` : ''}</td>
@@ -457,12 +547,13 @@ function abaDas(d) {
       </tr>`;
     }).join('')}
     </tbody></table></div>
-    <p class="suave" style="font-size:.85rem;margin-top:12px">Quando o Integra Contador (SERPRO) for ativado, o "Gerar guia" transmite o PGDAS-D e baixa o DAS sozinho. Até lá, ele abre o PGDAS-D e você anexa o PDF da guia aqui.</p>`;
+    <p class="suave" style="font-size:.85rem;margin-top:12px">${INTEGRA.ativo ? 'Puxar guia: o site busca o DAS na Receita (vencido já sai com multa e juros até hoje) e envia ao cliente.' : 'Quando o Integra Contador estiver ligado, aparece o botão "Puxar guia": o site busca o DAS na Receita sozinho. Até lá, use "Gerar guia" e anexe o PDF.'}</p>`;
   $$('[data-apu]').forEach((b) => b.addEventListener('click', async () => {
     const m = meses.find((x) => x.competencia === b.dataset.c);
     const base = `/apuracoes/${e.id}/${m.competencia}`;
     try {
       if (b.dataset.apu === 'pago') { await api(base + '/pago', { body: {} }); aviso('DAS marcado como pago.'); }
+      if (b.dataset.apu === 'puxar') { b.disabled = true; b.textContent = 'Buscando na Receita…'; await puxaGuia(e, m.competencia); }
       if (b.dataset.apu === 'zerada') {
         const ok = await dialogo({ titulo: `Declarar ${comp(m.competencia)} sem movimento`, sub: 'Mês sem faturamento: não há guia para pagar.',
           corpo: `<p style="margin:0 0 12px">Transmita o PGDAS-D de <b>${comp(m.competencia)}</b> com receita <b>R$ 0,00</b> e marque aqui como entregue.</p><a class="btn" href="${PORTAL_PGDAS}" target="_blank" rel="noopener">Abrir o PGDAS-D ${icone('seta')}</a>`,

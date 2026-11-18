@@ -10,6 +10,7 @@ process.env.ARQ_PORTAL = path.join(dir, 'portal.json');
 process.env.ARQ_CONTATOS = path.join(dir, 'contatos.jsonl');
 process.env.ADMIN_SENHA = 'senha-de-teste';
 process.env.CERT_CHAVE = 'chave-de-teste';
+process.env.LIMITE_API = '5000'; // o teste faz muitas chamadas seguidas
 delete process.env.FOCUS_NFE_TOKEN;
 delete process.env.ASAAS_API_KEY;
 
@@ -432,6 +433,30 @@ const notas = require('./portal/notas');
     assert.strictEqual(r.json.linha.status, 'das_disponivel');
     const guia = await fetch(base + new URL(r.json.linha.das.pdf).pathname);
     assert.strictEqual(guia.status, 200, 'guia anexada abre pelo link');
+    // Puxar guia pelo Integra Contador (SERPRO simulado): vencida sai consolidada com multa e juros
+    {
+      const integra = require('./portal/integra');
+      assert.strictEqual((await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-08/puxar`, null, admin)).status, 409, 'desligado sem chaves e certificado');
+      process.env.INTEGRA_TRIAL = '1';
+      const pedidos = [];
+      integra._setTransporte(async ({ url, body }) => {
+        pedidos.push({ url, body });
+        const dados = JSON.parse(body.pedidoDados.dados);
+        const pdf = Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.alloc(300, 32)]).toString('base64');
+        return { status: 200, json: { status: 200, mensagens: [], dados: JSON.stringify([{ pdf, cnpjCompleto: '00000000000100', detalhamentoDas: { periodoApuracao: dados.periodoApuracao, numeroDocumento: '07202600000000001', dataVencimento: '20260921', dataLimiteAcolhimento: dados.dataConsolidacao || '20260921', valores: { principal: 690, multa: 138, juros: 12.5, total: 840.5 } } }]) } };
+      });
+      assert.strictEqual((await req('GET', '/api/admin/portal/escritorio/integra', null, admin)).json.ativo, true);
+      r = await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-08/puxar`, null, admin);
+      assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+      assert.strictEqual(r.json.das.valor, 840.5, 'total com multa e juros');
+      assert.strictEqual(r.json.das.origem, 'integra');
+      assert.ok(pedidos[0].url.endsWith('/Emitir') && pedidos[0].body.pedidoDados.idServico === 'GERARDAS12');
+      assert.ok(JSON.parse(pedidos[0].body.pedidoDados.dados).dataConsolidacao, 'vencida pede consolidação');
+      assert.strictEqual((await fetch(base + new URL(r.json.das.pdf).pathname)).status, 200, 'PDF da guia puxada abre pelo link');
+      assert.strictEqual((await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-07/puxar`, null, admin)).status, 409, 'competência concluída não puxa de novo');
+      integra._setTransporte(null);
+      delete process.env.INTEGRA_TRIAL;
+    }
     r = await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-09/ajuste`, { extra: { servicos: '1.000,00' } }, admin);
     assert.strictEqual(r.json.linha.receita, 37500);
     r = await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-09/ajuste`, {}, admin);

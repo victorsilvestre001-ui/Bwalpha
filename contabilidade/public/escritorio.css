@@ -75,6 +75,11 @@ input:focus, select:focus, textarea:focus { border-color: var(--marca-2); box-sh
 .kpi b { display: block; font-size: 1.45rem; margin-top: 6px; letter-spacing: -.02em; color: var(--marca); }
 .kpi small { display: block; margin-top: 2px; }
 
+/* Barra de comandos */
+.comando { display: flex; gap: 10px; align-items: center; background: #fff; border: 1.5px solid var(--destaque); border-radius: 14px; padding: 6px 6px 6px 16px; margin-bottom: 18px; box-shadow: var(--sombra); }
+.comando > svg { color: var(--destaque); }
+.comando input { border: 0; box-shadow: none !important; padding: 10px 4px; font-size: 1rem; }
+
 /* Ferramentas da lista */
 .ferramentas { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
 .busca { position: relative; flex: 1; min-width: 240px; max-width: 420px; }
