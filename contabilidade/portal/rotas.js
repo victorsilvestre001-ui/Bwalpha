@@ -305,8 +305,18 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       if (!cnpjUtil.valido(doc)) return { status: 400, erro: 'CNPJ do cliente inválido.' };
       const e = await buscaEmpresa(doc).catch(() => null);
       Object.assign(tomador, { cnpj: doc, nome: e ? e.razaoSocial : txt(body.nome, 160), municipio: e && e.municipio, uf: e && e.uf });
+      // Endereço e telefone do cadastro da Receita, para a nota sair completa
+      const end = await obraUtil.completaEndereco(e && e.endereco ? { ...e.endereco, codigoMunicipio: e.endereco.codigoMunicipio || e.codigoIbge } : null);
+      if (end) tomador.endereco = end;
+      if (e && /^\d{10,11}$/.test(e.telefone || '')) tomador.telefone = e.telefone;
     } else if (doc.length === 11) {
       Object.assign(tomador, { cpf: doc, nome: txt(body.nome, 160) || 'Consumidor' });
+      // CPF: endereço opcional, digitado na tela (CEP e número)
+      if (body.endereco && String(body.endereco.cep || '').replace(/\D/g, '')) {
+        const end = await obraUtil.completaEndereco(body.endereco);
+        if (!end) return { status: 400, erro: 'Não achamos o endereço do cliente por este CEP. Confira o CEP ou deixe em branco.' };
+        Object.assign(tomador, { endereco: end, municipio: end.municipio || '', uf: end.uf || '' });
+      }
     } else {
       return { status: 400, erro: 'Informe o CNPJ (14 dígitos) ou CPF (11 dígitos) do cliente.' };
     }

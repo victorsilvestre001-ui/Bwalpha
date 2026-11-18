@@ -488,6 +488,23 @@ const notas = require('./portal/notas');
       for (const n of (await req('GET', `/api/admin/portal/escritorio/empresas/${idMaria}`, null, admin)).json.notas) if (n.obra && n.status === 'rascunho') await req('DELETE', `/api/admin/portal/escritorio/empresas/${idMaria}/notas/${n.id}`, null, admin);
       await req('POST', `/api/admin/portal/assinantes/${idMaria}/fiscal`, fiscalAntes, admin);
       console.log('ok obra');
+
+      // Endereço do tomador: CNPJ vem do cadastro da Receita; CPF pelo CEP digitado
+      r = await req('POST', `/api/admin/portal/escritorio/empresas/${idMaria}/notas`, { documento: '11222333000181', descricao: 'Consultoria', valor: '100' }, admin);
+      assert.deepStrictEqual(r.json.nota.tomador.endereco, { cep: '13010000', logradouro: 'RUA DAS PADARIAS', numero: '100', bairro: 'CENTRO', codigoMunicipio: '3509502' });
+      const xmlToma = nacionalT.montaDps({ ...r.json.nota, numeroDps: 9 }, { ...prest, fiscal: fiscalAntes }).xml;
+      assert.match(xmlToma, /<xNome>PADARIA PAO QUENTE LTDA<\/xNome><end><endNac><cMun>3509502<\/cMun><CEP>13010000<\/CEP><\/endNac><xLgr>RUA DAS PADARIAS<\/xLgr><nro>100<\/nro><xBairro>CENTRO<\/xBairro><\/end><fone>1932320000<\/fone><\/toma>/);
+      await req('DELETE', `/api/admin/portal/escritorio/empresas/${idMaria}/notas/${r.json.nota.id}`, null, admin);
+      r = await req('POST', `/api/admin/portal/escritorio/empresas/${idMaria}/notas`, { documento: '12345678909', nome: 'Ana', descricao: 'Aula', valor: '80', endereco: { cep: '18035-000', numero: '45' } }, admin);
+      assert.strictEqual(r.json.nota.tomador.endereco.logradouro, 'Avenida Teste');
+      assert.strictEqual(r.json.nota.tomador.municipio, 'Sorocaba');
+      await req('DELETE', `/api/admin/portal/escritorio/empresas/${idMaria}/notas/${r.json.nota.id}`, null, admin);
+      assert.strictEqual((await req('POST', `/api/admin/portal/escritorio/empresas/${idMaria}/notas`, { documento: '12345678909', nome: 'Ana', descricao: 'Aula', valor: '80', endereco: { cep: '99999-999' } }, admin)).status, 400, 'CEP que não existe');
+      r = await req('POST', `/api/admin/portal/escritorio/empresas/${idMaria}/notas`, { documento: '12345678909', nome: 'Ana', descricao: 'Aula', valor: '80' }, admin);
+      assert.strictEqual(r.json.nota.tomador.endereco, undefined, 'CPF sem endereço continua valendo');
+      assert.doesNotMatch(nacionalT.montaDps({ ...r.json.nota, numeroDps: 10 }, { ...prest, fiscal: fiscalAntes }).xml, /<toma>.*<end>/);
+      await req('DELETE', `/api/admin/portal/escritorio/empresas/${idMaria}/notas/${r.json.nota.id}`, null, admin);
+      console.log('ok endereço do tomador');
       nacional._setTransporte(null);
     }
     await new Promise((ok) => setTimeout(ok, 200));

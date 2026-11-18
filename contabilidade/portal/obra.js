@@ -26,7 +26,31 @@ async function buscaCep(cep) {
   if (c.length !== 8) return null;
   const r = await buscaExterna(c).catch(() => null);
   if (!r || r.erro) return null;
-  return { cep: c, logradouro: r.logradouro || '', bairro: r.bairro || '', municipio: r.localidade || '', uf: r.uf || '', codigoMunicipio: so(r.ibge) };
+  // CEP exclusivo de prédio: o ViaCEP traz o número no complemento (ex.: "1009")
+  const numero = /^\d{1,6}$/.test(String(r.complemento || '').trim()) ? String(r.complemento).trim() : '';
+  return { cep: c, logradouro: r.logradouro || '', bairro: r.bairro || '', municipio: r.localidade || '', uf: r.uf || '', codigoMunicipio: so(r.ibge), numero };
+}
+
+// Endereço do tomador da nota: usa o que veio (cadastro da Receita ou tela) e completa
+// rua, bairro e município pelo CEP. Devolve null se não der para montar um endereço válido.
+async function completaEndereco(dados) {
+  const d = dados || {};
+  const semNumero = !txt(d.numero, 60) || /^s\/?n$/i.test(txt(d.numero, 60));
+  const e = { cep: so(d.cep), logradouro: txt(d.logradouro, 255), numero: semNumero ? 'S/N' : txt(d.numero, 60), complemento: txt(d.complemento, 156), bairro: txt(d.bairro, 60), codigoMunicipio: so(d.codigoMunicipio) };
+  if (e.cep.length !== 8) return null;
+  if (!e.logradouro || !e.bairro || e.codigoMunicipio.length !== 7 || semNumero) {
+    const achado = await buscaCep(e.cep);
+    if (achado) {
+      if (semNumero && achado.numero) e.numero = achado.numero;
+      e.logradouro = e.logradouro || achado.logradouro;
+      e.bairro = e.bairro || achado.bairro;
+      if (e.codigoMunicipio.length !== 7) e.codigoMunicipio = achado.codigoMunicipio;
+      e.municipio = achado.municipio; e.uf = achado.uf;
+    }
+  }
+  if (!e.logradouro || !e.bairro || e.codigoMunicipio.length !== 7) return null;
+  if (!e.complemento) delete e.complemento;
+  return e;
 }
 
 // Confere e completa os dados da obra vindos da tela. Devolve { obra } ou { erro }.
@@ -58,4 +82,4 @@ async function normaliza(dados) {
   return { obra: o };
 }
 
-module.exports = { CODIGOS, exige, buscaCep, normaliza, _setBusca: (f) => { buscaExterna = f; } };
+module.exports = { CODIGOS, exige, buscaCep, normaliza, completaEndereco, _setBusca: (f) => { buscaExterna = f; } };

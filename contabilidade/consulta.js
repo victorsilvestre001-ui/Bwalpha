@@ -23,6 +23,15 @@ function simNao(v) {
   return String(v || '').toLowerCase().startsWith('s');
 }
 
+// Endereço e telefone do estabelecimento (vão no tomador da nota fiscal)
+const soNum = (v) => String(v || '').replace(/\D/g, '');
+function endereco({ tipo, logradouro, numero, complemento, bairro, cep, codigoIbge }) {
+  const lgr = [tipo, logradouro].map((x) => String(x || '').trim()).filter(Boolean).join(' ');
+  // Sem rua mas com CEP: quem usa completa a rua pelo CEP
+  if (!lgr && soNum(cep).length < 8) return null;
+  return { cep: soNum(cep).padStart(8, '0').slice(-8), logradouro: lgr, numero: String(numero || '').trim() || 'S/N', complemento: String(complemento || '').trim(), bairro: String(bairro || '').trim(), codigoMunicipio: soNum(codigoIbge) };
+}
+
 // "31/12/2026" -> "2026-12-31"
 function dataBr(d) {
   const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(d || '');
@@ -83,6 +92,8 @@ function deCnpja(d) {
     mei: !!(co.simei && co.simei.optant),
     dataExclusaoMei: null,
     socios: (co.members || []).map((x) => ({ nome: x.person && x.person.name, qualificacao: x.role && x.role.text })),
+    endereco: d.address ? endereco({ logradouro: d.address.street, numero: d.address.number, complemento: d.address.details, bairro: d.address.district, cep: d.address.zip, codigoIbge: d.address.municipality }) : null,
+    telefone: d.phones && d.phones[0] ? soNum(`${d.phones[0].area || ''}${d.phones[0].number || ''}`) : '',
     fonte: 'CNPJá',
   };
 }
@@ -110,6 +121,8 @@ function deBrasilApi(d) {
     mei: !!d.opcao_pelo_mei,
     dataExclusaoMei: d.data_exclusao_do_mei || null,
     socios: (d.qsa || []).map((s) => ({ nome: s.nome_socio, qualificacao: s.qualificacao_socio })),
+    endereco: endereco({ tipo: d.descricao_tipo_de_logradouro, logradouro: d.logradouro, numero: d.numero, complemento: d.complemento, bairro: d.bairro, cep: d.cep, codigoIbge: d.codigo_municipio_ibge }),
+    telefone: soNum(d.ddd_telefone_1),
     fonte: 'BrasilAPI',
   };
 }
@@ -139,6 +152,8 @@ function dePublicaCnpjWs(d) {
     mei: simNao(s.mei),
     dataExclusaoMei: s.data_exclusao_mei || null,
     socios: (d.socios || []).map((x) => ({ nome: x.nome, qualificacao: x.qualificacao_socio && x.qualificacao_socio.descricao })),
+    endereco: endereco({ tipo: e.tipo_logradouro, logradouro: e.logradouro, numero: e.numero, complemento: e.complemento, bairro: e.bairro, cep: e.cep, codigoIbge: e.cidade && e.cidade.ibge_id }),
+    telefone: soNum(`${e.ddd1 || ''}${e.telefone1 || ''}`),
     fonte: 'CNPJ.ws',
   };
 }
@@ -152,6 +167,7 @@ const DEMOS = {
     naturezaJuridica: '206-2 - Sociedade Empresária Limitada', porte: 'MICRO EMPRESA', capitalSocial: 50000,
     uf: 'SP', municipio: 'CAMPINAS', codigoIbge: '3509502', simples: false, dataExclusaoSimples: '2025-01-01', mei: false, dataExclusaoMei: null,
     socios: [{ nome: 'JOAO DA SILVA', qualificacao: 'Sócio-Administrador' }], fonte: 'Demonstração',
+    endereco: { cep: '13010000', logradouro: 'RUA DAS PADARIAS', numero: '100', complemento: '', bairro: 'CENTRO', codigoMunicipio: '3509502' }, telefone: '1932320000',
   },
   '12345678000195': {
     cnpj: '12345678000195', razaoSocial: 'MARIA SOUZA 12345678900', nomeFantasia: 'MARIA DOCES',

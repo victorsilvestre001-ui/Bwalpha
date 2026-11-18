@@ -234,6 +234,8 @@ async function abaNotas(mensagem) {
             <div id="camposCpf" class="grade-form" hidden>
               <label class="campo"><span>Nome do cliente</span><input id="nNome" maxlength="160" placeholder="Nome completo"></label>
               <label class="campo"><span>E-mail do cliente (opcional)</span><input id="nEmail" type="email" maxlength="160" placeholder="para receber a nota"></label>
+              <label class="campo"><span>CEP do cliente (opcional)</span><input id="tCep" inputmode="numeric" maxlength="9" placeholder="00000-000" autocomplete="off"></label>
+              <label class="campo"><span>Número</span><input id="tNum" maxlength="60" placeholder="123"></label>
             </div>
           </div>
           <div class="passo">
@@ -301,6 +303,7 @@ function preencheNota({ documento, nome, email, descricao, valor }) {
   $('#nDoc').value = mascaraDoc(documento);
   $('#nNome').value = nome || '';
   $('#nEmail').value = email || '';
+  $('#tCep').value = ''; $('#tNum').value = '';
   $('#nDesc').value = descricao || '';
   $('#nValor').value = valor ? mascaraValor(Math.round(valor * 100)) : '';
   $('#previewNota').innerHTML = '';
@@ -355,6 +358,7 @@ function buscaObra() {
 }
 
 function ligaFormNota() {
+  $('#tCep').addEventListener('input', (e) => { const c = e.target.value.replace(/\D/g, '').slice(0, 8); e.target.value = c.replace(/^(\d{5})(\d)/, '$1-$2'); });
   if ($('#oCep')) $('#oCep').addEventListener('input', (e) => { const c = e.target.value.replace(/\D/g, '').slice(0, 8); e.target.value = c.replace(/^(\d{5})(\d)/, '$1-$2'); buscaObra(); });
   $('#nDoc').addEventListener('input', (e) => { e.target.value = mascaraDoc(e.target.value); atualizaTomador(); });
   $('#nValor').addEventListener('input', (e) => { e.target.value = mascaraValor(e.target.value); });
@@ -379,7 +383,8 @@ async function geraRascunho(ev) {
   msgNota('');
   const botao = $('#btnRevisar'); botao.disabled = true;
   try {
-    const { nota } = await api('/notas', { method: 'POST', body: { documento: doc, valor: String(valor), descricao, nome: $('#nNome').value, email: $('#nEmail').value, obra } });
+    const endereco = doc.length === 11 && $('#tCep').value.replace(/\D/g, '').length === 8 ? { cep: $('#tCep').value, numero: $('#tNum').value } : undefined;
+    const { nota } = await api('/notas', { method: 'POST', body: { documento: doc, valor: String(valor), descricao, nome: $('#nNome').value, email: $('#nEmail').value, obra, endereco } });
     const u = eu.usuario;
     $('#formNota').hidden = true;
     $('#previewNota').innerHTML = `
@@ -387,7 +392,7 @@ async function geraRascunho(ev) {
         <b>Confira o pedido</b>
         <dl>
           <dt>Sua empresa</dt><dd>${esc(u.empresa ? u.empresa.razaoSocial : u.nome)} · ${docFmt(u.cnpj)}</dd>
-          <dt>Para quem</dt><dd>${esc(nota.tomador.nome || '—')} · ${docFmt(nota.tomador.cnpj || nota.tomador.cpf)}${nota.tomador.municipio ? ` · ${esc(nota.tomador.municipio)}/${esc(nota.tomador.uf)}` : ''}</dd>
+          <dt>Para quem</dt><dd>${esc(nota.tomador.nome || '—')} · ${docFmt(nota.tomador.cnpj || nota.tomador.cpf)}${nota.tomador.municipio ? ` · ${esc(nota.tomador.municipio)}/${esc(nota.tomador.uf)}` : ''}${nota.tomador.endereco ? `<br><small>${esc(nota.tomador.endereco.logradouro)}, ${esc(nota.tomador.endereco.numero)} · ${esc(nota.tomador.endereco.bairro)}</small>` : ''}</dd>
           <dt>O quê</dt><dd>${esc(nota.descricao)}</dd>
           ${nota.obra ? `<dt>Obra</dt><dd>${esc(nota.obra.logradouro)}, ${esc(nota.obra.numero)} · ${esc(nota.obra.bairro)} · ${esc(nota.obra.municipio)}/${esc(nota.obra.uf)}</dd>` : ''}
           <dt>Quanto</dt><dd class="valor">${brl(nota.valor)}</dd>

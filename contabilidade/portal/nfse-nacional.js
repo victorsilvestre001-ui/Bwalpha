@@ -89,9 +89,21 @@ function montaDps(nota, prestador, { agora = new Date(), ambiente = 1 } = {}) {
   const dh = dataHoraBrasilia(new Date(agora.getTime() - 60 * 1000)); // 1 min antes: evita "data futura" por diferença de relógio
   const op = opSimpNac(prestador.empresa);
   const t = nota.tomador || {};
+  // Endereço do tomador (sai no DANFSe): só vai completo, senão a Receita rejeita o grupo
+  const te = t.endereco;
+  const endToma = te && /^\d{8}$/.test(String(te.cep || '')) && /^\d{7}$/.test(String(te.codigoMunicipio || '')) && te.logradouro && te.bairro ? el('end', [
+    el('endNac', [el('cMun', String(te.codigoMunicipio)), el('CEP', String(te.cep))]),
+    el('xLgr', limpa(te.logradouro, 255)),
+    el('nro', limpa(te.numero || 'S/N', 60)),
+    el('xCpl', limpa(te.complemento, 156) || null),
+    el('xBairro', limpa(te.bairro, 60)),
+  ]) : '';
+  const fone = String(t.telefone || '').replace(/\D/g, '');
   const toma = t.cnpj || t.cpf ? el('toma', [
     t.cnpj ? el('CNPJ', t.cnpj) : el('CPF', t.cpf),
     el('xNome', limpa(t.nome, 300) || null),
+    endToma,
+    el('fone', fone.length >= 10 && fone.length <= 11 ? fone : null),
     el('email', limpa(t.email, 80) || null),
   ]) : '';
   // Obra (construção civil): endereço ou CNO da obra, e o ISS vai para o município da obra

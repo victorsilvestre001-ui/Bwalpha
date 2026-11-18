@@ -253,7 +253,14 @@ function abaNotas(d) {
           <div class="passo"><span class="n">1</span><div>
             <label class="campo"><span>Para quem? (CNPJ ou CPF do tomador)</span><input id="nDoc" inputmode="numeric" placeholder="00.000.000/0000-00" autocomplete="off"></label>
             <div id="nTomador" class="tomador" hidden></div>
-            <div id="nCpf" hidden><label class="campo"><span>Nome do tomador</span><input id="nNome" maxlength="160"></label></div>
+            <div id="nCpf" hidden><label class="campo"><span>Nome do tomador</span><input id="nNome" maxlength="160"></label>
+              <div class="form-obra">
+                <label class="campo"><span>CEP do cliente <small>(opcional)</small></span><input id="tCep" inputmode="numeric" placeholder="00000-000" autocomplete="off"></label>
+                <label class="campo"><span>Número</span><input id="tNum" maxlength="60" placeholder="123"></label>
+              </div>
+              <div id="tEnd" class="tomador" hidden></div>
+              <label class="campo"><span>Complemento <small>(opcional)</small></span><input id="tCpl" maxlength="156"></label>
+            </div>
             <label class="campo"><span>E-mail do tomador <small>(opcional, vai na nota)</small></span><input id="nEmail" type="email" maxlength="160" placeholder="financeiro@cliente.com.br"></label>
             <label class="check-salvar" id="nSalvarBox" hidden><input type="checkbox" id="nSalvar" checked> Salvar no cadastro de clientes desta empresa</label>
           </div></div>
@@ -320,6 +327,8 @@ function ligaFormNota(d) {
   };
   const preenche = (t) => {
     $('#nDoc').value = mascaraDoc(t.documento); $('#nNome').value = t.nome || ''; $('#nDesc').value = t.descricao || ''; $('#nEmail').value = t.email || '';
+    const en = t.endereco || {};
+    $('#tCep').value = String(en.cep || '').replace(/^(\d{5})(\d)/, '$1-$2'); $('#tNum').value = en.numero || ''; $('#tCpl').value = en.complemento || ''; $('#tEnd').hidden = true;
     $('#nValor').value = t.valor ? mascaraValor(Math.round(t.valor * 100)) : ''; atualiza(); (t.valor ? $('#nDesc') : $('#nValor')).focus();
   };
   $('#nDoc').addEventListener('input', (ev) => { ev.target.value = mascaraDoc(ev.target.value); atualiza(); });
@@ -358,6 +367,19 @@ function ligaFormNota(d) {
     box.innerHTML = `${icone('check')}<span><b>${esc(obraAchada.logradouro || 'Rua não informada pelo CEP')}</b><br><small>${esc([obraAchada.bairro, `${obraAchada.municipio}/${obraAchada.uf}`].filter(Boolean).join(' · '))}</small></span>`;
     $('#oManual').hidden = !!(obraAchada.logradouro && obraAchada.bairro);
   };
+  // Endereço do cliente com CPF (opcional): rua e bairro vêm pelo CEP
+  let tTimer;
+  $('#tCep').addEventListener('input', (ev) => {
+    const c = ev.target.value.replace(/\D/g, '').slice(0, 8);
+    ev.target.value = c.replace(/^(\d{5})(\d)/, '$1-$2');
+    const box = $('#tEnd');
+    clearTimeout(tTimer);
+    if (c.length !== 8) { box.hidden = true; return; }
+    box.hidden = false; box.className = 'tomador carregando'; box.textContent = 'Buscando o endereço…';
+    tTimer = setTimeout(async () => {
+      try { const a = await api('/escritorio/cep/' + c); box.className = 'tomador ok'; box.innerHTML = `${icone('check')}<span><b>${esc(a.logradouro || 'Endereço do CEP')}</b><br><small>${esc([a.bairro, `${a.municipio}/${a.uf}`].filter(Boolean).join(' · '))}</small></span>`; $('#tNum').focus(); } catch (err) { box.className = 'tomador erro'; box.textContent = err.message; }
+    }, 250);
+  });
   if (e.exigeObra) {
     let tCep;
     $('#oCep').addEventListener('input', (ev) => {
@@ -372,7 +394,7 @@ function ligaFormNota(d) {
       }, 250);
     });
   }
-  $$('[data-repetir]').forEach((b) => b.addEventListener('click', () => { const n = d.notas.find((x) => x.id === b.dataset.repetir); preenche({ documento: n.tomador.cnpj || n.tomador.cpf, nome: n.tomador.nome, descricao: n.descricao, valor: n.valor }); preencheObra(n.obra); window.scrollTo({ top: 0, behavior: 'smooth' }); }));
+  $$('[data-repetir]').forEach((b) => b.addEventListener('click', () => { const n = d.notas.find((x) => x.id === b.dataset.repetir); preenche({ documento: n.tomador.cnpj || n.tomador.cpf, nome: n.tomador.nome, email: n.tomador.email, descricao: n.descricao, valor: n.valor, endereco: n.tomador.cpf ? n.tomador.endereco : null }); preencheObra(n.obra); window.scrollTo({ top: 0, behavior: 'smooth' }); }));
   $$('[data-cancelar]').forEach((b) => b.addEventListener('click', () => cancelaNota(e, d.notas.find((x) => x.id === b.dataset.cancelar))));
   $('#formNota').addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -389,12 +411,13 @@ function ligaFormNota(d) {
     }
     msg('');
     let rasc;
-    try { rasc = (await api(`/escritorio/empresas/${e.id}/notas`, { body: { documento: c, valor: String(numValor($('#nValor').value)), descricao: $('#nDesc').value, nome: $('#nNome').value, email: $('#nEmail').value, obra, salvarCliente: !$('#nSalvarBox').hidden && $('#nSalvar').checked } })).nota; } catch (err) { return msg(err.message); }
+    const endereco = c.length === 11 && $('#tCep').value.replace(/\D/g, '').length === 8 ? { cep: $('#tCep').value, numero: $('#tNum').value, complemento: $('#tCpl').value } : undefined;
+    try { rasc = (await api(`/escritorio/empresas/${e.id}/notas`, { body: { documento: c, valor: String(numValor($('#nValor').value)), descricao: $('#nDesc').value, nome: $('#nNome').value, email: $('#nEmail').value, obra, endereco, salvarCliente: !$('#nSalvarBox').hidden && $('#nSalvar').checked } })).nota; } catch (err) { return msg(err.message); }
     const destino = { producao: 'A nota será emitida <b>agora</b> na Receita, com valor fiscal.', homologacao: 'A nota irá para a <b>homologação</b> da Receita (teste, sem valor fiscal).' }[e.emissao] || 'O pedido irá para a <b>fila da equipe</b>, para emissão no Emissor Nacional.';
     const r = await dialogo({
       titulo: 'Conferir nota fiscal', sub: destino,
       corpo: `<dl class="confere"><dt>Prestador</dt><dd><b>${esc(e.nome)}</b><br><small>${doc(e.cnpj)}</small></dd>
-        <dt>Tomador</dt><dd><b>${esc(rasc.tomador.nome || '—')}</b><br><small>${doc(rasc.tomador.cnpj || rasc.tomador.cpf)}${rasc.tomador.municipio ? ` · ${esc(rasc.tomador.municipio)}/${esc(rasc.tomador.uf)}` : ''}</small></dd>
+        <dt>Tomador</dt><dd><b>${esc(rasc.tomador.nome || '—')}</b><br><small>${doc(rasc.tomador.cnpj || rasc.tomador.cpf)}${rasc.tomador.municipio ? ` · ${esc(rasc.tomador.municipio)}/${esc(rasc.tomador.uf)}` : ''}</small>${rasc.tomador.endereco ? `<br><small>${esc(rasc.tomador.endereco.logradouro)}, ${esc(rasc.tomador.endereco.numero)}${rasc.tomador.endereco.complemento ? ` · ${esc(rasc.tomador.endereco.complemento)}` : ''} · ${esc(rasc.tomador.endereco.bairro)} · CEP ${esc(rasc.tomador.endereco.cep.replace(/^(\d{5})/, '$1-'))}</small>` : '<br><small style="color:var(--atencao)">Sem endereço do tomador na nota</small>'}</dd>
         <dt>Serviço</dt><dd>${esc(rasc.descricao)}</dd>
         ${rasc.obra ? `<dt>Obra</dt><dd>${esc(rasc.obra.logradouro)}, ${esc(rasc.obra.numero)}${rasc.obra.complemento ? ` · ${esc(rasc.obra.complemento)}` : ''}<br><small>${esc(rasc.obra.bairro)} · ${esc(rasc.obra.municipio)}/${esc(rasc.obra.uf)}${rasc.obra.cno ? ` · CNO ${esc(rasc.obra.cno)}` : ''}</small>${rasc.obra.codigoMunicipio !== String(e.fiscal.codigoMunicipio) ? '<br><small style="color:var(--atencao)">ISS devido no município da obra</small>' : ''}</dd>` : ''}
         <dt>Valor</dt><dd class="valor">${brl(rasc.valor)}</dd></dl>`,
