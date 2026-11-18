@@ -372,7 +372,11 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (n.via === 'nacional' && n.chaveAcesso) {
       const cert = certificado.carrega(u.id);
       if (!cert) return { status: 409, erro: 'O certificado da empresa não está conectado.' };
-      try { return { nota: db.atualiza('notas', n.id, { ...(await nacional.cancela(n, u, j, cert, opcoesAmb(n.ambiente))), cancelamentoPedido: j }) }; } catch (err) { return { status: 502, erro: err.message }; }
+      try { return { nota: db.atualiza('notas', n.id, { ...(await nacional.cancela(n, u, j, cert, opcoesAmb(n.ambiente))), cancelamentoPedido: j }) }; } catch (err) {
+        // E0840: a nota já foi cancelada na Receita (ex.: direto no Emissor Nacional). Só acerta aqui.
+        if (/E0840/.test(err.message)) return { nota: db.atualiza('notas', n.id, { status: 'cancelada', canceladaEm: new Date().toISOString(), cancelamentoPedido: j, obsCancelamento: 'Já estava cancelada na Receita' }) };
+        return { status: 502, erro: err.message };
+      }
     }
     if (!notas.ativo()) return { nota: db.atualiza('notas', n.id, { cancelamentoPedido: j }) };
     try { return { nota: db.atualiza('notas', n.id, await notas.cancela(n, j)) }; } catch (err) { return { status: 502, erro: err.message }; }

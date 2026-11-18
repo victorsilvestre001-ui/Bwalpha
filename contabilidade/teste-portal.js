@@ -402,6 +402,11 @@ const notas = require('./portal/notas');
       const retomada = (await req('GET', '/api/portal/notas')).json.notas.find((x) => x.id === r.json.nota.id);
       assert.strictEqual(retomada.status, 'emitida', 'retomada pela DPS');
       assert.match(retomada.pdf, /ConsultaPublica/, 'sem DANFSe, cai no link da consulta pública');
+      // Já cancelada direto na Receita (E0840): o site só acerta a situação
+      nacional._setTransporte(async ({ url }) => (url.endsWith('/eventos') ? { status: 400, json: { erros: [{ Codigo: 'E0840', Descricao: 'o evento de Cancelamento de NFS-e já está vinculado à NFS-e' }] } } : { status: 404, json: {} }));
+      r = await req('POST', `/api/portal/notas/${retomada.id}/cancelar`, { justificativa: 'Dados incorretos da nota fiscal' });
+      assert.strictEqual(r.json.nota && r.json.nota.status, 'cancelada', JSON.stringify(r.json));
+      require('./portal/db').atualiza('notas', retomada.id, { status: 'emitida' }); // o resto do teste usa esta nota
       // Emissão escolhida por empresa no /admin (sem a variável geral): homologação + nota de teste
       delete process.env.NFSE_NACIONAL;
       const idMaria = (await req('GET', '/api/admin/portal/assinantes', null, admin)).json.assinantes.find((x) => x.cnpj === '12345678000195').id;
