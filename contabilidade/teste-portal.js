@@ -280,6 +280,12 @@ const notas = require('./portal/notas');
       const dps = nacional.desgz64(enviados[0].body.dpsXmlGZipB64);
       assert.ok(dps.includes('<nDPS>5</nDPS>') && dps.includes('<cTribNac>010701</cTribNac>') && dps.includes('<cLocEmi>3552205</cLocEmi>'));
       assert.ok(dps.includes('gestão &amp; processos'), 'texto escapado');
+      const opSn = dps.match(/<opSimpNac>(\d)<\/opSimpNac>/)[1];
+      if (opSn === '3') assert.ok(dps.includes('<totTrib><pTotTribSN>6.00</pTotTribSN></totTrib>') && !dps.includes('indTotTrib'), 'ME/EPP do Simples informa pTotTribSN (rejeição E0712)');
+      else assert.ok(dps.includes('<totTrib><indTotTrib>0</indTotTrib></totTrib>'), `opSimpNac ${opSn} usa indTotTrib`);
+      // ME/EPP sempre com pTotTribSN, na alíquota configurada
+      const dpsEpp = nacional.montaDps({ numeroDps: 1, descricao: 'x', valor: 10, tomador: {} }, { cnpj: '12345678000195', fiscal: { codigoMunicipio: '3534401', codigoServico: '140101', aliquotaSN: 11.2 }, empresa: { simples: true } }).xml;
+      assert.ok(dpsEpp.includes('<pTotTribSN>11.20</pTotTribSN>'));
       const inf = dps.match(/<infDPS[\s\S]*<\/infDPS>/)[0].replace('<infDPS Id=', '<infDPS xmlns="http://www.sped.fazenda.gov.br/nfse" Id=');
       assert.strictEqual(crypto.createHash('sha256').update(inf).digest('base64'), dps.match(/<DigestValue>([^<]+)</)[1]);
       const certPem = `-----BEGIN CERTIFICATE-----\n${dps.match(/<X509Certificate>([^<]+)</)[1]}\n-----END CERTIFICATE-----`;

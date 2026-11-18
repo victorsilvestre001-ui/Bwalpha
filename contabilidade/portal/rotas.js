@@ -115,6 +115,11 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       serieDps: Number(body.serieDps) || 1,
       regimeEspecial: Number(body.regimeEspecial) || 0,
     };
+    if (body.aliquotaSN !== undefined && body.aliquotaSN !== '') {
+      const a = Math.round(Number(String(body.aliquotaSN).replace(',', '.')) * 100) / 100;
+      if (!(a > 0 && a < 100)) return res.status(400).json({ erro: 'Alíquota do Simples: informe o percentual, ex.: 6 ou 11,2.' });
+      f.aliquotaSN = a;
+    }
     if (contador && body.emissao !== undefined) {
       if (!['desligada', 'homologacao', 'producao'].includes(body.emissao)) return res.status(400).json({ erro: 'Emissão automática: use desligada, homologacao ou producao.' });
       f.emissao = body.emissao;

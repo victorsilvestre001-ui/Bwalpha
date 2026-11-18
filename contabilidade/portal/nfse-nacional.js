@@ -58,6 +58,13 @@ function dataHoraBrasilia(d) {
   return local.toISOString().slice(0, 19) + '-03:00';
 }
 
+// % aproximado dos tributos do Simples para a nota (padrão 6,00%: 1ª faixa do Anexo III)
+function pctSimples(v) {
+  const n = Math.round(Number(String(v == null || v === '' ? '6' : v).replace(',', '.')) * 100) / 100;
+  if (!(n > 0 && n < 100)) throw new ErroNfse('Alíquota do Simples inválida nos Dados da nota (use um valor entre 0,01 e 99,99).');
+  return n.toFixed(2);
+}
+
 function idDps({ codigoMunicipio, cnpj, serie, numero }) {
   return `DPS${String(codigoMunicipio).padStart(7, '0')}2${String(cnpj).padStart(14, '0')}${String(serie).padStart(5, '0')}${String(numero).padStart(15, '0')}`;
 }
@@ -117,7 +124,9 @@ function montaDps(nota, prestador, { agora = new Date(), ambiente = 1 } = {}) {
       el('vServPrest', [el('vServ', dec2(nota.valor))]),
       el('trib', [
         el('tribMun', [el('tribISSQN', '1'), el('tpRetISSQN', '1')]),
-        el('totTrib', [el('indTotTrib', '0')]),
+        // ME/EPP do Simples (opSimpNac 3) não pode usar indTotTrib (rejeição E0712): informa o % aproximado
+        // dos tributos pela alíquota do Simples (pTotTribSN). MEI e não optantes usam indTotTrib=0.
+        el('totTrib', [op === 3 ? el('pTotTribSN', pctSimples(f.aliquotaSN)) : el('indTotTrib', '0')]),
       ]),
     ]),
   ].join('');
