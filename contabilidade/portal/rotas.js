@@ -249,26 +249,65 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     res.json({ cnpj: doc, nome: e.razaoSocial, fantasia: e.nomeFantasia || '', municipio: e.municipio || '', uf: e.uf || '', situacao: e.situacao || '' });
   });
 
+  // ---- Regras comuns (cliente na Área do Cliente e contador no painel do escritório) ----
+  // Rascunho a partir de CNPJ/CPF, descrição e valor, com os dados do tomador já preenchidos.
+  // Devolve { nota } ou { status, erro }.
+  async function criaRascunho(u, body) {
+    const doc = String(body.documento || '').replace(/\D/g, '');
+    const descricao = txt(body.descricao, 2000);
+    const valor = dinheiro(body.valor);
+    if (!descricao || !(valor > 0)) return { status: 400, erro: 'Informe a descrição do serviço e o valor.' };
+    const tomador = { email: txt(body.email, 160) };
+    if (doc.length === 14) {
+      if (!cnpjUtil.valido(doc)) return { status: 400, erro: 'CNPJ do cliente inválido.' };
+      const e = await buscaEmpresa(doc).catch(() => null);
+      Object.assign(tomador, { cnpj: doc, nome: e ? e.razaoSocial : txt(body.nome, 160), municipio: e && e.municipio, uf: e && e.uf });
+    } else if (doc.length === 11) {
+      Object.assign(tomador, { cpf: doc, nome: txt(body.nome, 160) || 'Consumidor' });
+    } else {
+      return { status: 400, erro: 'Informe o CNPJ (14 dígitos) ou CPF (11 dígitos) do cliente.' };
+    }
+    return { nota: db.insere('notas', { usuarioId: u.id, status: 'rascunho', tomador, descricao, valor, ...(body.pedidoPor ? { pedidoPor: body.pedidoPor } : {}) }) };
+  }
+
+  // Envia um rascunho: direto na Receita (NFS-e Nacional), pela Focus ou para a fila da equipe
+  async function enviaNota(u, n) {
+    const agora = new Date().toISOString();
+    if (usaNacional(u)) return emiteNacional(u, n, agora);
+    if (notas.ativo() && notas.configFiscalCompleta(u)) {
+      const numeroDps = u.proximoDps || 1;
+      db.atualiza('usuarios', u.id, { proximoDps: numeroDps + 1 });
+      try {
+        const r2 = await notas.emite({ ...n, numeroDps }, u);
+        return db.atualiza('notas', n.id, { ...r2, numeroDps, enviadaEm: agora });
+      } catch (err) {
+        return db.atualiza('notas', n.id, { status: 'erro', erro: err.message, numeroDps, enviadaEm: agora });
+      }
+    }
+    // Sem integração ativa: entra na fila da equipe V&J, que emite e anexa o PDF
+    return db.atualiza('notas', n.id, { status: 'fila', enviadaEm: agora });
+  }
+
+  // Cancela uma nota emitida. Devolve { nota } ou { status, erro }.
+  async function cancelaNota(u, n, justificativa) {
+    if (!n || n.status !== 'emitida') return { status: 404, erro: 'Nota emitida não encontrada.' };
+    const j = txt(justificativa, 255);
+    if (j.length < 15) return { status: 400, erro: 'Explique o motivo do cancelamento (mínimo 15 caracteres).' };
+    if (n.via === 'nacional' && n.chaveAcesso) {
+      const cert = certificado.carrega(u.id);
+      if (!cert) return { status: 409, erro: 'O certificado da empresa não está conectado.' };
+      try { return { nota: db.atualiza('notas', n.id, { ...(await nacional.cancela(n, u, j, cert, opcoesAmb(n.ambiente))), cancelamentoPedido: j }) }; } catch (err) { return { status: 502, erro: err.message }; }
+    }
+    if (!notas.ativo()) return { nota: db.atualiza('notas', n.id, { cancelamentoPedido: j }) };
+    try { return { nota: db.atualiza('notas', n.id, await notas.cancela(n, j)) }; } catch (err) { return { status: 502, erro: err.message }; }
+  }
+  const responde2 = (res, r) => (r.erro ? res.status(r.status || 400).json({ erro: r.erro }) : res.json(r));
+
   // Passo 1: só CNPJ (ou CPF), descrição e valor -> rascunho com os dados do tomador já preenchidos
   r.post('/notas', auth.exigePlano, async (req, res) => {
     const plano = planoDo(req.usuario);
     if (!plano.notasMes) return res.status(402).json({ erro: `A emissão de notas faz parte do plano ${planos().find((p) => p.notasMes)?.nome || 'Completo'}.` });
-    const doc = String(req.body.documento || '').replace(/\D/g, '');
-    const descricao = txt(req.body.descricao, 2000);
-    const valor = dinheiro(req.body.valor);
-    if (!descricao || !(valor > 0)) return res.status(400).json({ erro: 'Informe a descrição do serviço e o valor.' });
-    const tomador = { email: txt(req.body.email, 160) };
-    if (doc.length === 14) {
-      if (!cnpjUtil.valido(doc)) return res.status(400).json({ erro: 'CNPJ do cliente inválido.' });
-      const e = await buscaEmpresa(doc).catch(() => null);
-      Object.assign(tomador, { cnpj: doc, nome: e ? e.razaoSocial : txt(req.body.nome, 160), municipio: e && e.municipio, uf: e && e.uf });
-    } else if (doc.length === 11) {
-      Object.assign(tomador, { cpf: doc, nome: txt(req.body.nome, 160) || 'Consumidor' });
-    } else {
-      return res.status(400).json({ erro: 'Informe o CNPJ (14 dígitos) ou CPF (11 dígitos) do cliente.' });
-    }
-    const n = db.insere('notas', { usuarioId: req.usuario.id, status: 'rascunho', tomador, descricao, valor });
-    res.json({ nota: n });
+    responde2(res, await criaRascunho(req.usuario, req.body || {}));
   });
 
   // Passo 2: o assinante confere e confirma; só então a nota é enviada
@@ -277,21 +316,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (!n || n.status !== 'rascunho') return res.status(404).json({ erro: 'Rascunho não encontrado.' });
     const plano = planoDo(req.usuario);
     if (usadasNoMes(req.usuario) >= (plano.notasMes || 0)) return res.status(402).json({ erro: `Você já usou as ${plano.notasMes} notas do mês. Fale conosco para ampliar.` });
-    const u = req.usuario;
-    const agora = new Date().toISOString();
-    if (usaNacional(u)) return res.json({ nota: await emiteNacional(u, n, agora) });
-    if (notas.ativo() && notas.configFiscalCompleta(u)) {
-      const numeroDps = u.proximoDps || 1;
-      db.atualiza('usuarios', u.id, { proximoDps: numeroDps + 1 });
-      try {
-        const r2 = await notas.emite({ ...n, numeroDps }, u);
-        return res.json({ nota: db.atualiza('notas', n.id, { ...r2, numeroDps, enviadaEm: agora }) });
-      } catch (err) {
-        return res.json({ nota: db.atualiza('notas', n.id, { status: 'erro', erro: err.message, numeroDps, enviadaEm: agora }) });
-      }
-    }
-    // Sem integração ativa: entra na fila da equipe V&J, que emite e anexa o PDF pelo /admin
-    res.json({ nota: db.atualiza('notas', n.id, { status: 'fila', enviadaEm: agora }) });
+    res.json({ nota: await enviaNota(req.usuario, n) });
   });
 
   r.delete('/notas/:id', auth.exigePlano, (req, res) => {
@@ -301,20 +326,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
 
   r.post('/notas/:id/cancelar', auth.exigePlano, async (req, res) => {
     const n = db.acha('notas', (x) => x.id === req.params.id && x.usuarioId === req.usuario.id);
-    if (!n || n.status !== 'emitida') return res.status(404).json({ erro: 'Nota emitida não encontrada.' });
-    const justificativa = txt(req.body.justificativa, 255);
-    if (justificativa.length < 15) return res.status(400).json({ erro: 'Explique o motivo do cancelamento (mínimo 15 caracteres).' });
-    if (n.via === 'nacional' && n.chaveAcesso) {
-      const cert = certificado.carrega(req.usuario.id);
-      if (!cert) return res.status(409).json({ erro: 'O certificado da empresa não está conectado. Fale com a equipe V&J.' });
-      try { return res.json({ nota: db.atualiza('notas', n.id, { ...(await nacional.cancela(n, req.usuario, justificativa, cert, opcoesAmb(n.ambiente))), cancelamentoPedido: justificativa }) }); } catch (err) { return res.status(502).json({ erro: err.message }); }
-    }
-    if (!notas.ativo()) return res.json({ nota: db.atualiza('notas', n.id, { cancelamentoPedido: justificativa }) });
-    try {
-      res.json({ nota: db.atualiza('notas', n.id, await notas.cancela(n, justificativa)) });
-    } catch (err) {
-      res.status(502).json({ erro: err.message });
-    }
+    responde2(res, await cancelaNota(req.usuario, n, req.body && req.body.justificativa));
   });
 
   // ---------- Orçamentos ----------
@@ -450,6 +462,77 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     return u;
   };
   admin.post('/assinantes/:id/fiscal', express.json(), (req, res) => { const u = empresaDe(req, res); if (u) salvaFiscal(u, req.body || {}, res, { contador: true }); });
+  // ---------- Painel do escritório (/escritorio): empresas -> notas fiscais e PGDAS-D ----------
+  function resumoEmpresa(u) {
+    const c = u.certificado || {};
+    const mes = new Date().toISOString().slice(0, 7);
+    const doMes = db.lista('notas', (n) => n.usuarioId === u.id && !n.teste && n.status !== 'rascunho' && (n.enviadaEm || '').startsWith(mes));
+    const ultimoTeste = db.lista('notas', (n) => n.usuarioId === u.id && n.teste).sort((a, b) => (b.enviadaEm || '').localeCompare(a.enviadaEm || ''))[0];
+    let das = null;
+    if (doSimples(u)) { try { das = apuracao.painel(u, { quantas: 1 })[0] || null; } catch { das = null; } }
+    return {
+      id: u.id, nome: (u.empresa && u.empresa.razaoSocial) || u.nome, fantasia: (u.empresa && u.empresa.nomeFantasia) || '', cnpj: u.cnpj,
+      municipio: (u.empresa && u.empresa.municipio) || '', uf: (u.empresa && u.empresa.uf) || '', telefone: u.telefone || '', email: u.email || '',
+      regime: u.empresa ? (u.empresa.mei ? 'MEI' : u.empresa.simples ? 'Simples Nacional' : (u.empresa.regime || 'Outro')) : '—',
+      situacao: (u.empresa && u.empresa.situacao) || '', gerenciado: !!u.gerenciado, dono: auth.ehDono(u),
+      certificado: c.ativo ? { ativo: true, validoAte: c.validoAte, titular: c.titular } : { ativo: false },
+      fiscal: u.fiscal || {}, proximoDps: u.proximoDps || 1, emissao: ambienteDe(u), fiscalOk: notas.configFiscalCompleta(u),
+      notasMes: { quantidade: doMes.filter((n) => n.status !== 'erro').length, valor: doMes.filter((n) => ['emitida', 'fila', 'processando'].includes(n.status)).reduce((t, n) => t + n.valor, 0) },
+      pendentes: db.lista('notas', (n) => n.usuarioId === u.id && ['fila', 'erro'].includes(n.status) && !n.teste).length,
+      das: das && { competencia: das.competencia, valor: das.das ? das.das.valor : das.valor, status: das.status, vencimento: (das.das && das.das.vencimento) || das.vencimento },
+      ultimoTeste: ultimoTeste && { status: ultimoTeste.status, numero: ultimoTeste.numero || '', chaveAcesso: ultimoTeste.chaveAcesso || '', pdf: ultimoTeste.pdf || '', erro: ultimoTeste.erro || '', enviadaEm: ultimoTeste.enviadaEm },
+    };
+  }
+  const empresasEscritorio = () => db.lista('usuarios', (u) => u.cnpj && !auth.ehDono(u));
+  admin.get('/escritorio/empresas', (req, res) => {
+    res.json({ empresas: empresasEscritorio().map(resumoEmpresa).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')) });
+  });
+  admin.get('/escritorio/empresas/:id', async (req, res) => {
+    let u = empresaDe(req, res);
+    if (!u) return;
+    await atualizaProcessando(u).catch(() => {});
+    u = await garanteAbertura(db.acha('usuarios', (x) => x.id === u.id));
+    const lista = minhasNotas(u).filter((n) => n.status !== 'rascunho' && !n.teste);
+    res.json({
+      empresa: resumoEmpresa(u), notas: lista, tomadores: tomadoresFrequentes(u),
+      apuracao: doSimples(u) ? { anexos: apuracao.anexosDa(u), meses: apuracao.painel(u, { quantas: 12 }) } : null,
+    });
+  });
+  admin.get('/escritorio/tomador/:doc', async (req, res) => {
+    const doc = String(req.params.doc || '').replace(/\D/g, '');
+    if (doc.length !== 14 || !cnpjUtil.valido(doc)) return res.status(400).json({ erro: 'CNPJ inválido. Confira os números.' });
+    const e = await buscaEmpresa(doc).catch(() => null);
+    if (!e) return res.status(404).json({ erro: 'CNPJ não encontrado na Receita.' });
+    res.json({ cnpj: doc, nome: e.razaoSocial, fantasia: e.nomeFantasia || '', municipio: e.municipio || '', uf: e.uf || '', situacao: e.situacao || '' });
+  });
+  admin.post('/escritorio/empresas/:id/notas', express.json(), async (req, res) => {
+    const u = empresaDe(req, res);
+    if (u) responde2(res, await criaRascunho(u, { ...(req.body || {}), pedidoPor: 'escritorio' }));
+  });
+  const notaDaEmpresa = (req, res) => {
+    const u = empresaDe(req, res);
+    if (!u) return [];
+    const n = db.acha('notas', (x) => x.id === req.params.nid && x.usuarioId === u.id);
+    if (!n) { res.status(404).json({ erro: 'Nota não encontrada.' }); return []; }
+    return [u, n];
+  };
+  admin.post('/escritorio/empresas/:id/notas/:nid/emitir', async (req, res) => {
+    const [u, n] = notaDaEmpresa(req, res);
+    if (!u) return;
+    if (n.status !== 'rascunho') return res.status(409).json({ erro: 'Esta nota já foi enviada.' });
+    res.json({ nota: await enviaNota(u, n) });
+  });
+  admin.delete('/escritorio/empresas/:id/notas/:nid', (req, res) => {
+    const [u, n] = notaDaEmpresa(req, res);
+    if (!u) return;
+    if (n.status === 'rascunho') db.remove('notas', (x) => x.id === n.id);
+    res.json({ ok: true });
+  });
+  admin.post('/escritorio/empresas/:id/notas/:nid/cancelar', express.json(), async (req, res) => {
+    const [u, n] = notaDaEmpresa(req, res);
+    if (u) responde2(res, await cancelaNota(u, n, req.body && req.body.justificativa));
+  });
+
   // Nota de R$ 1,00 na produção restrita (homologação), com o certificado já conectado, para conferir a integração
   admin.post('/assinantes/:id/nota-teste', async (req, res) => {
     const u = empresaDe(req, res);
