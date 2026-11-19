@@ -545,6 +545,23 @@ const notas = require('./portal/notas');
       assert.strictEqual((await req('POST', `/api/admin/portal/assinantes/${idMaria}/fiscal`, { ...fiscalAntes, pTribFed: '11,33', pTribMun: '3' }, admin)).json.usuario.fiscal.pTribMun, 3);
       assert.strictEqual((await req('POST', `/api/admin/portal/assinantes/${idMaria}/fiscal`, { ...fiscalAntes, pTribFed: '150' }, admin)).status, 400);
       console.log('ok não optante');
+
+      // Reforma tributária: grupo IBS/CBS no fim da DPS (fora do Simples já; Simples só em 2027)
+      assert.match(xmlNO, /<\/valores><IBSCBS><finNFSe>0<\/finNFSe><cIndOp>100301<\/cIndOp><indDest>0<\/indDest><valores><trib><gIBSCBS><CST>000<\/CST><cClassTrib>000001<\/cClassTrib><\/gIBSCBS><\/trib><\/valores><\/IBSCBS><\/infDPS>/);
+      const xmlSN = nacionalT.montaDps(notaNO, { ...prest, fiscal: fiscalAntes, empresa: { simples: true } }, { agora: new Date('2026-11-18T15:00:00Z') }).xml;
+      assert.doesNotMatch(xmlSN, /IBSCBS/, 'Simples em 2026 ainda não manda');
+      assert.match(nacionalT.montaDps(notaNO, { ...prest, fiscal: fiscalAntes, empresa: { simples: true } }, { agora: new Date('2027-01-05T15:00:00Z') }).xml, /<IBSCBS>/, 'Simples a partir de 2027');
+      assert.match(nacionalT.montaDps(notaNO, { ...prest, fiscal: { ...fiscalAntes, ibscbs: 'sempre' }, empresa: { simples: true } }).xml, /<IBSCBS>/);
+      assert.doesNotMatch(nacionalT.montaDps(notaNO, { ...prest, fiscal: { ...fiscalAntes, ibscbs: 'nunca' }, empresa: { simples: false } }).xml, /IBSCBS/);
+      assert.match(nacionalT.montaDps({ ...notaNO, obra: { cep: '18035000', logradouro: 'R', numero: '1', bairro: 'B', codigoMunicipio: '3552205' } }, { ...prest, fiscal: { ...fiscalAntes, codigoServico: '070202' }, empresa: { simples: false } }).xml, /<cIndOp>020201<\/cIndOp>/, 'obra: local do imóvel');
+      assert.match(nacionalT.montaDps(notaNO, { ...prest, fiscal: { ...fiscalAntes, codigoServico: '140101' }, empresa: { simples: false } }).xml, /<cIndOp>050101<\/cIndOp>/);
+      const xmlHom = nacionalT.montaDps(notaNO, { ...prest, fiscal: fiscalAntes, empresa: { simples: false } }, { ambiente: 2 }).xml;
+      assert.strictEqual((xmlHom.match(/<finNFSe>/g) || []).length, 1, 'finNFSe só dentro do IBSCBS');
+      assert.strictEqual((await req('POST', `/api/admin/portal/assinantes/${idMaria}/fiscal`, { ...fiscalAntes, ibscbs: 'talvez' }, admin)).status, 400);
+      r = await req('POST', `/api/admin/portal/assinantes/${idMaria}/fiscal`, { ...fiscalAntes, ibscbs: 'sempre', cIndOp: '030101' }, admin);
+      assert.deepStrictEqual([r.json.usuario.fiscal.ibscbs, r.json.usuario.fiscal.cIndOp], ['sempre', '030101']);
+      await req('POST', `/api/admin/portal/assinantes/${idMaria}/fiscal`, { ...fiscalAntes, ibscbs: 'auto', cIndOp: '' }, admin);
+      console.log('ok IBS/CBS');
       nacional._setTransporte(null);
     }
     await new Promise((ok) => setTimeout(ok, 200));

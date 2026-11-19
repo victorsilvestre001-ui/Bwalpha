@@ -15,6 +15,16 @@ const zlib = require('zlib');
 const crypto = require('crypto');
 const forge = require('node-forge');
 const { exige: exigeObra } = require('./obra');
+const { indOpServico } = require('./servicos');
+
+// Grupo IBS/CBS (reforma tributária, NT 004/009 da NFS-e): fora do Simples já vai; no Simples só é
+// obrigatório a partir de 2027. fiscal.ibscbs: 'auto' (padrão), 'sempre' ou 'nunca'.
+function incluiIbsCbs(f, op, dataCompet) {
+  const modo = f.ibscbs || 'auto';
+  if (modo === 'nunca') return false;
+  if (modo === 'sempre') return true;
+  return op === 1 || String(dataCompet) >= '2027-01-01';
+}
 
 const NS = 'http://www.sped.fazenda.gov.br/nfse';
 const NS_DS = 'http://www.w3.org/2000/09/xmldsig#';
@@ -135,7 +145,8 @@ function montaDps(nota, prestador, { agora = new Date(), ambiente = 1 } = {}) {
     el('nDPS', numero),
     el('dCompet', dh.slice(0, 10)),
     el('tpEmit', '1'),
-    ambiente === 2 ? el('finNFSe', '0') : '', // só existe no leiaute da produção restrita (RTC)
+    // Leiaute antigo da produção restrita pedia finNFSe aqui; com o grupo IBSCBS ela vai dentro dele
+    ambiente === 2 && !incluiIbsCbs(f, op, dh.slice(0, 10)) ? el('finNFSe', '0') : '',
     el('cLocEmi', String(f.codigoMunicipio)),
     el('prest', [
       el('CNPJ', prestador.cnpj),
@@ -168,6 +179,13 @@ function montaDps(nota, prestador, { agora = new Date(), ambiente = 1 } = {}) {
             : el('indTotTrib', '0')]),
       ]),
     ]),
+    // IBS/CBS declarado: tributação integral (CST 000 / cClassTrib 000001); a Receita calcula os valores
+    incluiIbsCbs(f, op, dh.slice(0, 10)) ? el('IBSCBS', [
+      el('finNFSe', '0'),
+      el('cIndOp', /^\d{6}$/.test(String(f.cIndOp || '')) ? String(f.cIndOp) : indOpServico(f.codigoServico)),
+      el('indDest', '0'),
+      el('valores', [el('trib', [el('gIBSCBS', [el('CST', /^\d{3}$/.test(String(f.cstIbsCbs || '')) ? String(f.cstIbsCbs) : '000'), el('cClassTrib', /^\d{6}$/.test(String(f.cClassTrib || '')) ? String(f.cClassTrib) : '000001')])])]),
+    ]) : '',
   ].join('');
   return { id, xml: `<DPS xmlns="${NS}" versao="${VERSAO}"><infDPS Id="${id}">${infDps}</infDPS></DPS>` };
 }

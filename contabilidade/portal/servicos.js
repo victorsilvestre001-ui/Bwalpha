@@ -86,4 +86,26 @@ function buscaServicos(q, limite = 20) {
   return LISTA.filter((s) => (digitos.length >= 2 && s.codigo.startsWith(digitos.padEnd(2, '0').slice(0, digitos.length))) || termos.every((t) => sem(`${s.codigo} ${s.item} ${s.descricao}`).includes(t))).slice(0, limite);
 }
 
-module.exports = { sugereServico, aliquotaInicial, buscaServicos, servico: (c) => POR_CODIGO[String(c || '').padStart(6, '0')] || null, LISTA };
+// Reforma tributária (IBS/CBS): código indicador da operação (cIndOp, Anexo VII da NT 009 da NFS-e)
+// pelo tipo de serviço, conforme o local da operação do art. 11 da LC 214/2025
+const INDOP = {
+  '020201': 'Serviço sobre bem imóvel (local do imóvel)',
+  '030101': 'Serviço presencial na pessoa (estabelecimento do prestador)',
+  '050101': 'Serviço sobre bem móvel (estabelecimento do prestador)',
+  '060101': 'Transporte de passageiros (início do transporte)',
+  '070101': 'Transporte de carga (local de entrega)',
+  '100301': 'Demais serviços (domicílio do tomador)',
+};
+function indOpServico(codigo) {
+  const c = String(codigo || '').replace(/\D/g, '').padStart(6, '0');
+  const item = c.slice(0, 2);
+  const sub = c.slice(0, 4);
+  if (item === '07' && !['0701', '0703'].includes(sub)) return '020201'; // construção, reforma, limpeza e conservação de imóveis
+  if (['04', '06'].includes(item) || ['0801', '0802'].includes(sub) || item === '12') return '030101'; // saúde, estética, academia, ensino e diversões presenciais
+  if (item === '14') return '050101'; // manutenção, conserto e beneficiamento de bens móveis
+  if (sub === '1601') return '060101';
+  if (sub === '1602') return '070101';
+  return '100301';
+}
+
+module.exports = { indOpServico, INDOP, sugereServico, aliquotaInicial, buscaServicos, servico: (c) => POR_CODIGO[String(c || '').padStart(6, '0')] || null, LISTA };

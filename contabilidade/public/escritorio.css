@@ -238,3 +238,5 @@ input:focus, select:focus, textarea:focus { border-color: var(--marca-2); box-sh
 .emp-equipe { display: flex !important; align-items: center; gap: 4px; color: var(--marca-2); font-weight: 600; }
 .emp-equipe svg.i { width: 13px; height: 13px; }
 .form-obra { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+.reforma-box { border: 1px dashed var(--borda); border-radius: 12px; padding: 12px 14px; margin: 0 0 14px; background: #fafbfd; }
+.reforma-box > b { display: block; margin-bottom: 8px; font-size: .9rem; }

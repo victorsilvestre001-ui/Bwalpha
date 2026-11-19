@@ -8,6 +8,18 @@ const data = (d) => (d ? new Date(d).toLocaleDateString('pt-BR') : '—');
 const dataIso = (d) => (d ? d.split('-').reverse().join('/') : '—');
 const icone = (id) => `<svg class="i"><use href="#i-${id}"/></svg>`;
 const iniciais = (n) => String(n || '?').replace(/\b(LTDA|ME|EPP|EIRELI|S\/?A|SLU)\b/gi, '').replace(/[^\p{L}\s]/gu, '').trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase();
+// cIndOp da reforma (igual a portal/servicos.js)
+const INDOP = { '020201': 'Serviço sobre bem imóvel', '030101': 'Serviço presencial na pessoa', '050101': 'Serviço sobre bem móvel', '060101': 'Transporte de passageiros', '070101': 'Transporte de carga', '100301': 'Demais serviços' };
+function indOpServico(codigo) {
+  const c = String(codigo || '').replace(/\D/g, '').padStart(6, '0');
+  const item = c.slice(0, 2); const sub = c.slice(0, 4);
+  if (item === '07' && !['0701', '0703'].includes(sub)) return '020201';
+  if (['04', '06'].includes(item) || ['0801', '0802'].includes(sub) || item === '12') return '030101';
+  if (item === '14') return '050101';
+  if (sub === '1601') return '060101';
+  if (sub === '1602') return '070101';
+  return '100301';
+}
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 const comp = (c) => `${MESES[+c.slice(5, 7) - 1]}/${c.slice(0, 4)}`;
 const pct = (v) => `${(v * 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
@@ -951,6 +963,17 @@ function abaConfig(d) {
           <label class="campo"><span>ISS aprox. (%)</span><input id="fIss" value="${esc(String(f.pTribMun != null ? f.pTribMun : 5).replace('.', ','))}"></label>`}
         </div>
         <p id="descServ" class="suave" style="font-size:.82rem;margin:-6px 0 14px"></p>
+        <div class="reforma-box">
+          <b>Reforma tributária (IBS/CBS na nota)</b>
+          <div class="form-2">
+            <label class="campo"><span>Enviar o grupo IBS/CBS</span><select id="fIbs">
+              <option value="auto" ${(f.ibscbs || 'auto') === 'auto' ? 'selected' : ''}>Automático (fora do Simples já; Simples a partir de 2027)</option>
+              <option value="sempre" ${f.ibscbs === 'sempre' ? 'selected' : ''}>Sempre</option>
+              <option value="nunca" ${f.ibscbs === 'nunca' ? 'selected' : ''}>Não enviar</option></select></label>
+            <label class="campo"><span>Tipo de operação (cIndOp)</span><select id="fIndOp"><option value="">Automático pelo serviço</option>${Object.entries(INDOP).map(([c, t]) => `<option value="${c}" ${f.cIndOp === c ? 'selected' : ''}>${c} · ${esc(t)}</option>`).join('')}</select></label>
+          </div>
+          <small class="suave" id="indOpAuto"></small>
+        </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primario">Salvar</button><button type="button" class="btn" id="btnPreencher">${icone('raio')} Preencher pelo CNPJ</button>${e.emissao === 'homologacao' ? '<button type="button" class="btn" id="btnTeste">Testar emissão (R$ 1,00)</button>' : ''}</div>
         ${t ? `<p class="msg ${t.status === 'emitida' ? 'ok' : 'erro'}">Último teste (${new Date(t.enviadaEm).toLocaleString('pt-BR')}): ${t.status === 'emitida' ? `nota ${esc(t.numero)} gerada${t.pdf ? ` · <a href="${esc(t.pdf)}" target="_blank" rel="noopener">ver PDF</a>` : ''}` : esc(t.erro || t.status)}</p>` : ''}
       </form>
@@ -978,13 +1001,14 @@ function abaConfig(d) {
       if (!seguir) return;
     }
     try {
-      await api(`/assinantes/${e.id}/fiscal`, { body: { codigoMunicipio: $('#fMun').value, codigoServico: $('#fServ').value.replace(/\D/g, '').slice(0, 6), serieDps: $('#fSerie').value, proximoDps: $('#fNum').value, aliquotaSN: $('#fAliq') ? $('#fAliq').value : undefined, pTribFed: $('#fFed') ? $('#fFed').value : undefined, pTribMun: $('#fIss') ? $('#fIss').value : undefined, emissao } });
+      await api(`/assinantes/${e.id}/fiscal`, { body: { codigoMunicipio: $('#fMun').value, codigoServico: $('#fServ').value.replace(/\D/g, '').slice(0, 6), serieDps: $('#fSerie').value, proximoDps: $('#fNum').value, aliquotaSN: $('#fAliq') ? $('#fAliq').value : undefined, pTribFed: $('#fFed') ? $('#fFed').value : undefined, pTribMun: $('#fIss') ? $('#fIss').value : undefined, ibscbs: $('#fIbs').value, cIndOp: $('#fIndOp').value, emissao } });
       aviso('Configuração salva.'); telaEmpresa(e.id, 'config');
     } catch (err) { aviso(esc(err.message), 'erro'); }
   });
   // Código do serviço: busca na lista oficial e mostra a descrição do código escolhido
   const mostraServico = async () => {
     const c = $('#fServ').value.replace(/\D/g, '').slice(0, 6);
+    $('#indOpAuto').textContent = c.length === 6 ? `Automático para este serviço: ${indOpServico(c)} · ${INDOP[indOpServico(c)]}. A Receita calcula os valores de IBS e CBS; vai CST 000 / cClassTrib 000001 (tributação integral).` : '';
     if (c.length !== 6) { $('#descServ').textContent = ''; return; }
     try { const { servicos } = await api('/escritorio/servicos?q=' + c); const s = servicos.find((x) => x.codigo === c); $('#descServ').textContent = s ? `${s.item} · ${s.descricao}` : 'Código não encontrado na lista nacional.'; } catch { /* ok */ }
   };

@@ -129,6 +129,16 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       if (!(a > 0 && a < 100)) return res.status(400).json({ erro: 'Alíquota do Simples: informe o percentual, ex.: 6 ou 11,2.' });
       f.aliquotaSN = a;
     }
+    // Reforma tributária: quando mandar o grupo IBS/CBS e o código da operação (cIndOp)
+    if (body.ibscbs !== undefined) {
+      if (!['auto', 'sempre', 'nunca'].includes(body.ibscbs)) return res.status(400).json({ erro: 'IBS/CBS na nota: use auto, sempre ou nunca.' });
+      f.ibscbs = body.ibscbs;
+    }
+    if (body.cIndOp !== undefined) {
+      const c = String(body.cIndOp || '').replace(/\D/g, '');
+      if (c && c.length !== 6) return res.status(400).json({ erro: 'Código da operação (cIndOp) tem 6 dígitos.' });
+      if (c) f.cIndOp = c; else delete f.cIndOp;
+    }
     // Empresa fora do Simples: % aproximado dos tributos federais e municipais que sai na nota
     for (const campo of ['pTribFed', 'pTribMun']) {
       if (body[campo] === undefined || body[campo] === '') continue;
