@@ -73,7 +73,9 @@ function daEmpresa(u, { de, ate, hoje = agenda.hojeSP() }) {
   for (const it of lista) {
     const man = manuais.find((x) => x.chave === it.chave && x.ref === it.ref);
     if (man && man.feito) { it.status = 'ok'; it.manual = true; }
-    if (['pendente', 'guia'].includes(it.status) && it.data < hoje) it.status = 'atrasada';
+    // Vencida: "Em atraso" só quando o site sabe que está em aberto (guia/apuração registrada).
+    // O que o site não acompanha (PIS/Cofins, IRPJ, folha...) fica "A conferir" até alguém marcar feito.
+    if (['pendente', 'guia'].includes(it.status) && it.data < hoje) it.status = it.automatico ? 'atrasada' : 'conferir';
     it.tipo = tipoDe(it.titulo);
   }
   return lista.sort((x, y) => x.data.localeCompare(y.data));
