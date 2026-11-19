@@ -95,8 +95,28 @@ const INDOP = {
   '060101': 'Transporte de passageiros (início do transporte)',
   '070101': 'Transporte de carga (local de entrega)',
   '100301': 'Demais serviços (domicílio do tomador)',
+  '010101': 'Fornecimento de bem móvel material (local da entrega)',
+  '020101': 'Operação com bem imóvel ou direito sobre imóvel (local do imóvel)',
+  '020202': 'Serviço sobre bem imóvel (local do imóvel)',
+  '020301': 'Administração e intermediação de imóvel (local do imóvel)',
+  '020401': 'Serviço sobre bem imóvel (local do imóvel)',
+  '040101': 'Organização de eventos (local do evento)',
+  '050201': 'Serviços portuários (local da prestação)',
+  '080101': 'Exploração de via (local da prestação)',
+  '100101': 'Cessão de espaço publicitário (domicílio do adquirente)',
+  '100501': 'Bens imateriais e direitos (domicílio do adquirente)',
 };
+// Anexo VIII da NFS-e (RTC, v1.02.00): por item da LC 116 -> NBS possíveis, cIndOp e cClassTrib sugeridos.
+// A própria Receita marca a tabela como preliminar; usamos como sugestão.
+let RTC = {};
+try { RTC = require('./nbs-servicos.json'); } catch { RTC = {}; }
+const itemDe = (codigo) => { const c = String(codigo || '').replace(/\D/g, '').padStart(6, '0'); return `${c.slice(0, 2)}.${c.slice(2, 4)}`; };
+const rtcDoServico = (codigo) => RTC[itemDe(codigo)] || null;
+const nbsPadrao = (codigo) => { const r = rtcDoServico(codigo); return r && r.nbs[0] ? r.nbs[0].codigo : ''; };
+
 function indOpServico(codigo) {
+  const r = rtcDoServico(codigo);
+  if (r && /^\d{6}$/.test(r.indOp)) return r.indOp;
   const c = String(codigo || '').replace(/\D/g, '').padStart(6, '0');
   const item = c.slice(0, 2);
   const sub = c.slice(0, 4);
@@ -108,4 +128,4 @@ function indOpServico(codigo) {
   return '100301';
 }
 
-module.exports = { indOpServico, INDOP, sugereServico, aliquotaInicial, buscaServicos, servico: (c) => POR_CODIGO[String(c || '').padStart(6, '0')] || null, LISTA };
+module.exports = { indOpServico, INDOP, rtcDoServico, nbsPadrao, sugereServico, aliquotaInicial, buscaServicos, servico: (c) => POR_CODIGO[String(c || '').padStart(6, '0')] || null, LISTA };

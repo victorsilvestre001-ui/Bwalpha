@@ -15,7 +15,7 @@ const zlib = require('zlib');
 const crypto = require('crypto');
 const forge = require('node-forge');
 const { exige: exigeObra } = require('./obra');
-const { indOpServico } = require('./servicos');
+const { indOpServico, nbsPadrao } = require('./servicos');
 
 // Grupo IBS/CBS (reforma tributária, NT 004/009 da NFS-e): fora do Simples já vai; no Simples só é
 // obrigatório a partir de 2027. fiscal.ibscbs: 'auto' (padrão), 'sempre' ou 'nunca'.
@@ -162,7 +162,8 @@ function montaDps(nota, prestador, { agora = new Date(), ambiente = 1 } = {}) {
       el('locPrest', [el('cLocPrestacao', localPrestacao)]),
       el('cServ', [
         el('cTribNac', String(f.codigoServico)),
-        el('cNBS', f.codigoNbs && /^\d{9}$/.test(f.codigoNbs) ? f.codigoNbs : null),
+        // NBS: obrigatório quando vai o grupo IBS/CBS (E0322); sem escolha, o 1º NBS do item no Anexo VIII
+        el('cNBS', f.codigoNbs && /^\d{9}$/.test(f.codigoNbs) ? f.codigoNbs : (incluiIbsCbs(f, op, dh.slice(0, 10)) ? nbsPadrao(f.codigoServico) || null : null)),
         el('xDescServ', limpa(nota.descricao, 2000)),
       ]),
       grupoObra,

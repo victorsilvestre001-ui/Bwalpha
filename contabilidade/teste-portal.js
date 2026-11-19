@@ -547,9 +547,21 @@ const notas = require('./portal/notas');
       console.log('ok não optante');
 
       // Reforma tributária: grupo IBS/CBS no fim da DPS (fora do Simples já; Simples só em 2027)
-      assert.match(xmlNO, /<\/valores><IBSCBS><finNFSe>0<\/finNFSe><cIndOp>100301<\/cIndOp><indDest>0<\/indDest><valores><trib><gIBSCBS><CST>000<\/CST><cClassTrib>000001<\/cClassTrib><\/gIBSCBS><\/trib><\/valores><\/IBSCBS><\/infDPS>/);
+      assert.strictEqual(require('./portal/servicos').indOpServico('010701'), '050101', 'cIndOp da tabela oficial (Anexo VIII)');
+      assert.match(xmlNO, /<\/valores><IBSCBS><finNFSe>0<\/finNFSe><cIndOp>050101<\/cIndOp><indDest>0<\/indDest><valores><trib><gIBSCBS><CST>000<\/CST><cClassTrib>000001<\/cClassTrib><\/gIBSCBS><\/trib><\/valores><\/IBSCBS><\/infDPS>/);
       const xmlSN = nacionalT.montaDps(notaNO, { ...prest, fiscal: fiscalAntes, empresa: { simples: true } }, { agora: new Date('2026-11-18T15:00:00Z') }).xml;
       assert.doesNotMatch(xmlSN, /IBSCBS/, 'Simples em 2026 ainda não manda');
+      const nbs0107 = require('./portal/servicos').nbsPadrao('010701');
+      assert.ok(/^\d{9}$/.test(nbs0107), 'tabela oficial tem NBS para 01.07');
+      assert.match(xmlNO, new RegExp(`<cNBS>${nbs0107}</cNBS>`), 'NBS obrigatório com IBS/CBS (E0322)');
+      assert.doesNotMatch(xmlSN, /<cNBS>/, 'sem IBS/CBS não precisa de NBS');
+      assert.match(nacionalT.montaDps(notaNO, { ...prest, fiscal: { ...fiscalAntes, codigoNbs: '115021000', cClassTrib: '200046', cstIbsCbs: '200' }, empresa: { simples: false } }).xml, /<cNBS>115021000<\/cNBS>[\s\S]*<CST>200<\/CST><cClassTrib>200046<\/cClassTrib>/);
+      r = await req('GET', '/api/admin/portal/escritorio/rtc/070401', null, admin);
+      assert.deepStrictEqual([r.json.indOp, r.json.cClassTribSugerido, r.json.nbs[0].codigo], ['020201', '200046', '101031000']);
+      r = await req('POST', `/api/admin/portal/assinantes/${idMaria}/fiscal`, { ...fiscalAntes, codigoNbs: '1.1502.10.00', cClassTrib: '200046' }, admin);
+      assert.deepStrictEqual([r.json.usuario.fiscal.codigoNbs, r.json.usuario.fiscal.cClassTrib, r.json.usuario.fiscal.cstIbsCbs], ['115021000', '200046', '200']);
+      r = await req('POST', `/api/admin/portal/assinantes/${idMaria}/fiscal`, { ...fiscalAntes, codigoNbs: '', cClassTrib: '000001' }, admin);
+      assert.deepStrictEqual([r.json.usuario.fiscal.codigoNbs, r.json.usuario.fiscal.cClassTrib], [undefined, undefined]);
       assert.match(nacionalT.montaDps(notaNO, { ...prest, fiscal: fiscalAntes, empresa: { simples: true } }, { agora: new Date('2027-01-05T15:00:00Z') }).xml, /<IBSCBS>/, 'Simples a partir de 2027');
       assert.match(nacionalT.montaDps(notaNO, { ...prest, fiscal: { ...fiscalAntes, ibscbs: 'sempre' }, empresa: { simples: true } }).xml, /<IBSCBS>/);
       assert.doesNotMatch(nacionalT.montaDps(notaNO, { ...prest, fiscal: { ...fiscalAntes, ibscbs: 'nunca' }, empresa: { simples: false } }).xml, /IBSCBS/);

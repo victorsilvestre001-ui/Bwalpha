@@ -134,6 +134,17 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       if (!['auto', 'sempre', 'nunca'].includes(body.ibscbs)) return res.status(400).json({ erro: 'IBS/CBS na nota: use auto, sempre ou nunca.' });
       f.ibscbs = body.ibscbs;
     }
+    if (body.codigoNbs !== undefined) {
+      const n = String(body.codigoNbs || '').replace(/\D/g, '');
+      if (n && n.length !== 9) return res.status(400).json({ erro: 'O código NBS tem 9 dígitos (ex.: 1.1502.10.00).' });
+      if (n) f.codigoNbs = n; else delete f.codigoNbs;
+    }
+    // cClassTrib (6 dígitos); o CST são os 3 primeiros dígitos dele
+    if (body.cClassTrib !== undefined) {
+      const c = String(body.cClassTrib || '').replace(/\D/g, '');
+      if (c && c.length !== 6) return res.status(400).json({ erro: 'cClassTrib tem 6 dígitos.' });
+      if (c && c !== '000001') { f.cClassTrib = c; f.cstIbsCbs = c.slice(0, 3); } else { delete f.cClassTrib; delete f.cstIbsCbs; }
+    }
     if (body.cIndOp !== undefined) {
       const c = String(body.cIndOp || '').replace(/\D/g, '');
       if (c && c.length !== 6) return res.status(400).json({ erro: 'Código da operação (cIndOp) tem 6 dígitos.' });
@@ -763,6 +774,11 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (!u) return;
     const r = await preencheFiscal(u, { forcar: true });
     res.json({ fiscal: r.usuario.fiscal, preenchidos: r.preenchidos, servico: r.servico, atividade: r.atividade, cnae: r.cnae });
+  });
+  // Reforma: NBS possíveis, cIndOp e cClassTrib sugeridos para um código de serviço (Anexo VIII)
+  admin.get('/escritorio/rtc/:codigo', (req, res) => {
+    const r = servicos.rtcDoServico(req.params.codigo);
+    res.json({ nbs: (r && r.nbs) || [], indOp: servicos.indOpServico(req.params.codigo), cClassTribSugerido: (r && r.cClassTrib) || '000001' });
   });
   // Endereço da obra pelo CEP (para a tela de emissão)
   const respondeCep = async (req, res) => {

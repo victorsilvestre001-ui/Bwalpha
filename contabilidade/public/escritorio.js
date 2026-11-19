@@ -971,6 +971,8 @@ function abaConfig(d) {
               <option value="sempre" ${f.ibscbs === 'sempre' ? 'selected' : ''}>Sempre</option>
               <option value="nunca" ${f.ibscbs === 'nunca' ? 'selected' : ''}>Não enviar</option></select></label>
             <label class="campo"><span>Tipo de operação (cIndOp)</span><select id="fIndOp"><option value="">Automático pelo serviço</option>${Object.entries(INDOP).map(([c, t]) => `<option value="${c}" ${f.cIndOp === c ? 'selected' : ''}>${c} · ${esc(t)}</option>`).join('')}</select></label>
+            <label class="campo"><span>NBS do serviço</span><select id="fNbs" data-atual="${esc(f.codigoNbs || '')}"><option value="">Automático (1º da lista oficial)</option></select></label>
+            <label class="campo"><span>Classificação (cClassTrib)</span><select id="fClass" data-atual="${esc(f.cClassTrib || '')}"><option value="000001">000001 · Tributação integral (padrão)</option></select></label>
           </div>
           <small class="suave" id="indOpAuto"></small>
         </div>
@@ -1001,14 +1003,23 @@ function abaConfig(d) {
       if (!seguir) return;
     }
     try {
-      await api(`/assinantes/${e.id}/fiscal`, { body: { codigoMunicipio: $('#fMun').value, codigoServico: $('#fServ').value.replace(/\D/g, '').slice(0, 6), serieDps: $('#fSerie').value, proximoDps: $('#fNum').value, aliquotaSN: $('#fAliq') ? $('#fAliq').value : undefined, pTribFed: $('#fFed') ? $('#fFed').value : undefined, pTribMun: $('#fIss') ? $('#fIss').value : undefined, ibscbs: $('#fIbs').value, cIndOp: $('#fIndOp').value, emissao } });
+      await api(`/assinantes/${e.id}/fiscal`, { body: { codigoMunicipio: $('#fMun').value, codigoServico: $('#fServ').value.replace(/\D/g, '').slice(0, 6), serieDps: $('#fSerie').value, proximoDps: $('#fNum').value, aliquotaSN: $('#fAliq') ? $('#fAliq').value : undefined, pTribFed: $('#fFed') ? $('#fFed').value : undefined, pTribMun: $('#fIss') ? $('#fIss').value : undefined, ibscbs: $('#fIbs').value, cIndOp: $('#fIndOp').value, codigoNbs: $('#fNbs').value, cClassTrib: $('#fClass').value, emissao } });
       aviso('Configuração salva.'); telaEmpresa(e.id, 'config');
     } catch (err) { aviso(esc(err.message), 'erro'); }
   });
   // Código do serviço: busca na lista oficial e mostra a descrição do código escolhido
   const mostraServico = async () => {
     const c = $('#fServ').value.replace(/\D/g, '').slice(0, 6);
-    $('#indOpAuto').textContent = c.length === 6 ? `Automático para este serviço: ${indOpServico(c)} · ${INDOP[indOpServico(c)]}. A Receita calcula os valores de IBS e CBS; vai CST 000 / cClassTrib 000001 (tributação integral).` : '';
+    if (c.length === 6) {
+      api('/escritorio/rtc/' + c).then((r) => {
+        $('#indOpAuto').textContent = `Automático para este serviço: cIndOp ${r.indOp}${INDOP[r.indOp] ? ` · ${INDOP[r.indOp]}` : ''}. A Receita calcula os valores de IBS e CBS.`;
+        const nbsAtual = $('#fNbs').dataset.atual;
+        $('#fNbs').innerHTML = `<option value="">Automático (${r.nbs[0] ? r.nbs[0].codigo.replace(/^(\d)(\d{4})(\d{2})(\d{2})$/, '$1.$2.$3.$4') : 'sem NBS'})</option>${r.nbs.map((n) => `<option value="${n.codigo}" ${n.codigo === nbsAtual ? 'selected' : ''}>${n.codigo.replace(/^(\d)(\d{4})(\d{2})(\d{2})$/, '$1.$2.$3.$4')} · ${esc(n.descricao.slice(0, 70))}</option>`).join('')}`;
+        const clAtual = $('#fClass').dataset.atual;
+        const sug = r.cClassTribSugerido;
+        $('#fClass').innerHTML = `<option value="000001">000001 · Tributação integral (padrão)</option>${sug && sug !== '000001' ? `<option value="${sug}" ${clAtual === sug ? 'selected' : ''}>${sug} · Sugerido pela tabela da Receita (confira a LC 214)</option>` : ''}${clAtual && clAtual !== sug && clAtual !== '000001' ? `<option value="${clAtual}" selected>${clAtual}</option>` : ''}`;
+      }).catch(() => {});
+    } else $('#indOpAuto').textContent = '';
     if (c.length !== 6) { $('#descServ').textContent = ''; return; }
     try { const { servicos } = await api('/escritorio/servicos?q=' + c); const s = servicos.find((x) => x.codigo === c); $('#descServ').textContent = s ? `${s.item} · ${s.descricao}` : 'Código não encontrado na lista nacional.'; } catch { /* ok */ }
   };
