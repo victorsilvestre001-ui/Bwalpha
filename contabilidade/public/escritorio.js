@@ -816,6 +816,28 @@ async function executaPedido(texto) {
     location.hash = `#/empresa/${e.id}/notas`;
     return { texto: `Nota da ${e.nome}${cli ? ' para ' + cli[0].nome : ''}${valor ? ' de ' + brl(valor) : ''} aberta para conferir e emitir.`, link: `#/empresa/${e.id}/notas` };
   }
+  // Entregar PGDAS-D sem movimento ("entregar PGDAS da X zerado", "declarar sem movimento outubro da X")
+  if (/entreg|declar|transmit/.test(q) && /zerad|sem movimento|pgdas|das\b/.test(q)) {
+    if (!d.apuracao) throw new Error(`${e.nome} não está no Simples Nacional.`);
+    if (!INTEGRA.ativo) throw new Error('O Integra Contador ainda não está ligado.');
+    const mesTxtZ = Object.keys(MESES_NOME).find((m) => new RegExp(`\\b${m}`).test(q));
+    const anoZ = (q.match(/\b(20\d{2})\b/) || [])[1];
+    // Meses ainda não entregues na Receita (sem guia paga nem declaração registrada)
+    const naoEntregue = (m) => !['paga', 'entregue', 'das_disponivel'].includes(m.status) && !(m.conferencia && m.conferencia.declarada);
+    let meses = d.apuracao.meses.filter((m) => (mesTxtZ ? m.competencia.slice(5) === MESES_NOME[mesTxtZ] && (!anoZ || m.competencia.startsWith(anoZ)) : naoEntregue(m)));
+    if (!meses.length) throw new Error(mesTxtZ ? `Não achei ${mesTxtZ}${anoZ ? '/' + anoZ : ''} na apuração da ${e.nome}.` : `${e.nome} não tem PGDAS-D pendente de entrega no período.`);
+    meses = meses.sort((a, b) => a.competencia.localeCompare(b.competencia));
+    const ok = []; const falhou = [];
+    for (const m of meses) {
+      try { await api(`/apuracoes/${e.id}/${m.competencia}/zerada`, { method: 'POST' }); ok.push(comp(m.competencia)); } catch (err) {
+        if (/AcessoNegado|procura/i.test(err.message)) throw new Error(`A ${e.nome} não deu procuração no e-CAC para a VIMARI nem para o procurador. Sem ela a Receita não aceita a entrega pelo site; peça a procuração (Simples Nacional) e tente de novo.`);
+        falhou.push(`${comp(m.competencia)}: ${err.message}`);
+        if (/MSG_E0132|DEFIS|regime de apura/i.test(err.message)) break; // a Receita exige outra coisa antes
+      }
+    }
+    if (!ok.length) throw new Error(`Nada entregue. ${falhou.join(' | ')}`);
+    return { texto: `PGDAS-D sem movimento entregue da ${e.nome}: ${ok.join(', ')}.${falhou.length ? ` Não entregue: ${falhou.join(' | ')}` : ''} Recibos e multas por atraso ficam no PGDAS-D e DAS.`, link: `#/empresa/${e.id}/das` };
+  }
   // Puxar guia do DAS (só quando o pedido fala de guia/DAS)
   if (!/\bguia|\bdas\b|\bdarf|\bboleto|\bimposto|\bpagar/.test(q)) throw new Error('Não entendi o pedido. Use, por exemplo: "puxar guia da AGEN", "emitir nota da AGEN para VIMARI de 500,00", "certidões da AGEN" ou "cadastrar empresa 00.000.000/0000-00".');
   if (!d.apuracao) throw new Error(`${e.nome} não está no Simples Nacional.`);
