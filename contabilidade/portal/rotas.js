@@ -1049,6 +1049,15 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
           const antesAbertura = abertura && c < abertura;
           const situacao = antesAbertura ? 'antes_abertura' : !p || !p.declarada ? 'nao_declarada' : p.das.length ? 'com_movimento' : 'sem_movimento';
           linha.meses.push({ competencia: c, situacao, retificada: !!(p && p.retificada), das: p ? p.das.length : 0, dasPago: !!(p && p.dasPago) });
+          // Grava o que a Receita disse, para o calendário de obrigações mostrar certo
+          if (situacao !== 'antes_abertura') {
+            const reg = apuracao.registro(u, c);
+            const conferencia = { ...(reg.conferencia || {}), em: new Date().toISOString(), declarada: situacao !== 'nao_declarada', dasPago: !!(p && p.dasPago), situacao: situacao === 'nao_declarada' ? 'sem_declaracao' : situacao === 'sem_movimento' ? 'ok' : (reg.conferencia && reg.conferencia.situacao) || 'sem_leitura', ...(situacao === 'sem_movimento' ? { receitaDeclarada: 0 } : {}) };
+            const patch = { conferencia };
+            if (p && p.dasPago && reg.status !== 'paga') patch.status = 'paga';
+            else if (situacao === 'sem_movimento' && ['calculada', 'aprovada'].includes(reg.status)) patch.status = 'entregue';
+            db.atualiza('apuracoes', reg.id, patch);
+          }
         }
       } catch (err) { linha.erro = err.message; }
       empresas.push(linha);
@@ -1164,7 +1173,8 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     }
     itens.sort((a, b) => a.data.localeCompare(b.data) || a.empresa.localeCompare(b.empresa, 'pt-BR'));
     const conta = (s) => itens.filter((x) => x.status === s).length;
-    res.json({ ...j, itens, resumo: { atrasadas: conta('atrasada'), pendentes: conta('pendente'), guias: conta('guia'), ok: conta('ok') } });
+    const empresas = [...new Map(itens.map((x) => [x.empresaId, { id: x.empresaId, nome: x.empresa }])).values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    res.json({ ...j, itens, empresas, tipos: obrigacoes.TIPOS, resumo: { atrasadas: conta('atrasada'), pendentes: conta('pendente'), guias: conta('guia'), ok: conta('ok'), conferir: conta('conferir') } });
   });
   admin.get('/escritorio/empresas/:id/obrigacoes', (req, res) => {
     const u = empresaDe(req, res);

@@ -251,7 +251,7 @@ async function telaEmpresa(id, aba) {
 }
 
 // ----- Obrigações: situação fiscal, parcelamento e calendário -----
-const ST_OBR = { ok: ['ok', 'Feito'], guia: ['info', 'Guia gerada'], pendente: ['neutro', 'A fazer'], atrasada: ['erro', 'Atrasada'] };
+const ST_OBR = { ok: ['ok', 'Feito'], guia: ['info', 'Guia gerada'], pendente: ['neutro', 'A fazer'], atrasada: ['erro', 'Atrasada'], conferir: ['atencao', 'A conferir'] };
 const linhaObrigacao = (x, comEmpresa) => `<tr data-e="${x.empresaId}" data-c="${esc(x.chave)}" data-r="${esc(x.ref)}">
   <td>${dataIso(x.data)}</td>
   ${comEmpresa ? `<td><a href="#/empresa/${x.empresaId}/obrigacoes"><b class="trunca">${esc(x.empresa)}</b></a></td>` : ''}
@@ -310,29 +310,53 @@ async function abaObrigacoes(d) {
   }));
 }
 
-// Visão geral: obrigações de todas as empresas
+// Visão geral das obrigações: escolha a empresa, o tipo de guia e a situação (abas)
+const ABAS_OBR = [
+  ['atrasada', 'Em atraso', (s) => s === 'atrasada'],
+  ['apagar', 'A pagar', (s) => s === 'pendente' || s === 'guia'],
+  ['ok', 'Pagas / feitas', (s) => s === 'ok'],
+  ['conferir', 'A conferir', (s) => s === 'conferir'],
+  ['todas', 'Todas', () => true],
+];
 async function telaObrigacoes() {
   const el = $('#conteudo');
   el.innerHTML = '<p class="vazio">Carregando obrigações…</p>';
   const o = await api('/escritorio/obrigacoes');
-  let filtro = telaObrigacoes.filtro || 'abertas';
+  const est = telaObrigacoes.est || (telaObrigacoes.est = { empresa: '', tipo: '', aba: 'atrasada' });
+  if (est.empresa && !o.empresas.some((x) => x.id === est.empresa)) est.empresa = '';
+  const tiposPresentes = Object.keys(o.tipos).filter((t) => o.itens.some((x) => x.tipo === t));
+  el.innerHTML = `
+    <div class="cab"><div><h1>Obrigações</h1><p>O que vence de ${comp(o.de)} a ${comp(o.ate)}. Escolha a empresa, o tipo de guia e a situação.</p></div></div>
+    <div class="filtros-obr">
+      <label class="campo"><span>Empresa</span><select id="oEmp"><option value="">Todas as empresas (${o.empresas.length})</option>${o.empresas.map((x) => `<option value="${x.id}" ${est.empresa === x.id ? 'selected' : ''}>${esc(x.nome)}</option>`).join('')}</select></label>
+      <div><span class="rotulo">Tipo de guia</span><div class="filtros" id="oTipos"><button class="filtro" data-t="">Todas</button>${tiposPresentes.map((t) => `<button class="filtro" data-t="${t}">${esc(o.tipos[t])}</button>`).join('')}</div></div>
+    </div>
+    <div class="kpis" id="oKpis"></div>
+    <nav class="abas" id="oAbas"></nav>
+    <div id="oEmpTopo"></div>
+    <div class="card sem-pad"><table class="tabela"><thead><tr><th>Vence</th><th id="oColEmp">Empresa</th><th>Obrigação</th><th class="num">Valor</th><th>Situação</th><th></th></tr></thead><tbody id="linhasObr"></tbody></table></div>`;
   const desenha = () => {
-    const lista = o.itens.filter((x) => filtro === 'todas' || (filtro === 'abertas' ? x.status !== 'ok' : x.status === filtro));
-    $('#linhasObr').innerHTML = lista.map((x) => linhaObrigacao(x, true)).join('') || '<tr><td colspan="6" class="vazio">Nada aqui.</td></tr>';
-    $$('.filtros [data-f]').forEach((b) => b.classList.toggle('ativo', b.dataset.f === filtro));
+    const base = o.itens.filter((x) => (!est.empresa || x.empresaId === est.empresa) && (!est.tipo || x.tipo === est.tipo));
+    const conta = (f) => base.filter((x) => f(x.status)).length;
+    const soma = (f) => base.filter((x) => f(x.status) && x.valor).reduce((t, x) => t + x.valor, 0);
+    $('#oKpis').innerHTML = `
+      <div class="kpi"><span>Em atraso</span><b style="color:var(--erro)">${conta((s) => s === 'atrasada')}</b><small>${soma((s) => s === 'atrasada') ? brl(soma((s) => s === 'atrasada')) : 'precisam de atenção'}</small></div>
+      <div class="kpi"><span>A pagar</span><b>${conta((s) => s === 'pendente' || s === 'guia')}</b><small>${soma((s) => s === 'pendente' || s === 'guia') ? brl(soma((s) => s === 'pendente' || s === 'guia')) : 'no período'}</small></div>
+      <div class="kpi"><span>Pagas / feitas</span><b style="color:var(--ok)">${conta((s) => s === 'ok')}</b><small>no período</small></div>
+      <div class="kpi"><span>A conferir</span><b>${conta((s) => s === 'conferir')}</b><small>sem informação da Receita</small></div>`;
+    $('#oAbas').innerHTML = ABAS_OBR.map(([id, nome, f]) => `<a href="#" data-aba="${id}" class="${est.aba === id ? 'ativo' : ''}">${nome} <span class="cont-aba ${id === 'atrasada' && conta(f) ? 'alerta' : ''}">${conta(f)}</span></a>`).join('');
+    const emp = est.empresa && o.empresas.find((x) => x.id === est.empresa);
+    $('#oEmpTopo').innerHTML = emp ? `<div class="faixa info" style="margin-bottom:12px">${icone('predio')}<span><b>${esc(emp.nome)}</b></span><a class="btn pequeno" href="#/empresa/${emp.id}/obrigacoes">Abrir a empresa</a></div>` : '';
+    $('#oColEmp').hidden = !!est.empresa;
+    const filtroAba = ABAS_OBR.find((a) => a[0] === est.aba)[2];
+    const lista = base.filter((x) => filtroAba(x.status));
+    $('#linhasObr').innerHTML = lista.map((x) => linhaObrigacao(x, !est.empresa)).join('') || `<tr><td colspan="6" class="vazio">${est.aba === 'atrasada' ? 'Nada em atraso aqui.' : 'Nada aqui.'}</td></tr>`;
+    $$('#oTipos [data-t]').forEach((b) => b.classList.toggle('ativo', b.dataset.t === est.tipo));
+    $$('#oAbas [data-aba]').forEach((a) => a.addEventListener('click', (ev) => { ev.preventDefault(); est.aba = a.dataset.aba; desenha(); }));
     ligaMarcar($('#linhasObr'), telaObrigacoes);
   };
-  el.innerHTML = `
-    <div class="cab"><div><h1>Obrigações</h1><p>O que vence para cada empresa, de ${comp(o.de)} a ${comp(o.ate)}.</p></div></div>
-    <div class="kpis">
-      <div class="kpi"><span>Atrasadas</span><b style="color:var(--erro)">${o.resumo.atrasadas}</b><small>precisam de atenção</small></div>
-      <div class="kpi"><span>A fazer</span><b>${o.resumo.pendentes}</b><small>no período</small></div>
-      <div class="kpi"><span>Guias geradas</span><b>${o.resumo.guias}</b><small>aguardando pagamento</small></div>
-      <div class="kpi"><span>Feitas</span><b>${o.resumo.ok}</b><small>no período</small></div>
-    </div>
-    <div class="ferramentas"><div class="filtros">${[['abertas', 'Em aberto'], ['atrasada', 'Atrasadas'], ['guia', 'Guias geradas'], ['ok', 'Feitas'], ['todas', 'Todas']].map(([v, t]) => `<button class="filtro" data-f="${v}">${t}</button>`).join('')}</div></div>
-    <div class="card sem-pad"><table class="tabela"><thead><tr><th>Vence</th><th>Empresa</th><th>Obrigação</th><th class="num">Valor</th><th>Situação</th><th></th></tr></thead><tbody id="linhasObr"></tbody></table></div>`;
-  $$('.filtros [data-f]').forEach((b) => b.addEventListener('click', () => { filtro = b.dataset.f; telaObrigacoes.filtro = filtro; desenha(); }));
+  $('#oEmp').addEventListener('change', (ev) => { est.empresa = ev.target.value; desenha(); });
+  $$('#oTipos [data-t]').forEach((b) => b.addEventListener('click', () => { est.tipo = b.dataset.t; desenha(); }));
   desenha();
 }
 

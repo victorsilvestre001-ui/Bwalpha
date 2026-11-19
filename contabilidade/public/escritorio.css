@@ -246,3 +246,6 @@ input:focus, select:focus, textarea:focus { border-color: var(--marca-2); box-sh
 .modelo-wa { border-bottom: 1px solid var(--linha); padding: 10px 0; }
 .modelo-wa:last-child { border-bottom: 0; }
 .modelo-wa p { margin: 6px 0 0; font-size: .88rem; background: #f5f8fc; border-radius: 8px; padding: 8px 10px; }
+.filtros-obr { display: grid; grid-template-columns: minmax(220px, 340px) 1fr; gap: 14px; align-items: end; margin-bottom: 14px; }
+.filtros-obr .campo { margin: 0; }
+@media (max-width: 1000px) { .filtros-obr { grid-template-columns: 1fr; } }

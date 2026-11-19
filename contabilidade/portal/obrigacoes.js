@@ -42,9 +42,13 @@ function daEmpresa(u, { de, ate, hoje = agenda.hojeSP() }) {
         const c = comp(ac, mc);
         item.competencia = c;
         const reg = db.acha('apuracoes', (x) => x.usuarioId === u.id && x.competencia === c);
+        const conf = reg && reg.conferencia;
         item.automatico = true;
         if (reg && ['paga', 'entregue'].includes(reg.status)) item.status = 'ok';
+        else if (conf && (conf.dasPago || (conf.situacao === 'ok' && conf.receitaDeclarada === 0))) item.status = 'ok';
         else if (reg && reg.status === 'das_disponivel') { item.status = 'guia'; item.valor = reg.das && reg.das.valor; item.link = reg.das && reg.das.pdf; }
+        // Sem nenhum registro do mês (nem apuração, nem conferência da Receita): não dá para afirmar atraso
+        else if (!reg || (reg.status === 'calculada' && !conf && !reg.aprovado)) item.status = 'conferir';
       }
       if (ev.titulo === 'DEFIS') {
         item.automatico = true;
@@ -69,9 +73,20 @@ function daEmpresa(u, { de, ate, hoje = agenda.hojeSP() }) {
   for (const it of lista) {
     const man = manuais.find((x) => x.chave === it.chave && x.ref === it.ref);
     if (man && man.feito) { it.status = 'ok'; it.manual = true; }
-    if (it.status !== 'ok' && it.data < hoje) it.status = 'atrasada';
+    if (['pendente', 'guia'].includes(it.status) && it.data < hoje) it.status = 'atrasada';
+    it.tipo = tipoDe(it.titulo);
   }
   return lista.sort((x, y) => x.data.localeCompare(y.data));
+}
+
+// Tipo da guia/obrigação, para filtrar na tela
+const TIPOS = { das: 'DAS (Simples e MEI)', parcela: 'Parcelamentos', declaracao: 'Declarações (DEFIS, DASN)', folha: 'Folha, FGTS e INSS', federais: 'Tributos federais (fora do Simples)' };
+function tipoDe(titulo) {
+  if (/^DAS/.test(titulo)) return 'das';
+  if (/Parcela/.test(titulo)) return 'parcela';
+  if (/DEFIS|DASN|ECD|ECF/.test(titulo)) return 'declaracao';
+  if (/sal[aá]rio|FGTS|INSS/i.test(titulo)) return 'folha';
+  return 'federais';
 }
 
 function marca(u, chave, ref, feito) {
@@ -80,4 +95,4 @@ function marca(u, chave, ref, feito) {
   return db.insere('obrigacoes', { usuarioId: u.id, chave, ref, feito: !!feito, em: new Date().toISOString() });
 }
 
-module.exports = { daEmpresa, marca, regimeDe, slug };
+module.exports = { daEmpresa, marca, regimeDe, slug, TIPOS, tipoDe };

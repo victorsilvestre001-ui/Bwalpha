@@ -671,6 +671,8 @@ const notas = require('./portal/notas');
         const periodos = ano === '2026' ? [{ periodoApuracao: 202609, operacoes: op(9, true) }, { periodoApuracao: 202608, operacoes: op(8, false) }] : [];
         return { status: 200, json: { status: 200, mensagens: [], dados: JSON.stringify({ periodos }) } };
       });
+      const dbT = require('./portal/db');
+      const antesMov = JSON.parse(JSON.stringify(dbT.lista('apuracoes', (x) => x.usuarioId === idAp)));
       r = await req('POST', '/api/admin/portal/escritorio/movimento?meses=3', null, admin);
       assert.strictEqual(r.status, 200, JSON.stringify(r.json));
       const mv = r.json.empresas.find((x) => x.id === idAp);
@@ -679,6 +681,10 @@ const notas = require('./portal/notas');
       assert.strictEqual(sit['2026-09'], 'com_movimento');
       assert.strictEqual(sit['2026-08'], 'sem_movimento');
       assert.strictEqual(sit['2026-10'], 'nao_declarada');
+      const regSet = dbT.acha('apuracoes', (x) => x.usuarioId === idAp && x.competencia === '2026-09');
+      assert.ok(regSet && regSet.status === 'paga' && regSet.conferencia.dasPago, 'resultado da Receita gravado');
+      // Restaura os meses para o resto do teste (que ainda ajusta setembro)
+      for (const x of dbT.lista('apuracoes', (y) => y.usuarioId === idAp)) { const o = antesMov.find((y) => y.id === x.id); if (o) dbT.atualiza('apuracoes', x.id, { status: o.status, conferencia: o.conferencia || null }); else dbT.remove('apuracoes', (y) => y.id === x.id); }
       console.log('ok movimento');
       // Entrega do PGDAS-D sem movimento pelo Integra (TRANSDECLARACAO11), atrasado com MAED
       const enviados = [];
@@ -792,6 +798,8 @@ const notas = require('./portal/notas');
       assert.ok(r.json.itens.some((x) => x.chave === 'parcela-parcelamento' && x.ref === mesAtual && x.status === 'guia'), 'parcela do mês com guia');
       const dasItem = r.json.itens.find((x) => /^DAS do Simples/.test(x.titulo) && x.competencia === '2026-08');
       assert.ok(dasItem && dasItem.status === 'atrasada' && dasItem.link, 'guia vencida e não paga aparece atrasada, com o link');
+      const semReg = require('./portal/obrigacoes').daEmpresa({ id: 'sem-registro', empresa: { simples: true } }, { de: '2026-09', ate: '2026-09', hoje: '2026-11-18' });
+      assert.deepStrictEqual(semReg.map((x) => [x.tipo, x.status]), [['das', 'conferir']], 'sem registro nenhum: a conferir, não atrasada');
       const qualquer = r.json.itens.find((x) => x.status !== 'ok' && !x.automatico) || r.json.itens.find((x) => x.status !== 'ok');
       assert.strictEqual((await req('POST', `/api/admin/portal/escritorio/empresas/${idAp}/obrigacoes`, { chave: qualquer.chave, ref: qualquer.ref }, admin)).status, 200);
       assert.ok((await req('GET', `/api/admin/portal/escritorio/empresas/${idAp}/obrigacoes`, null, admin)).json.itens.find((x) => x.chave === qualquer.chave && x.ref === qualquer.ref).status === 'ok', 'marcado como feito');
