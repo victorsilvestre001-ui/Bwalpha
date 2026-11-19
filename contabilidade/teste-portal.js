@@ -600,6 +600,57 @@ const notas = require('./portal/notas');
       assert.deepStrictEqual([r.json.usuario.fiscal.ibscbs, r.json.usuario.fiscal.cIndOp], ['sempre', '030101']);
       await req('POST', `/api/admin/portal/assinantes/${idMaria}/fiscal`, { ...fiscalAntes, ibscbs: 'auto', cIndOp: '' }, admin);
       console.log('ok IBS/CBS');
+
+      // Vendas: NF-e e NFC-e pela Focus (simulada)
+      {
+        const vendasT = require('./portal/vendas');
+        const bv = `/api/admin/portal/escritorio/empresas/${idMaria}`;
+        assert.strictEqual((await req('POST', `${bv}/produtos`, { descricao: 'Pastilha de freio', ncm: '123', valor: '50' }, admin)).status, 400, 'NCM com 8 dígitos');
+        r = await req('POST', `${bv}/produtos`, { descricao: 'Pastilha de freio', codigo: 'PF01', ncm: '8708.30.90', valor: '89,90', pisCst: '04' }, admin);
+        assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+        const idProd = r.json.produto.id;
+        assert.strictEqual((await req('POST', `${bv}/vendas`, { modelo: 'nfce', itens: [{ produtoId: idProd, quantidade: 1 }] }, admin)).status, 409, 'sem token da Focus');
+        process.env.FOCUS_NFE_TOKEN = 'tok-focus';
+        const envFocus = [];
+        vendasT._setTransporte(async (url, o) => {
+          envFocus.push({ url, metodo: o.method, corpo: o.body ? JSON.parse(o.body) : null });
+          if (o.method === 'POST' && url.includes('/v2/nfce')) return { status: 201, json: { status: 'autorizado', numero: '12', serie: '1', chave_nfe: '3526', caminho_danfe: '/notas_fiscais_consumidor/x.html', caminho_xml_nota_fiscal: '/arquivos/x.xml', qrcode_url: 'http://sefaz/qr' } };
+          if (o.method === 'POST' && url.includes('/v2/nfe') && JSON.parse(o.body).items[0].quantidade_comercial === 9) return { status: 202, json: { status: 'processando_autorizacao' } };
+          if (o.method === 'POST' && url.includes('/v2/nfe')) return { status: 202, json: { status: 'processando_autorizacao' } };
+          if (o.method === 'GET' && url.includes('/v2/nfe/')) return { status: 200, json: envFocus.some((x) => x.corpo && x.corpo.items && x.corpo.items[0].quantidade_comercial === 9) && url.endsWith(envFocus.filter((x) => x.metodo === 'POST').slice(-1)[0].url.split('ref=')[1]) ? { status: 'erro_autorizacao', mensagem_sefaz: 'Rejeição 778: NCM inexistente' } : { status: 'autorizado', numero: '5', serie: '1', caminho_danfe: '/arquivos/123/DANFEs/d.pdf', caminho_xml_nota_fiscal: '/arquivos/123/d.xml' } };
+          if (o.method === 'DELETE') return { status: 200, json: { status: 'cancelado' } };
+          return { status: 404, json: { mensagem: 'não achei' } };
+        });
+        // Cupom (NFC-e): síncrono, consumidor sem CPF
+        r = await req('POST', `${bv}/vendas`, { modelo: 'nfce', itens: [{ produtoId: idProd, quantidade: 2 }], pagamento: '17' }, admin);
+        assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+        assert.deepStrictEqual([r.json.venda.status, r.json.venda.numero, r.json.venda.total], ['emitida', '12', 179.8]);
+        assert.ok(r.json.venda.danfe.startsWith('https://homologacao.focusnfe.com.br/notas_fiscais_consumidor/'), 'começa em homologação, link completo');
+        const cNfce = envFocus[0].corpo;
+        assert.deepStrictEqual([cNfce.cnpj_emitente, cNfce.items[0].icms_situacao_tributaria, cNfce.items[0].pis_situacao_tributaria, cNfce.items[0].codigo_ncm, cNfce.formas_pagamento[0]], ['12345678000195', '102', '04', '87083090', { forma_pagamento: '17', valor_pagamento: 179.8 }]);
+        assert.ok(!('cpf_destinatario' in cNfce));
+        // NF-e para empresa de outro estado: CFOP 6102 e local_destino 2; assíncrona, sai na consulta
+        r = await req('POST', `${bv}/vendas?espera=0`, { modelo: 'nfe', itens: [{ produtoId: idProd, quantidade: 1, valor: '100,00' }], destinatario: { documento: '11222333000181' } }, admin);
+        assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+        assert.deepStrictEqual([r.json.venda.status, r.json.venda.numero], ['emitida', '5']);
+        const cNfe = envFocus.find((x) => x.metodo === 'POST' && x.url.includes('/v2/nfe?')).corpo;
+        assert.deepStrictEqual([cNfe.items[0].cfop, cNfe.local_destino, cNfe.uf_destinatario, cNfe.cnpj_destinatario, cNfe.consumidor_final], ['6102', 2, 'SP', '11222333000181', 1]);
+        const idVendaNfe = r.json.venda.id;
+        assert.strictEqual((await req('POST', `${bv}/vendas`, { modelo: 'nfe', itens: [{ produtoId: idProd, quantidade: 1 }] }, admin)).status, 400, 'NF-e exige cliente');
+        // Recusa da SEFAZ: não fica guardada
+        r = await req('POST', `${bv}/vendas?espera=0`, { modelo: 'nfe', itens: [{ produtoId: idProd, quantidade: 9 }], destinatario: { documento: '11222333000181' } }, admin);
+        assert.strictEqual(r.status, 400);
+        assert.match(r.json.erro, /NCM inexistente/);
+        r = await req('GET', `${bv}/vendas`, null, admin);
+        assert.strictEqual(r.json.vendas.length, 2, 'recusada não fica na lista');
+        assert.strictEqual((await req('POST', `${bv}/vendas/${idVendaNfe}/cancelar`, { justificativa: 'curto' }, admin)).status, 400);
+        assert.strictEqual((await req('POST', `${bv}/vendas/${idVendaNfe}/cancelar`, { justificativa: 'Venda desfeita a pedido do cliente' }, admin)).json.venda.status, 'cancelada');
+        assert.strictEqual((await req('POST', `${bv}/vendas/ambiente`, { ambiente: 'producao' }, admin)).json.ambiente, 'producao');
+        await req('POST', `${bv}/vendas/ambiente`, { ambiente: 'homologacao' }, admin);
+        vendasT._setTransporte(null);
+        delete process.env.FOCUS_NFE_TOKEN;
+        console.log('ok vendas NF-e/NFC-e');
+      }
       nacional._setTransporte(null);
     }
     await new Promise((ok) => setTimeout(ok, 200));

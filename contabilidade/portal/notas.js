@@ -3,11 +3,12 @@
 //   GET    /v2/nfsen/REF       consulta (autorizado | erro_autorizacao | cancelado)
 //   DELETE /v2/nfsen/REF       cancela ({ justificativa })
 // Autenticação HTTP Basic: usuário = token da Focus, senha vazia.
-// Variáveis: FOCUS_NFE_TOKEN e FOCUS_NFE_AMBIENTE=homologacao (padrão: produção).
+// Variáveis: FOCUS_NFE_TOKEN, FOCUS_NFSE=1 (liga a NFS-e pela Focus; sem ele o token serve só para NF-e/NFC-e)
+// e FOCUS_NFE_AMBIENTE=homologacao (padrão: produção).
 // Sem o token, a nota confirmada vai para a fila da equipe no /admin, que emite e anexa o PDF.
 
 const BASE = () => (process.env.FOCUS_NFE_AMBIENTE === 'homologacao' ? 'https://homologacao.focusnfe.com.br/v2' : 'https://api.focusnfe.com.br/v2');
-const ativo = () => !!process.env.FOCUS_NFE_TOKEN;
+const ativo = () => !!process.env.FOCUS_NFE_TOKEN && process.env.FOCUS_NFSE === '1';
 
 async function focus(caminho, { method = 'GET', body } = {}) {
   const auth = Buffer.from(`${process.env.FOCUS_NFE_TOKEN}:`).toString('base64');

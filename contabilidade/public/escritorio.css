@@ -251,3 +251,6 @@ input:focus, select:focus, textarea:focus { border-color: var(--marca-2); box-sh
 @media (max-width: 1000px) { .filtros-obr { grid-template-columns: 1fr; } }
 .certidoes { display: flex; flex-wrap: wrap; gap: 8px; }
 .certidoes .btn { font-size: .85rem; }
+.item-venda { display: grid; grid-template-columns: 1fr 70px 100px 28px; gap: 6px; align-items: center; margin-bottom: 6px; }
+.item-venda select, .item-venda input { margin: 0; }
+.faixa.atencao { background: var(--atencao-bg); color: #7a4800; }

@@ -18,6 +18,7 @@ const integra = require('./integra');
 const servicos = require('./servicos');
 const obraUtil = require('./obra');
 const avisos = require('./avisos');
+const vendas = require('./vendas');
 const obrigacoes = require('./obrigacoes');
 const fs = require('fs');
 const path = require('path');
@@ -1213,6 +1214,128 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (!chave || !/^\d{4}-\d{2}$/.test(ref)) return res.status(400).json({ erro: 'Obrigação inválida.' });
     obrigacoes.marca(u, chave, ref, req.body.feito !== false);
     res.json({ ok: true });
+  });
+
+  // ---------- Vendas: NF-e e NFC-e pela Focus ----------
+  const ambVendas = (u) => (u.fiscal && u.fiscal.vendasAmbiente === 'producao' ? 'producao' : 'homologacao');
+  const simplesOuMei = (u) => !!(u.empresa && (u.empresa.mei || u.empresa.simples !== false));
+  const prodPublico = (p) => ({ id: p.id, codigo: p.codigo, descricao: p.descricao, ncm: p.ncm, unidade: p.unidade, valor: p.valor, cfop: p.cfop, csosn: p.csosn, origem: p.origem, pisCst: p.pisCst });
+  function validaProduto(b) {
+    const p = {
+      codigo: txt(b.codigo, 60), descricao: txt(b.descricao, 120), ncm: String(b.ncm || '').replace(/\D/g, ''), unidade: txt(b.unidade || 'UN', 6).toUpperCase(),
+      valor: dinheiro(String(b.valor || '').replace(/\./g, '').replace(',', '.')), cfop: String(b.cfop || '5102').replace(/\D/g, ''), csosn: String(b.csosn || '102').replace(/\D/g, ''),
+      origem: Number(b.origem || 0), pisCst: String(b.pisCst || '49').replace(/\D/g, ''),
+    };
+    if (!p.descricao) return { erro: 'Informe a descrição do produto.' };
+    if (p.ncm.length !== 8) return { erro: 'O NCM tem 8 dígitos (ex.: 8714.10.00).' };
+    if (!/^[1-7]\d{3}$/.test(p.cfop)) return { erro: 'CFOP inválido (ex.: 5102 venda, 5405 venda com ST).' };
+    if (!/^\d{3}$/.test(p.csosn)) return { erro: 'CSOSN tem 3 dígitos (102 sem ST, 500 com ST já recolhida).' };
+    if (!(p.origem >= 0 && p.origem <= 8)) return { erro: 'Origem da mercadoria vai de 0 a 8.' };
+    return { produto: p };
+  }
+  async function atualizaVendasProcessando(u) {
+    for (const v of db.lista('vendas', (x) => x.usuarioId === u.id && x.status === 'processando')) {
+      try { db.atualiza('vendas', v.id, await vendas.consulta(v, v.ambiente)); } catch (err) { console.warn('[vendas] consulta', v.id, err.message); }
+    }
+  }
+  admin.get('/escritorio/empresas/:id/vendas', async (req, res) => {
+    const u = empresaDe(req, res);
+    if (!u) return;
+    if (vendas.ativo()) await atualizaVendasProcessando(u);
+    res.json({
+      config: { focus: vendas.ativo(), ambiente: ambVendas(u), simples: simplesOuMei(u), uf: (u.empresa && u.empresa.uf) || '' },
+      produtos: db.lista('produtos', (p) => p.usuarioId === u.id).sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR')).map(prodPublico),
+      vendas: db.lista('vendas', (v) => v.usuarioId === u.id).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)).slice(0, 60),
+    });
+  });
+  // Ambiente da emissão de vendas: homologação (teste, sem valor fiscal) ou produção
+  admin.post('/escritorio/empresas/:id/vendas/ambiente', express.json(), (req, res) => {
+    const u = empresaDe(req, res);
+    if (!u) return;
+    const amb = req.body.ambiente === 'producao' ? 'producao' : 'homologacao';
+    db.atualiza('usuarios', u.id, { fiscal: { ...(u.fiscal || {}), vendasAmbiente: amb } });
+    res.json({ ambiente: amb });
+  });
+  admin.post('/escritorio/empresas/:id/produtos', express.json(), (req, res) => {
+    const u = empresaDe(req, res);
+    if (!u) return;
+    const r = validaProduto(req.body || {});
+    if (r.erro) return res.status(400).json({ erro: r.erro });
+    res.json({ produto: prodPublico(db.insere('produtos', { usuarioId: u.id, ...r.produto })) });
+  });
+  admin.put('/escritorio/empresas/:id/produtos/:pid', express.json(), (req, res) => {
+    const u = empresaDe(req, res);
+    if (!u) return;
+    const p = db.acha('produtos', (x) => x.id === req.params.pid && x.usuarioId === u.id);
+    if (!p) return res.status(404).json({ erro: 'Produto não encontrado.' });
+    const r = validaProduto(req.body || {});
+    if (r.erro) return res.status(400).json({ erro: r.erro });
+    res.json({ produto: prodPublico(db.atualiza('produtos', p.id, r.produto)) });
+  });
+  admin.delete('/escritorio/empresas/:id/produtos/:pid', (req, res) => {
+    const u = empresaDe(req, res);
+    if (!u) return;
+    db.remove('produtos', (x) => x.id === req.params.pid && x.usuarioId === u.id);
+    res.json({ ok: true });
+  });
+  admin.post('/escritorio/empresas/:id/vendas', express.json(), async (req, res) => {
+    const u = empresaDe(req, res);
+    if (!u) return;
+    if (!vendas.ativo()) return res.status(409).json({ erro: 'A emissão de NF-e/NFC-e ainda não está ligada: falta o token da Focus NFe no Railway.' });
+    if (!simplesOuMei(u)) return res.status(409).json({ erro: 'Nesta primeira versão a emissão de NF-e/NFC-e é para empresas do Simples Nacional e MEI.' });
+    const modelo = req.body.modelo === 'nfe' ? 'nfe' : 'nfce';
+    const itensPedido = Array.isArray(req.body.itens) ? req.body.itens.slice(0, 100) : [];
+    const itens = [];
+    for (const it of itensPedido) {
+      const p = db.acha('produtos', (x) => x.id === it.produtoId && x.usuarioId === u.id);
+      const q = Number(String(it.quantidade || '1').replace(',', '.'));
+      if (!p || !(q > 0)) return res.status(400).json({ erro: 'Item inválido: escolha um produto cadastrado e a quantidade.' });
+      const valor = it.valor !== undefined && it.valor !== '' ? dinheiro(String(it.valor).replace(/\./g, '').replace(',', '.')) : p.valor;
+      if (!(valor > 0)) return res.status(400).json({ erro: `Informe o preço de ${p.descricao}.` });
+      itens.push({ ...prodPublico(p), quantidade: q, valor });
+    }
+    if (!itens.length) return res.status(400).json({ erro: 'Adicione ao menos um produto.' });
+    // Cliente: obrigatório na NF-e (com endereço); no cupom, CPF/CNPJ é opcional
+    const b = req.body.destinatario || {};
+    const doc = String(b.documento || '').replace(/\D/g, '');
+    const destinatario = { documento: doc, nome: txt(b.nome, 60), ie: String(b.ie || '').replace(/\D/g, '') };
+    if (doc.length === 14) {
+      const emp = await buscaEmpresa(doc).catch(() => null);
+      if (emp) { destinatario.nome = destinatario.nome || emp.razaoSocial; destinatario.uf = emp.uf; }
+      const end = await obraUtil.completaEndereco(emp && emp.endereco ? { ...emp.endereco, codigoMunicipio: emp.endereco.codigoMunicipio || emp.codigoIbge } : null);
+      if (end) destinatario.endereco = end;
+    }
+    if (b.cep) {
+      const end = await obraUtil.completaEndereco({ cep: b.cep, numero: b.numero, complemento: b.complemento });
+      if (end) { destinatario.endereco = end; destinatario.uf = end.uf || destinatario.uf; }
+    }
+    if (destinatario.endereco && !destinatario.endereco.municipio) {
+      const c = await obraUtil.buscaCep(destinatario.endereco.cep).catch(() => null);
+      if (c) { destinatario.endereco.municipio = c.municipio; destinatario.uf = destinatario.uf || c.uf; }
+    }
+    const ambiente = ambVendas(u);
+    let venda = db.insere('vendas', { usuarioId: u.id, modelo, ambiente, status: 'processando', itens, destinatario, pagamento: String(req.body.pagamento || '01'), total: Math.round(itens.reduce((t, i) => t + i.quantidade * i.valor, 0) * 100) / 100, pedidoPor: req.acesso && req.acesso.usuario ? req.acesso.usuario.nome : 'Escritório' });
+    try {
+      venda = db.atualiza('vendas', venda.id, await vendas.emite(venda, u, ambiente));
+      // NF-e é assíncrona: confere algumas vezes antes de responder
+      for (let i = 0; i < 4 && venda.status === 'processando'; i++) {
+        await new Promise((ok) => setTimeout(ok, req.query.espera === '0' ? 0 : 2000));
+        venda = db.atualiza('vendas', venda.id, await vendas.consulta(venda, ambiente));
+      }
+    } catch (err) {
+      db.remove('vendas', (x) => x.id === venda.id);
+      return res.status(400).json({ erro: err.message });
+    }
+    if (venda.status === 'erro') { db.remove('vendas', (x) => x.id === venda.id); return res.status(400).json({ erro: `A SEFAZ recusou: ${venda.erro}` }); }
+    if (venda.status === 'emitida' && ambiente === 'producao') avisos.nota(u, { id: venda.id, numero: venda.numero, tomador: { nome: destinatario.nome || 'consumidor' }, valor: venda.total, pdf: venda.danfe }).catch(() => {});
+    res.json({ venda });
+  });
+  admin.post('/escritorio/empresas/:id/vendas/:vid/cancelar', express.json(), async (req, res) => {
+    const u = empresaDe(req, res);
+    if (!u) return;
+    const v = db.acha('vendas', (x) => x.id === req.params.vid && x.usuarioId === u.id);
+    if (!v || v.status !== 'emitida') return res.status(404).json({ erro: 'Nota emitida não encontrada.' });
+    try { res.json({ venda: db.atualiza('vendas', v.id, { ...(await vendas.cancela(v, req.body.justificativa, v.ambiente)), canceladaEm: new Date().toISOString() }) }); } catch (err) { res.status(400).json({ erro: err.message }); }
   });
 
   // ---------- Fila de certidões ----------

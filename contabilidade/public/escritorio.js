@@ -248,13 +248,126 @@ async function telaEmpresa(id, aba) {
     </div>
     <nav class="abas">
       <a href="#/empresa/${id}/notas" class="${aba === 'notas' ? 'ativo' : ''}">${icone('nota')} Notas fiscais</a>
+      <a href="#/empresa/${id}/vendas" class="${aba === 'vendas' ? 'ativo' : ''}">${icone('calc')} Vendas (NF-e/cupom)</a>
       <a href="#/empresa/${id}/clientes" class="${aba === 'clientes' ? 'ativo' : ''}">${icone('pessoas')} Clientes <span class="cont-aba">${d.clientes.filter((c) => c.salvo).length}</span></a>
       <a href="#/empresa/${id}/das" class="${aba === 'das' ? 'ativo' : ''}">${icone('calc')} PGDAS-D e DAS</a>
       <a href="#/empresa/${id}/obrigacoes" class="${aba === 'obrigacoes' ? 'ativo' : ''}">${icone('fila')} Obrigações${e.situacaoFiscal && e.situacaoFiscal.regular === false ? ' <span class="cont-aba alerta">!</span>' : ''}</a>
       <a href="#/empresa/${id}/config" class="${aba === 'config' ? 'ativo' : ''}">${icone('engr')} Configuração</a>
     </nav>
     <section id="abaCorpo"></section>`;
-  ({ notas: abaNotas, clientes: abaClientes, das: abaDas, obrigacoes: abaObrigacoes, config: abaConfig })[aba]?.(d);
+  ({ notas: abaNotas, vendas: abaVendas, clientes: abaClientes, das: abaDas, obrigacoes: abaObrigacoes, config: abaConfig })[aba]?.(d);
+}
+
+// ----- Vendas: NF-e (venda) e NFC-e (cupom) pela Focus -----
+const PAGTOS = [['01', 'Dinheiro'], ['17', 'PIX'], ['03', 'Cartão de crédito'], ['04', 'Cartão de débito'], ['15', 'Boleto'], ['99', 'Outros']];
+const ST_VENDA = { emitida: ['ok', 'Emitida'], processando: ['info', 'Processando'], cancelada: ['neutro', 'Cancelada'] };
+async function abaVendas(d) {
+  const e = d.empresa;
+  const el = $('#abaCorpo');
+  el.innerHTML = '<p class="vazio">Carregando vendas…</p>';
+  const v = await api(`/escritorio/empresas/${e.id}/vendas`);
+  const c = v.config;
+  const prod = v.produtos;
+  const faixa = !c.focus ? '<div class="faixa atencao">Para emitir NF-e e cupom fiscal, falta ligar a Focus NFe: crie a conta, cadastre a empresa lá (certificado A1, inscrição estadual e CSC) e coloque o token no Railway (FOCUS_NFE_TOKEN).</div>'
+    : !c.simples ? '<div class="faixa atencao">Nesta primeira versão a emissão é para empresas do Simples Nacional e MEI.</div>'
+    : `<div class="faixa ${c.ambiente === 'producao' ? 'ok' : 'info'}">${icone('raio')}<span>${c.ambiente === 'producao' ? '<b>Produção:</b> as notas têm valor fiscal.' : '<b>Teste (homologação):</b> as notas não têm valor fiscal.'}</span><button class="btn pequeno" id="vAmb">${c.ambiente === 'producao' ? 'Voltar para teste' : 'Ligar produção'}</button></div>`;
+  el.innerHTML = `${faixa}
+    <div class="grade-nota">
+      <div class="card">
+        <h2>Nova venda</h2>
+        <div class="segmentos" style="grid-template-columns:1fr 1fr">
+          <label><input type="radio" name="vMod" value="nfce" checked><b>Cupom fiscal (NFC-e)</b><small class="suave">venda no balcão, consumidor final</small></label>
+          <label><input type="radio" name="vMod" value="nfe"><b>NF-e de venda</b><small class="suave">para empresa ou entrega</small></label>
+        </div>
+        <label class="campo"><span>Cliente: CPF ou CNPJ <small id="vDocObs">(opcional no cupom)</small></span><input id="vDoc" inputmode="numeric" placeholder="000.000.000-00"></label>
+        <div id="vNfe" hidden>
+          <label class="campo"><span>Nome do cliente</span><input id="vNome" maxlength="60"></label>
+          <div class="form-obra"><label class="campo"><span>CEP</span><input id="vCep" inputmode="numeric" placeholder="00000-000"></label><label class="campo"><span>Número</span><input id="vNum" placeholder="123"></label></div>
+          <label class="campo"><span>Inscrição estadual do cliente <small>(se for contribuinte)</small></span><input id="vIe" inputmode="numeric"></label>
+        </div>
+        <span class="rotulo">Produtos</span>
+        <div id="vItens"></div>
+        <button type="button" class="lnk" id="vMais">${icone('mais')} Adicionar produto</button>
+        <label class="campo" style="margin-top:12px"><span>Pagamento</span><select id="vPag">${PAGTOS.map(([k, n]) => `<option value="${k}">${n}</option>`).join('')}</select></label>
+        <div class="linha-info"><span class="suave">Total</span><b id="vTotal" style="font-size:1.3rem">R$ 0,00</b></div>
+        <button class="btn primario largo" id="vEmitir" ${!c.focus || !c.simples || !prod.length ? 'disabled' : ''}>Conferir e emitir ${icone('seta')}</button>
+        ${!prod.length ? '<p class="msg atencao">Cadastre os produtos ao lado primeiro.</p>' : ''}
+        <p id="vMsg" class="msg erro" hidden></p>
+      </div>
+      <div class="card sem-pad">
+        <div style="padding:18px 22px 6px;display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0">Produtos</h2><button class="btn pequeno" id="pNovo">${icone('mais')} Produto</button></div>
+        <table class="tabela"><thead><tr><th>Produto</th><th>NCM</th><th class="num">Preço</th><th></th></tr></thead><tbody>
+        ${prod.map((p) => `<tr data-p="${p.id}"><td><b>${esc(p.descricao)}</b><br><small class="suave">${esc(p.codigo || '')} · ${esc(p.unidade)} · CFOP ${esc(p.cfop)} · CSOSN ${esc(p.csosn)}</small></td><td>${esc(p.ncm)}</td><td class="num">${brl(p.valor)}</td><td class="acoes"><button class="lnk" data-pe="${p.id}">Editar</button><button class="lnk perigo" data-px="${p.id}">Excluir</button></td></tr>`).join('') || '<tr><td colspan="4" class="vazio">Nenhum produto cadastrado.</td></tr>'}
+        </tbody></table>
+      </div>
+    </div>
+    <div class="card sem-pad" style="margin-top:18px">
+      <div style="padding:18px 22px 6px"><h2 style="margin:0">Vendas emitidas</h2></div>
+      <table class="tabela"><thead><tr><th>Data</th><th>Tipo</th><th>Cliente</th><th class="num">Total</th><th>Situação</th><th></th></tr></thead><tbody>
+      ${v.vendas.map((x) => { const [cl, tx] = ST_VENDA[x.status] || ['neutro', x.status]; return `<tr><td>${data(x.criadoEm)}${x.numero ? `<br><small>Nº ${esc(x.numero)}${x.serie ? `/${esc(x.serie)}` : ''}</small>` : ''}</td><td>${x.modelo === 'nfe' ? 'NF-e' : 'Cupom'}${x.ambiente === 'homologacao' ? '<br><small class="suave">teste</small>' : ''}</td><td>${esc((x.destinatario && (x.destinatario.nome || doc(x.destinatario.documento))) || 'Consumidor')}</td><td class="num"><b>${brl(x.total)}</b></td><td><span class="chip ${cl}">${tx}</span></td>
+        <td class="acoes"><div class="acoes-col">${x.danfe ? `<a class="lnk" href="${esc(x.danfe)}" target="_blank" rel="noopener">${icone('pdf')} ${x.modelo === 'nfe' ? 'DANFE' : 'Cupom'}</a>` : ''}${x.xml ? `<a class="lnk" href="${esc(x.xml)}" target="_blank" rel="noopener">XML</a>` : ''}${x.status === 'emitida' ? `<button class="lnk perigo" data-vc="${x.id}">Cancelar</button>` : ''}</div></td></tr>`; }).join('') || '<tr><td colspan="6" class="vazio">Nenhuma venda ainda.</td></tr>'}
+      </tbody></table>
+    </div>`;
+  const recarrega = () => abaVendas(d);
+  const msg = (t) => { $('#vMsg').textContent = t; $('#vMsg').hidden = !t; };
+  const modelo = () => $$('[name=vMod]').find((r) => r.checked).value;
+  $$('[name=vMod]').forEach((r) => r.addEventListener('change', () => { $('#vNfe').hidden = modelo() !== 'nfe'; $('#vDocObs').textContent = modelo() === 'nfe' ? '(obrigatório)' : '(opcional no cupom)'; }));
+  if ($('#vAmb')) $('#vAmb').addEventListener('click', async () => {
+    const prodNovo = c.ambiente !== 'producao';
+    if (prodNovo && !(await dialogo({ titulo: 'Ligar produção?', sub: 'As próximas notas terão valor fiscal. Faça antes um teste em homologação.', botoes: [{ texto: 'Cancelar', valor: false }, { texto: 'Ligar produção', classe: 'primario', valor: true }] }))) return;
+    await api(`/escritorio/empresas/${e.id}/vendas/ambiente`, { body: { ambiente: prodNovo ? 'producao' : 'homologacao' } }); recarrega();
+  });
+  // Itens da venda
+  const linhaItem = () => {
+    const div = document.createElement('div'); div.className = 'item-venda';
+    div.innerHTML = `<select class="iProd"><option value="">Produto…</option>${prod.map((p) => `<option value="${p.id}">${esc(p.descricao)}</option>`).join('')}</select><input class="iQtd" inputmode="decimal" value="1" title="Quantidade"><input class="iVal" inputmode="decimal" placeholder="Preço"><button type="button" class="lnk perigo iX" title="Tirar">×</button>`;
+    $('.iProd', div).addEventListener('change', () => { const p = prod.find((x) => x.id === $('.iProd', div).value); if (p) $('.iVal', div).value = String(p.valor.toFixed(2)).replace('.', ','); soma(); });
+    [$('.iQtd', div), $('.iVal', div)].forEach((i) => i.addEventListener('input', soma));
+    $('.iX', div).addEventListener('click', () => { div.remove(); soma(); });
+    $('#vItens').append(div);
+  };
+  const num = (s) => Number(String(s || '').replace(/\./g, '').replace(',', '.')) || 0;
+  const itens = () => $$('.item-venda').map((dv) => ({ produtoId: $('.iProd', dv).value, quantidade: $('.iQtd', dv).value.replace(',', '.'), valor: $('.iVal', dv).value })).filter((i) => i.produtoId);
+  const soma = () => { $('#vTotal').textContent = brl(itens().reduce((t, i) => t + Number(i.quantidade || 0) * num(i.valor), 0)); };
+  if (prod.length) linhaItem();
+  $('#vMais').addEventListener('click', linhaItem);
+  $('#vEmitir').addEventListener('click', async () => {
+    msg('');
+    const it = itens();
+    if (!it.length) return msg('Escolha ao menos um produto.');
+    const docC = $('#vDoc').value.replace(/\D/g, '');
+    if (modelo() === 'nfe' && docC.length !== 11 && docC.length !== 14) return msg('Na NF-e informe o CPF ou CNPJ do cliente.');
+    if (modelo() === 'nfe' && docC.length === 11 && $('#vCep').value.replace(/\D/g, '').length !== 8) return msg('Na NF-e para CPF informe o CEP e o número do cliente.');
+    const ok = await dialogo({ titulo: `Emitir ${modelo() === 'nfe' ? 'NF-e' : 'cupom fiscal'}?`, sub: `${c.ambiente === 'producao' ? 'Com valor fiscal.' : 'Em teste (homologação), sem valor fiscal.'} Total ${$('#vTotal').textContent}.`, botoes: [{ texto: 'Voltar', valor: false }, { texto: 'Emitir', classe: 'ouro', valor: true }] });
+    if (!ok) return;
+    $('#vEmitir').disabled = true;
+    try {
+      const r = await api(`/escritorio/empresas/${e.id}/vendas`, { body: { modelo: modelo(), itens: it, pagamento: $('#vPag').value, destinatario: { documento: docC, nome: $('#vNome').value, cep: $('#vCep').value, numero: $('#vNum').value, ie: $('#vIe').value } } });
+      aviso(r.venda.status === 'emitida' ? `${modelo() === 'nfe' ? 'NF-e' : 'Cupom'} nº ${esc(r.venda.numero)} emitido.` : 'Enviada à SEFAZ; ainda processando.');
+      if (r.venda.danfe) window.open(r.venda.danfe, '_blank', 'noopener');
+      recarrega();
+    } catch (err) { msg(err.message); $('#vEmitir').disabled = false; }
+  });
+  // Produtos
+  const formProduto = (p = {}) => `<div class="form-2">
+      <label class="campo"><span>Descrição</span><input id="fpDesc" maxlength="120" value="${esc(p.descricao || '')}"></label>
+      <label class="campo"><span>Código interno</span><input id="fpCod" maxlength="60" value="${esc(p.codigo || '')}"></label>
+      <label class="campo"><span>NCM (8 dígitos)</span><input id="fpNcm" inputmode="numeric" value="${esc(p.ncm || '')}" placeholder="8714.10.00"></label>
+      <label class="campo"><span>Preço</span><input id="fpVal" inputmode="decimal" value="${p.valor ? String(p.valor.toFixed(2)).replace('.', ',') : ''}"></label>
+      <label class="campo"><span>Unidade</span><input id="fpUn" maxlength="6" value="${esc(p.unidade || 'UN')}"></label>
+      <label class="campo"><span>CFOP</span><select id="fpCfop"><option value="5102">5102 · Venda de mercadoria</option><option value="5405" ${p.cfop === '5405' ? 'selected' : ''}>5405 · Venda com ST já recolhida</option><option value="5101" ${p.cfop === '5101' ? 'selected' : ''}>5101 · Venda de produção própria</option></select></label>
+      <label class="campo"><span>CSOSN (Simples)</span><select id="fpCsosn"><option value="102">102 · Sem crédito de ICMS</option><option value="500" ${p.csosn === '500' ? 'selected' : ''}>500 · ICMS já cobrado por ST</option><option value="101" ${p.csosn === '101' ? 'selected' : ''}>101 · Com permissão de crédito</option></select></label>
+      <label class="campo"><span>PIS/COFINS</span><select id="fpPis"><option value="49">49 · Outras saídas (padrão)</option><option value="04" ${p.pisCst === '04' ? 'selected' : ''}>04 · Monofásico (ex.: autopeças)</option></select></label>
+      <label class="campo"><span>Origem</span><select id="fpOrig"><option value="0">0 · Nacional</option><option value="1" ${String(p.origem) === '1' ? 'selected' : ''}>1 · Importação direta</option><option value="2" ${String(p.origem) === '2' ? 'selected' : ''}>2 · Importado no mercado interno</option></select></label>
+    </div>`;
+  const lerProduto = () => ({ descricao: $('#fpDesc').value, codigo: $('#fpCod').value, ncm: $('#fpNcm').value, valor: $('#fpVal').value, unidade: $('#fpUn').value, cfop: $('#fpCfop').value, csosn: $('#fpCsosn').value, pisCst: $('#fpPis').value, origem: $('#fpOrig').value });
+  $('#pNovo').addEventListener('click', async () => { if (await dialogo({ titulo: 'Novo produto', corpo: formProduto(), botoes: [{ texto: 'Cancelar', valor: null }, { texto: 'Salvar', classe: 'primario', acao: () => api(`/escritorio/empresas/${e.id}/produtos`, { body: lerProduto() }) }] })) recarrega(); });
+  $$('[data-pe]', el).forEach((b) => b.addEventListener('click', async () => { const p = prod.find((x) => x.id === b.dataset.pe); if (await dialogo({ titulo: 'Editar produto', corpo: formProduto(p), botoes: [{ texto: 'Cancelar', valor: null }, { texto: 'Salvar', classe: 'primario', acao: () => api(`/escritorio/empresas/${e.id}/produtos/${p.id}`, { method: 'PUT', body: lerProduto() }) }] })) recarrega(); }));
+  $$('[data-px]', el).forEach((b) => b.addEventListener('click', async () => { await api(`/escritorio/empresas/${e.id}/produtos/${b.dataset.px}`, { method: 'DELETE' }); recarrega(); }));
+  $$('[data-vc]', el).forEach((b) => b.addEventListener('click', async () => {
+    const r = await dialogo({ titulo: 'Cancelar nota?', sub: 'A NF-e pode ser cancelada em até 24 horas; o cupom, em até 30 minutos.', corpo: '<label class="campo"><span>Motivo (mínimo 15 caracteres)</span><textarea id="vcMot" rows="3" maxlength="255"></textarea></label>', botoes: [{ texto: 'Voltar', valor: null }, { texto: 'Cancelar nota', classe: 'primario', acao: () => api(`/escritorio/empresas/${e.id}/vendas/${b.dataset.vc}/cancelar`, { body: { justificativa: $('#vcMot').value } }) }] });
+    if (r) { aviso('Nota cancelada.'); recarrega(); }
+  }));
 }
 
 // ----- Obrigações: situação fiscal, parcelamento e calendário -----
