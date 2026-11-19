@@ -185,7 +185,8 @@ function montaDps(nota, prestador, { agora = new Date(), ambiente = 1 } = {}) {
       ambiente === 2 ? '' : el('finNFSe', '0'),
       el('cIndOp', /^\d{6}$/.test(String(f.cIndOp || '')) ? String(f.cIndOp) : indOpServico(f.codigoServico)),
       el('indDest', '0'),
-      el('valores', [el('trib', [el('gIBSCBS', [el('CST', /^\d{3}$/.test(String(f.cstIbsCbs || '')) ? String(f.cstIbsCbs) : '000'), el('cClassTrib', /^\d{6}$/.test(String(f.cClassTrib || '')) ? String(f.cClassTrib) : '000001')])])]),
+      // Produção: trib/gIBSCBS/CST; no piloto da homologação o CST vem direto em trib
+      el('valores', [el('trib', ((cst) => (ambiente === 2 ? cst : [el('gIBSCBS', cst)]))([el('CST', /^\d{3}$/.test(String(f.cstIbsCbs || '')) ? String(f.cstIbsCbs) : '000'), el('cClassTrib', /^\d{6}$/.test(String(f.cClassTrib || '')) ? String(f.cClassTrib) : '000001')]))]),
     ]) : '',
   ].join('');
   return { id, xml: `<DPS xmlns="${NS}" versao="${VERSAO}"><infDPS Id="${id}">${infDps}</infDPS></DPS>` };

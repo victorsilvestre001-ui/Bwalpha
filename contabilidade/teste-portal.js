@@ -558,6 +558,7 @@ const notas = require('./portal/notas');
       const xmlHom = nacionalT.montaDps(notaNO, { ...prest, fiscal: fiscalAntes, empresa: { simples: false } }, { ambiente: 2 }).xml;
       assert.strictEqual((xmlHom.match(/<finNFSe>/g) || []).length, 1, 'na homologação só a finNFSe de fora');
       assert.match(xmlHom, /<tpEmit>1<\/tpEmit><finNFSe>0<\/finNFSe><cLocEmi>/);
+      assert.match(xmlHom, /<trib><CST>000<\/CST><cClassTrib>000001<\/cClassTrib><\/trib>/, 'piloto sem gIBSCBS');
       assert.strictEqual((await req('POST', `/api/admin/portal/assinantes/${idMaria}/fiscal`, { ...fiscalAntes, ibscbs: 'talvez' }, admin)).status, 400);
       r = await req('POST', `/api/admin/portal/assinantes/${idMaria}/fiscal`, { ...fiscalAntes, ibscbs: 'sempre', cIndOp: '030101' }, admin);
       assert.deepStrictEqual([r.json.usuario.fiscal.ibscbs, r.json.usuario.fiscal.cIndOp], ['sempre', '030101']);
