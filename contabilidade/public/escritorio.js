@@ -261,6 +261,8 @@ async function telaEmpresa(id, aba) {
 
 // ----- Vendas: NF-e (venda) e NFC-e (cupom) pela Focus -----
 const PAGTOS = [['01', 'Dinheiro'], ['17', 'PIX'], ['03', 'Cartão de crédito'], ['04', 'Cartão de débito'], ['15', 'Boleto'], ['99', 'Outros']];
+const impressaoVenda = (empId, vendaId) => `/api/admin/portal/escritorio/empresas/${encodeURIComponent(empId)}/vendas/${encodeURIComponent(vendaId)}/imprimir`;
+const zapVenda = (e, x) => `https://wa.me/?text=${encodeURIComponent(`Olá! Segue o seu cupom fiscal da ${e.fantasia || e.nome}${x.numero ? ` (nº ${x.numero})` : ''}, no valor de ${brl(x.total)}: ${x.danfe}`)}`;
 const ST_VENDA = { emitida: ['ok', 'Emitida'], processando: ['info', 'Processando'], cancelada: ['neutro', 'Cancelada'] };
 async function abaVendas(d) {
   const e = d.empresa;
@@ -293,7 +295,7 @@ async function abaVendas(d) {
         <label class="campo" style="margin-top:12px"><span>Pagamento</span><select id="vPag">${PAGTOS.map(([k, n]) => `<option value="${k}">${n}</option>`).join('')}</select></label>
         <div class="linha-info"><span class="suave">Total</span><b id="vTotal" style="font-size:1.3rem">R$ 0,00</b></div>
         <button class="btn primario largo" id="vEmitir" ${!c.focus || !c.simples ? 'disabled' : ''}>Conferir e emitir ${icone('seta')}</button>
-        <p class="suave" style="font-size:.82rem">Digite o nome do produto: o sistema sugere o NCM e os impostos. Produto novo fica cadastrado e marcado para conferir.</p>
+        <p class="suave" style="font-size:.82rem">Digite o nome do produto: o sistema sugere o NCM e os impostos. Produto novo fica cadastrado e marcado para conferir. <a href="/ajuda-cupom" target="_blank" rel="noopener">Como ligar a impressora</a></p>
         <p id="vMsg" class="msg erro" hidden></p>
       </div>
       <div class="card sem-pad">
@@ -307,7 +309,7 @@ async function abaVendas(d) {
       <div style="padding:18px 22px 6px"><h2 style="margin:0">Vendas emitidas</h2></div>
       <table class="tabela"><thead><tr><th>Data</th><th>Tipo</th><th>Cliente</th><th class="num">Total</th><th>Situação</th><th></th></tr></thead><tbody>
       ${v.vendas.map((x) => { const [cl, tx] = ST_VENDA[x.status] || ['neutro', x.status]; return `<tr><td>${data(x.criadoEm)}${x.numero ? `<br><small>Nº ${esc(x.numero)}${x.serie ? `/${esc(x.serie)}` : ''}</small>` : ''}</td><td>${x.modelo === 'nfe' ? 'NF-e' : 'Cupom'}${x.ambiente === 'homologacao' ? '<br><small class="suave">teste</small>' : ''}</td><td>${esc((x.destinatario && (x.destinatario.nome || doc(x.destinatario.documento))) || 'Consumidor')}</td><td class="num"><b>${brl(x.total)}</b></td><td><span class="chip ${cl}">${tx}</span></td>
-        <td class="acoes"><div class="acoes-col">${x.danfe ? `<a class="lnk" href="${esc(x.danfe)}" target="_blank" rel="noopener">${icone('pdf')} ${x.modelo === 'nfe' ? 'DANFE' : 'Cupom'}</a>` : ''}${x.xml ? `<a class="lnk" href="${esc(x.xml)}" target="_blank" rel="noopener">XML</a>` : ''}${x.status === 'emitida' ? `<button class="lnk perigo" data-vc="${x.id}">Cancelar</button>` : ''}</div></td></tr>`; }).join('') || '<tr><td colspan="6" class="vazio">Nenhuma venda ainda.</td></tr>'}
+        <td class="acoes"><div class="acoes-col">${x.danfe && x.modelo === 'nfce' && x.status === 'emitida' ? `<a class="lnk" href="${impressaoVenda(e.id, x.id)}" target="_blank" rel="noopener">${icone('pdf')} Imprimir</a><a class="lnk" href="${esc(zapVenda(e, x))}" target="_blank" rel="noopener">WhatsApp</a>` : x.danfe ? `<a class="lnk" href="${esc(x.danfe)}" target="_blank" rel="noopener">${icone('pdf')} ${x.modelo === 'nfe' ? 'DANFE' : 'Cupom'}</a>` : ''}${x.xml ? `<a class="lnk" href="${esc(x.xml)}" target="_blank" rel="noopener">XML</a>` : ''}${x.status === 'emitida' ? `<button class="lnk perigo" data-vc="${x.id}">Cancelar</button>` : ''}</div></td></tr>`; }).join('') || '<tr><td colspan="6" class="vazio">Nenhuma venda ainda.</td></tr>'}
       </tbody></table>
     </div>`;
   const recarrega = () => abaVendas(d);
@@ -341,12 +343,16 @@ async function abaVendas(d) {
     const ok = await dialogo({ titulo: `Emitir ${modelo() === 'nfe' ? 'NF-e' : 'cupom fiscal'}?`, sub: `${c.ambiente === 'producao' ? 'Com valor fiscal.' : 'Em teste (homologação), sem valor fiscal.'} Total ${$('#vTotal').textContent}.`, botoes: [{ texto: 'Voltar', valor: false }, { texto: 'Emitir', classe: 'ouro', valor: true }] });
     if (!ok) return;
     $('#vEmitir').disabled = true;
+    // Cupom: a janela da impressão abre já (senão o navegador bloqueia) e recebe o cupom quando ele sai
+    const janela = modelo() === 'nfce' ? window.open('', '_blank') : null;
+    if (janela) janela.document.write('<p style="font:16px system-ui;padding:24px">Emitindo o cupom…</p>');
     try {
       const r = await api(`/escritorio/empresas/${e.id}/vendas`, { body: { modelo: modelo(), itens: it, pagamento: $('#vPag').value, destinatario: { documento: docC, nome: $('#vNome').value, cep: $('#vCep').value, numero: $('#vNum').value, ie: $('#vIe').value } } });
       aviso(r.venda.status === 'emitida' ? `${modelo() === 'nfe' ? 'NF-e' : 'Cupom'} nº ${esc(r.venda.numero)} emitido.` : 'Enviada à SEFAZ; ainda processando.');
-      if (r.venda.danfe) window.open(r.venda.danfe, '_blank', 'noopener');
+      if (janela) { if (r.venda.status === 'emitida' && r.venda.danfe) janela.location.href = impressaoVenda(e.id, r.venda.id); else janela.close(); }
+      else if (r.venda.danfe) window.open(r.venda.danfe, '_blank', 'noopener');
       recarrega();
-    } catch (err) { msg(err.message); $('#vEmitir').disabled = false; }
+    } catch (err) { if (janela) janela.close(); msg(err.message); $('#vEmitir').disabled = false; }
   });
   // Produtos
   const formProduto = (p = {}) => `<div class="form-2">

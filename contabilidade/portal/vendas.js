@@ -149,4 +149,47 @@ async function cadastraEmpresa(u, dados, cert) {
   return { id: r.id || atual, tokenProducao: r.token_producao || '', tokenHomologacao: r.token_homologacao || '', certificadoValidoAte: r.certificado_valido_ate || '' };
 }
 
-module.exports = { ativo, cadastraEmpresa, emite, consulta, cancela, corpo, item, ErroVenda, _setTransporte: (f) => { transporte = f || transportePadrao; } };
+// Página para imprimir o cupom na impressora térmica: busca o DANFE NFC-e oficial (HTML da Focus),
+// ajusta para bobina de 80 mm (ou 58 mm) e chama a impressão sozinha. Só aceita links da própria Focus.
+const buscaHtmlPadrao = async (url) => {
+  const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
+  if (!r.ok) throw new ErroVenda(`A Focus não devolveu o cupom (${r.status}).`);
+  return r.text();
+};
+let buscaHtml = buscaHtmlPadrao;
+function paginaImpressao(html, url, { largura = 80, nonce = '' } = {}) {
+  const origem = new URL(url).origin;
+  const mm = largura === 58 ? 58 : 80;
+  const extra = `<base href="${origem}/"><meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+@page { size: ${mm}mm auto; margin: 2mm; }
+html, body { background: #fff; }
+body { width: ${mm - 4}mm; margin: 0 auto !important; }
+img, table { max-width: 100% !important; }
+.vj-barra { position: sticky; top: 0; display: flex; gap: 8px; justify-content: center; padding: 10px; background: #0b2545; font: 14px system-ui, sans-serif; }
+.vj-barra button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 0; cursor: pointer; }
+.vj-barra .vj-imp { background: #c9a227; color: #0b2545; font-weight: 700; }
+@media print { .vj-barra { display: none !important; } }
+</style>`;
+  const barra = `<div class="vj-barra"><button class="vj-imp" id="vjImp">Imprimir de novo</button><button id="vjFecha">Fechar</button></div>
+<script nonce="${nonce}">
+document.getElementById('vjImp').onclick = function () { window.print(); };
+document.getElementById('vjFecha').onclick = function () { window.close(); };
+window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 300); });
+</script>`;
+  let h = String(html || '');
+  h = /<head[^>]*>/i.test(h) ? h.replace(/<head[^>]*>/i, (m) => `${m}${extra}`) : `<!doctype html><html><head>${extra}</head><body>${h}</body></html>`;
+  h = /<body[^>]*>/i.test(h) ? h.replace(/<body[^>]*>/i, (m) => `${m}${barra}`) : `${h}${barra}`;
+  return h;
+}
+async function cupomParaImprimir(venda, opcoes = {}) {
+  const url = String(venda.danfe || '');
+  if (!Object.values(HOST).some((h) => url.startsWith(`${h}/`))) throw new ErroVenda('Este cupom ainda não tem o arquivo para imprimir.');
+  return paginaImpressao(await buscaHtml(url), url, opcoes);
+}
+
+module.exports = {
+  ativo, cadastraEmpresa, emite, consulta, cancela, corpo, item, cupomParaImprimir, paginaImpressao, ErroVenda,
+  _setTransporte: (f) => { transporte = f || transportePadrao; },
+  _setBuscaHtml: (f) => { buscaHtml = f || buscaHtmlPadrao; },
+};

@@ -424,41 +424,70 @@ async function geraRascunho(ev) {
 // ----- Orçamentos -----
 // ----- Cupom fiscal (NFC-e): digita o produto, o sistema sugere o tipo e os impostos, informa o valor -----
 const PAGTOS_CUPOM = [['01', 'Dinheiro'], ['17', 'PIX'], ['04', 'Débito'], ['03', 'Crédito']];
+// Preferências da impressão ficam neste aparelho (cada loja tem a sua impressora)
+const prefCupom = () => { try { return { largura: 80, auto: true, ...JSON.parse(localStorage.getItem('vj-cupom') || '{}') }; } catch { return { largura: 80, auto: true }; } };
+const salvaPrefCupom = (p) => { try { localStorage.setItem('vj-cupom', JSON.stringify(p)); } catch { /* sem armazenamento: usa o padrão */ } };
+const linkImpressao = (id) => `/api/portal/vendas/${encodeURIComponent(id)}/imprimir?largura=${prefCupom().largura}`;
+function linkZapCupom(venda, numero) {
+  const tel = String(numero || '').replace(/\D/g, '');
+  const nome = (eu && eu.usuario && eu.usuario.empresa && (eu.usuario.empresa.nomeFantasia || eu.usuario.empresa.razaoSocial)) || 'nossa loja';
+  const texto = `Olá! Segue o seu cupom fiscal da ${nome}${venda.numero ? ` (nº ${venda.numero})` : ''}, no valor de ${brl(venda.total)}: ${venda.danfe}`;
+  return `https://wa.me/${tel ? (tel.length <= 11 ? `55${tel}` : tel) : ''}?text=${encodeURIComponent(texto)}`;
+}
+function mascaraTel(v) {
+  const c = String(v || '').replace(/\D/g, '').slice(0, 11);
+  return c.length > 10 ? c.replace(/^(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3') : c.replace(/^(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3').replace(/^(\d{2})(\d{0,4})$/, '($1) $2');
+}
 async function abaCupom() {
   const el = $('#abaCupom');
   el.innerHTML = '<p class="vazio">Carregando…</p>';
   try {
     const v = await api('/vendas');
     const c = v.config;
+    const pref = prefCupom();
     const bloqueio = !c.focus ? 'A emissão de cupom fiscal ainda está sendo ligada pelo escritório. Assim que estiver pronta, aparece aqui.'
       : !c.simples ? 'O cupom fiscal por aqui é para empresas do Simples Nacional e MEI. Fale com a equipe.' : '';
     el.innerHTML = `
       <h1>Cupom fiscal</h1>
       <p class="sub">Digite o <b>nome do produto</b> e o <b>valor</b>. O sistema já preenche o resto (NCM e impostos).${c.ambiente !== 'producao' ? ' <b>Modo de teste:</b> os cupons ainda não têm valor fiscal.' : ''}</p>
       ${bloqueio ? `<div class="card aviso-sim">${bloqueio}</div>` : ''}
+      <div id="cInstalar"></div>
       <p id="msgCupom" hidden></p>
       <section class="card">
         <div id="cItens"></div>
         <button type="button" class="sec" id="cMais">${icone('mais')} Mais um produto</button>
         <span class="rotulo" style="display:block;margin-top:16px">Pagamento</span>
         <div class="pagtos">${PAGTOS_CUPOM.map(([k, n], i) => `<label><input type="radio" name="cPag" value="${k}" ${i === 0 ? 'checked' : ''}>${n}</label>`).join('')}</div>
-        <label class="campo" style="margin-top:10px"><span>CPF na nota <small>(opcional)</small></span><input id="cCpf" inputmode="numeric" maxlength="18" placeholder="000.000.000-00"></label>
+        <div class="grade-cupom">
+          <label class="campo"><span>CPF na nota <small>(opcional)</small></span><input id="cCpf" inputmode="numeric" maxlength="18" placeholder="000.000.000-00"></label>
+          <label class="campo"><span>WhatsApp do cliente <small>(opcional)</small></span><input id="cZap" inputmode="tel" maxlength="16" placeholder="(11) 99999-9999"></label>
+        </div>
         <div class="cupom-total"><span class="suave">Total</span><b id="cTotal">R$ 0,00</b></div>
         <div class="linha-botoes"><button class="btn azul largo" id="cEmitir" ${bloqueio ? 'disabled' : ''}>Emitir cupom ${icone('seta')}</button></div>
+        <div class="cupom-pref">
+          <label><input type="checkbox" id="cAuto" ${pref.auto ? 'checked' : ''}> Imprimir sozinho ao emitir</label>
+          <label>Bobina <select id="cLarg"><option value="80" ${pref.largura === 80 ? 'selected' : ''}>80 mm</option><option value="58" ${pref.largura === 58 ? 'selected' : ''}>58 mm</option></select></label>
+          <a href="/ajuda-cupom" target="_blank" rel="noopener">Como ligar a impressora</a>
+        </div>
       </section>
       <section class="card">
         <h2>Últimos cupons</h2>
         <table class="lista-docs"><thead><tr><th>Data</th><th>Itens</th><th>Total</th><th></th></tr></thead><tbody>
-        ${v.vendas.filter((x) => x.modelo === 'nfce').map((x) => `<tr><td>${data(x.criadoEm)}${x.numero ? `<br><small>Nº ${esc(x.numero)}</small>` : ''}</td><td>${esc(x.itens.map((i) => i.descricao).join(', ').slice(0, 80))}${x.ambiente === 'homologacao' ? ' <small>(teste)</small>' : ''}</td><td><b>${brl(x.total)}</b>${x.status !== 'emitida' ? `<br><small>${esc({ processando: 'processando', cancelada: 'cancelado' }[x.status] || x.status)}</small>` : ''}</td><td>${x.danfe ? `<a class="sec" href="${esc(x.danfe)}" target="_blank" rel="noopener">Ver cupom</a>` : ''}</td></tr>`).join('') || '<tr><td colspan="4" class="vazio">Nenhum cupom ainda.</td></tr>'}
+        ${v.vendas.filter((x) => x.modelo === 'nfce').map((x) => `<tr><td>${data(x.criadoEm)}${x.numero ? `<br><small>Nº ${esc(x.numero)}</small>` : ''}</td><td>${esc(x.itens.map((i) => i.descricao).join(', ').slice(0, 80))}${x.ambiente === 'homologacao' ? ' <small>(teste)</small>' : ''}</td><td><b>${brl(x.total)}</b>${x.status !== 'emitida' ? `<br><small>${esc({ processando: 'processando', cancelada: 'cancelado' }[x.status] || x.status)}</small>` : ''}</td>
+          <td class="acoes-cupom">${x.danfe && x.status === 'emitida' ? `<a class="sec" href="${linkImpressao(x.id)}" target="_blank" rel="noopener">Imprimir</a><a class="sec zap" href="${esc(linkZapCupom(x))}" target="_blank" rel="noopener">${icone('zap')} WhatsApp</a>` : ''}</td></tr>`).join('') || '<tr><td colspan="4" class="vazio">Nenhum cupom ainda.</td></tr>'}
         </tbody></table>
       </section>`;
-    const msg = (t, tipo = 'erro') => { const m = $('#msgCupom'); m.className = tipo === 'ok' ? 'ok-form' : 'erro-form'; m.innerHTML = t; m.hidden = !t; };
+    const msg = (t, tipo = 'erro') => { const m = $('#msgCupom'); m.className = tipo === 'ok' ? 'ok-form' : 'erro-form'; m.innerHTML = t; m.hidden = !t; if (t) m.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
     const itens = () => lerItensVendaRapida($('#cItens'));
     const soma = () => { $('#cTotal').textContent = brl(itens().reduce((t, i) => t + (Number(i.quantidade) || 0) * valorNumero(i.valor), 0)); };
     const linha = () => $('#cItens').append(linhaVendaRapida({ buscar: (q) => api(`/produtos/sugestoes?q=${encodeURIComponent(q)}`).then((r) => r.sugestoes), aoMudar: soma }));
     linha();
+    mostraInstalar($('#cInstalar'));
     $('#cMais').addEventListener('click', linha);
     $('#cCpf').addEventListener('input', (ev) => { ev.target.value = mascaraDoc(ev.target.value); });
+    $('#cZap').addEventListener('input', (ev) => { ev.target.value = mascaraTel(ev.target.value); });
+    $('#cAuto').addEventListener('change', (ev) => salvaPrefCupom({ ...prefCupom(), auto: ev.target.checked }));
+    $('#cLarg').addEventListener('change', (ev) => { salvaPrefCupom({ ...prefCupom(), largura: Number(ev.target.value) }); });
     $('#cEmitir').addEventListener('click', async () => {
       msg('');
       const it = itens();
@@ -469,18 +498,39 @@ async function abaCupom() {
       if (semValor) return msg(`Informe o valor de "${esc(semValor.descricao)}".`);
       const cpf = $('#cCpf').value.replace(/\D/g, '');
       if (cpf && cpf.length !== 11 && cpf.length !== 14) return msg('CPF/CNPJ na nota incompleto.');
+      const zap = $('#cZap').value.replace(/\D/g, '');
+      if (zap && zap.length < 10) return msg('WhatsApp do cliente incompleto (DDD + número).');
+      // A janela da impressão abre já no clique (senão o navegador bloqueia) e recebe o cupom quando ele sai
+      const janela = prefCupom().auto ? window.open('', '_blank') : null;
+      if (janela) janela.document.write('<p style="font:16px system-ui;padding:24px">Emitindo o cupom…</p>');
       $('#cEmitir').disabled = true;
       try {
         const r = await api('/vendas', { body: { modelo: 'nfce', itens: it, pagamento: document.querySelector('[name=cPag]:checked').value, destinatario: { documento: cpf } } });
-        if (r.venda.danfe) window.open(r.venda.danfe, '_blank', 'noopener');
+        const ok = r.venda.status === 'emitida' && r.venda.danfe;
+        if (janela) { if (ok) janela.location.href = linkImpressao(r.venda.id); else janela.close(); }
         await abaCupom();
-        msg(r.venda.status === 'emitida' ? `Cupom nº ${esc(r.venda.numero)} emitido. ${r.venda.danfe ? `<a href="${esc(r.venda.danfe)}" target="_blank" rel="noopener">Abrir para imprimir</a>` : ''}` : 'Cupom enviado; ainda processando na SEFAZ.', 'ok');
+        msg(ok ? `Cupom nº ${esc(r.venda.numero)} emitido.
+          <span class="linha-botoes" style="margin-top:10px"><a class="btn azul pequeno" href="${linkImpressao(r.venda.id)}" target="_blank" rel="noopener">Imprimir</a>
+          <a class="btn pequeno zap" href="${esc(linkZapCupom(r.venda, zap))}" target="_blank" rel="noopener">${icone('zap')} Enviar no WhatsApp${zap ? '' : ' (escolher contato)'}</a></span>`
+          : 'Cupom enviado; ainda processando na SEFAZ. Ele aparece na lista abaixo quando sair.', 'ok');
       } catch (err) {
+        if (janela) janela.close();
         if (err.status === 401 || err.status === 402) return trataErro(err, el);
         msg(esc(err.message)); $('#cEmitir').disabled = false;
       }
     });
   } catch (err) { trataErro(err, el); }
+}
+// Atalho de app no celular/computador: usa o convite do navegador quando houver; no iPhone, explica o caminho
+let convitePwa = null;
+window.addEventListener('beforeinstallprompt', (ev) => { ev.preventDefault(); convitePwa = ev; const alvo = $('#cInstalar'); if (alvo) mostraInstalar(alvo); });
+function mostraInstalar(alvo) {
+  if (!alvo || window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) { if (alvo) alvo.innerHTML = ''; return; }
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if (!convitePwa && !ios) { alvo.innerHTML = ''; return; }
+  alvo.innerHTML = `<div class="card aviso-app"><b>Deixe o cupom fiscal a um toque</b><span>${ios ? 'No iPhone: toque em Compartilhar e depois em <b>Adicionar à Tela de Início</b>.' : 'Instale o atalho na tela do celular ou do computador do caixa.'}</span>${ios ? '' : '<button class="btn azul pequeno" id="cInstBtn">Instalar atalho</button>'}</div>`;
+  const b = $('#cInstBtn');
+  if (b) b.addEventListener('click', async () => { convitePwa.prompt(); await convitePwa.userChoice.catch(() => null); convitePwa = null; alvo.innerHTML = ''; });
 }
 
 async function abaOrcamentos() {
@@ -693,6 +743,9 @@ async function inicia() {
   $('#linkAdmin').hidden = !eu.usuario.dono;
   if (!eu.usuario.assinante) return mostraPlanos();
   tela('telaApp');
-  abre('empresa');
+  // Atalho do celular (ou link) abre direto na aba pedida: /area#cupom, /area#notas
+  const pedida = location.hash.replace('#', '');
+  abre(['notas', 'cupom', 'orcamentos', 'conta'].includes(pedida) ? pedida : 'empresa');
 }
 inicia();
+if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));

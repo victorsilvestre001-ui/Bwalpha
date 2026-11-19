@@ -1434,6 +1434,23 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
   r.post('/vendas', auth.exigePlano, async (req, res) => {
     responde2(res, await emiteVenda(req.usuario, req.body || {}, 'Cliente', { espera: req.query.espera !== '0' }));
   });
+  // Cupom pronto para a impressora térmica (80 mm ou 58 mm), já chamando a impressão
+  async function enviaImpressao(res, u, vid, largura) {
+    const v = db.acha('vendas', (x) => x.id === vid && x.usuarioId === u.id);
+    if (!v) return res.status(404).type('text').send('Cupom não encontrado.');
+    const nonce = crypto.randomBytes(12).toString('base64');
+    try {
+      const html = await vendas.cupomParaImprimir(v, { largura: Number(largura) === 58 ? 58 : 80, nonce });
+      // Só o nosso script (com nonce) roda: o HTML vem da Focus, mas é servido do nosso domínio
+      res.set('Content-Security-Policy', `default-src 'none'; img-src * data: blob:; style-src 'unsafe-inline' *; font-src * data:; script-src 'nonce-${nonce}'; frame-ancestors 'self'`);
+      res.type('html').send(html);
+    } catch (err) { res.status(502).type('text').send(err.message); }
+  }
+  r.get('/vendas/:vid/imprimir', auth.exigePlano, (req, res) => enviaImpressao(res, req.usuario, req.params.vid, req.query.largura));
+  admin.get('/escritorio/empresas/:id/vendas/:vid/imprimir', (req, res) => {
+    const u = empresaDe(req, res);
+    if (u) enviaImpressao(res, u, req.params.vid, req.query.largura);
+  });
   admin.post('/escritorio/empresas/:id/vendas/:vid/cancelar', express.json(), async (req, res) => {
     const u = empresaDe(req, res);
     if (!u) return;

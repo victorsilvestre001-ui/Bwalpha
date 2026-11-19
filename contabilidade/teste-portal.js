@@ -674,6 +674,36 @@ const notas = require('./portal/notas');
         r = await req('PUT', `${bv}/produtos/${pOleo.id}`, { ...pOleo, valor: '38,50' }, admin);
         assert.strictEqual(r.json.produto.conferir, false, 'escritório conferiu');
         console.log('ok venda rápida');
+        // Impressão do cupom na térmica: página do nosso domínio com o DANFE oficial da Focus, 80/58 mm
+        {
+          const vImp = (await req('GET', '/api/portal/vendas')).json.vendas.find((x) => x.status === 'emitida' && x.modelo === 'nfce' && x.danfe);
+          assert.ok(vImp, 'há cupom emitido para imprimir');
+          const buscados = [];
+          vendasT._setBuscaHtml(async (url) => { buscados.push(url); return '<html><head><title>DANFE</title></head><body><img src="qrcode.png"><script>alert(1)</script></body></html>'; });
+          const pega = async (url, extra = {}) => { const x = await fetch(base + url, { headers: { cookie, ...extra } }); return { status: x.status, csp: x.headers.get('content-security-policy') || '', tipo: x.headers.get('content-type') || '', html: await x.text() }; };
+          let p = await pega(`/api/portal/vendas/${vImp.id}/imprimir`);
+          assert.strictEqual(p.status, 200, p.html);
+          assert.match(p.tipo, /text\/html/);
+          assert.strictEqual(buscados[0], vImp.danfe, 'busca o DANFE oficial');
+          assert.ok(p.html.includes('<base href="https://homologacao.focusnfe.com.br/">'), 'imagens do DANFE continuam vindo da Focus');
+          assert.match(p.html, /@page \{ size: 80mm auto/);
+          assert.match(p.html, /window\.print\(\)/);
+          const nonce = (p.csp.match(/'nonce-([^']+)'/) || [])[1];
+          assert.ok(nonce && p.html.includes(`<script nonce="${nonce}">`), 'só o nosso script tem permissão');
+          assert.ok(!/script-src[^;]*unsafe-inline/.test(p.csp), 'scripts da página de fora ficam bloqueados');
+          p = await pega(`/api/portal/vendas/${vImp.id}/imprimir?largura=58`);
+          assert.match(p.html, /@page \{ size: 58mm auto/);
+          assert.strictEqual((await pega('/api/portal/vendas/nao-existe/imprimir')).status, 404);
+          p = await pega(`/api/admin/portal/escritorio/empresas/${idMaria}/vendas/${vImp.id}/imprimir`, admin);
+          assert.strictEqual(p.status, 200, 'painel do escritório também imprime');
+          // Link que não é da Focus nunca é buscado
+          require('./portal/db').atualiza('vendas', vImp.id, { danfe: 'http://169.254.169.254/latest' });
+          assert.strictEqual((await pega(`/api/portal/vendas/${vImp.id}/imprimir`)).status, 502);
+          assert.strictEqual(buscados.length, 3, 'não buscou o link de fora');
+          require('./portal/db').atualiza('vendas', vImp.id, { danfe: vImp.danfe });
+          vendasT._setBuscaHtml(null);
+          console.log('ok impressão do cupom');
+        }
         // Cupom fiscal: cadastro da empresa na Focus pelo painel e emissão com o token dela
         {
           const chamadas = [];

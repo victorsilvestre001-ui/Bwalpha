@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Impressora do cupom · V&amp;J Assessoria Contábil</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0b2545">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root { --bg: #f5f7fb; --card: #fff; --texto: #13213a; --suave: #5b6b82; --borda: #e2e7ef; --marca: #0b2545; --ouro: #c9a227; --ok: #128c4b; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0d1626; --card: #15213a; --texto: #e8edf6; --suave: #9fb0c8; --borda: #26344f; --marca: #8fb4ff; --ouro: #e0bd4a; --ok: #44c27f; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--texto); font: 16px/1.6 'Plus Jakarta Sans', system-ui, sans-serif; }
+header { background: #0b2545; color: #fff; padding: 28px 16px 24px; }
+header .w, main { max-width: 860px; margin: 0 auto; }
+header small { color: #c9a227; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: .75rem; }
+header h1 { margin: 6px 0 6px; font-size: clamp(1.5rem, 4vw, 2rem); line-height: 1.2; }
+header p { margin: 0; color: #cfd8e6; }
+main { padding: 20px 16px 48px; }
+.indice { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 20px; }
+.indice a { padding: 8px 14px; border-radius: 999px; background: var(--card); border: 1px solid var(--borda); color: var(--texto); text-decoration: none; font-weight: 600; font-size: .9rem; }
+section { background: var(--card); border: 1px solid var(--borda); border-radius: 16px; padding: 20px 22px; margin-bottom: 16px; }
+h2 { margin: 0 0 4px; font-size: 1.2rem; }
+h2 + p { margin-top: 0; color: var(--suave); }
+h3 { margin: 18px 0 6px; font-size: 1rem; }
+ol, ul { padding-left: 22px; margin: 6px 0; }
+li { margin: 4px 0; }
+code { background: var(--bg); border: 1px solid var(--borda); border-radius: 6px; padding: 1px 6px; font-size: .88em; word-break: break-all; }
+.dica { border-left: 4px solid var(--ouro); background: var(--bg); padding: 10px 14px; border-radius: 0 10px 10px 0; margin: 12px 0 0; font-size: .92rem; }
+.ok { color: var(--ok); font-weight: 700; }
+table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--borda); vertical-align: top; }
+th { color: var(--suave); font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+.voltar { display: inline-block; margin-top: 8px; color: var(--marca); font-weight: 700; }
+@media (max-width: 560px) { section { padding: 16px; } th:nth-child(3), td:nth-child(3) { display: none; } }
+</style>
+</head>
+<body>
+<header><div class="w">
+  <small>Cupom fiscal</small>
+  <h1>Como imprimir o cupom</h1>
+  <p>Não precisa de máquina fiscal: o cupom é autorizado pela internet. A impressora só imprime o que o sistema manda.</p>
+</div></header>
+<main>
+  <nav class="indice">
+    <a href="#impressoras">Qual impressora</a>
+    <a href="#computador">No computador</a>
+    <a href="#celular">No celular (Android)</a>
+    <a href="#iphone">No iPhone</a>
+    <a href="#whatsapp">Sem imprimir</a>
+    <a href="#problemas">Problemas comuns</a>
+  </nav>
+
+  <section id="impressoras">
+    <h2>Qual impressora usar</h2>
+    <p>Qualquer impressora térmica de cupom (não fiscal) funciona. Escolha pelo jeito que você vende.</p>
+    <table>
+      <thead><tr><th>Você vende pelo</th><th>Impressora</th><th>Exemplos comuns</th></tr></thead>
+      <tbody>
+        <tr><td><b>Computador</b> no caixa</td><td>Térmica USB, bobina de 80 mm, com guilhotina (corta sozinha)</td><td>Elgin i9, Bematech MP-4200 TH, Epson TM-T20</td></tr>
+        <tr><td><b>Celular</b> ou tablet</td><td>Térmica portátil Bluetooth, bobina de 58 mm ou 80 mm</td><td>Modelos portáteis Bluetooth de 58 mm</td></tr>
+        <tr><td><b>iPhone</b></td><td>Impressora compatível com AirPrint, ou envie pelo WhatsApp</td><td>Consulte "AirPrint" na caixa da impressora</td></tr>
+      </tbody>
+    </table>
+    <p class="dica">A bobina é de papel térmico comum (o mesmo da maquininha de cartão). Na tela do cupom fiscal escolha <b>80 mm</b> ou <b>58 mm</b> conforme a sua bobina.</p>
+  </section>
+
+  <section id="computador">
+    <h2>No computador (Windows)</h2>
+    <p>Liga uma vez e depois o cupom sai sozinho a cada venda.</p>
+    <ol>
+      <li>Ligue a impressora no USB e instale o programa (driver) que vem com ela ou que está no site do fabricante.</li>
+      <li>No Windows, abra <b>Configurações › Bluetooth e dispositivos › Impressoras</b>, escolha a térmica e marque <b>Definir como padrão</b>.</li>
+      <li>Em <b>Preferências de impressão</b> da térmica, deixe o papel em <b>80 mm</b> (ou 58 mm) e o corte automático ligado.</li>
+      <li>Na Área do Cliente, abra <b>Cupom fiscal</b> e deixe marcado <b>Imprimir sozinho ao emitir</b>.</li>
+      <li>Emita um cupom de teste. Na primeira vez o Chrome mostra a tela de impressão: escolha a térmica, margens <b>Nenhuma</b>, escala <b>100%</b> e clique em Imprimir. Ele lembra das próximas vezes.</li>
+    </ol>
+    <h3>Imprimir sem a tela de confirmação (opcional)</h3>
+    <p>Para o cupom sair direto, sem clicar em "Imprimir", crie um atalho do Chrome só para o caixa:</p>
+    <ol>
+      <li>Clique com o botão direito na área de trabalho › <b>Novo › Atalho</b>.</li>
+      <li>Cole: <code>"C:\Program Files\Google\Chrome\Application\chrome.exe" --kiosk-printing https://site-production-3edd.up.railway.app/area#cupom</code></li>
+      <li>Dê o nome <b>Cupom fiscal</b> e use sempre esse atalho no caixa (feche as outras janelas do Chrome antes de abrir).</li>
+    </ol>
+    <p class="dica">Com esse atalho o Chrome imprime direto na impressora <b>padrão</b> do Windows. Por isso a térmica precisa estar como padrão.</p>
+  </section>
+
+  <section id="celular">
+    <h2>No celular Android + impressora Bluetooth</h2>
+    <ol>
+      <li>Ligue a impressora e pareie no celular: <b>Configurações › Bluetooth</b> › escolha a impressora (a senha costuma ser 0000 ou 1234).</li>
+      <li>Instale na Play Store um serviço de impressão para térmicas, como o <b>RawBT</b>, e escolha nele a sua impressora e a largura do papel.</li>
+      <li>Abra a Área do Cliente no Chrome do celular e toque em <b>Instalar atalho</b> (ou no menu ⋮ › <b>Instalar app</b>). O ícone "V&amp;J Cupom" fica na tela inicial.</li>
+      <li>Emita o cupom. Na tela de impressão, escolha a impressora pelo serviço instalado e toque em imprimir.</li>
+    </ol>
+  </section>
+
+  <section id="iphone">
+    <h2>No iPhone</h2>
+    <ol>
+      <li>Abra a Área do Cliente no Safari, toque em <b>Compartilhar</b> e depois em <b>Adicionar à Tela de Início</b>.</li>
+      <li>Para imprimir, use uma impressora com <b>AirPrint</b> na mesma rede Wi-Fi. A maioria das térmicas Bluetooth baratas não funciona com iPhone.</li>
+      <li>Sem impressora compatível, use o envio pelo WhatsApp (abaixo).</li>
+    </ol>
+  </section>
+
+  <section id="whatsapp">
+    <h2>Sem imprimir: WhatsApp</h2>
+    <p>O cupom tem um link oficial que o cliente abre no celular, com QR Code para consultar na SEFAZ.</p>
+    <ol>
+      <li>Antes de emitir, preencha <b>WhatsApp do cliente</b> (opcional).</li>
+      <li>Depois de emitir, toque em <b>Enviar no WhatsApp</b>. A conversa abre com a mensagem e o link do cupom prontos; é só enviar.</li>
+      <li>Sem o número, o WhatsApp abre para você escolher o contato.</li>
+    </ol>
+    <p class="dica">Pergunte ao cliente se ele prefere o cupom pelo WhatsApp. Em dúvida sobre deixar de imprimir, fale com o escritório.</p>
+  </section>
+
+  <section id="problemas">
+    <h2>Problemas comuns</h2>
+    <ul>
+      <li><b>Saiu cortado ou muito pequeno:</b> na tela de impressão use margens <b>Nenhuma</b> e escala <b>100%</b>, e confira se escolheu 80 mm ou 58 mm igual à bobina.</li>
+      <li><b>A janela do cupom não abriu:</b> o navegador bloqueou o pop-up. Clique no ícone de bloqueio na barra de endereço e permita pop-ups deste site.</li>
+      <li><b>Saiu papel em branco:</b> a bobina está ao contrário. O lado que risca com a unha é o que imprime.</li>
+      <li><b>Imprimiu na impressora errada:</b> deixe a térmica como impressora padrão do Windows.</li>
+      <li><b>Sem internet:</b> o cupom precisa de conexão para ser autorizado. Espere voltar e emita de novo.</li>
+    </ul>
+    <p>Precisa de ajuda? Fale com o escritório pelo WhatsApp.</p>
+    <a class="voltar" href="/area#cupom">← Voltar para o cupom fiscal</a>
+  </section>
+</main>
+</body>
+</html>

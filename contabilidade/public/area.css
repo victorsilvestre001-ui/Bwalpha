@@ -147,3 +147,14 @@ iframe.ferramenta { width: 100%; min-height: 900px; border: 0; border-radius: 16
 .pagtos label { border: 1px solid var(--borda); border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: .88rem; }
 .pagtos input { display: none; }
 .pagtos label:has(input:checked) { border-color: var(--marca); background: var(--marca); color: #fff; }
+.grade-cupom { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+@media (max-width: 560px) { .grade-cupom { grid-template-columns: 1fr; gap: 0; } }
+.cupom-pref { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-top: 14px; font-size: .85rem; color: var(--suave, #5b6b82); }
+.cupom-pref label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.cupom-pref select { padding: 4px 8px; border: 1px solid var(--borda); border-radius: 8px; font: inherit; background: var(--bg); }
+.acoes-cupom { white-space: nowrap; }
+.acoes-cupom .sec { margin: 2px 4px 2px 0; display: inline-flex; gap: 4px; align-items: center; }
+.zap { color: #128c4b !important; }
+.btn.zap { background: #25d366; color: #fff !important; border-color: #25d366; }
+.aviso-app { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; justify-content: space-between; border-left: 4px solid var(--marca); }
+.aviso-app span { flex: 1 1 260px; font-size: .9rem; }
