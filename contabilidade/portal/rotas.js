@@ -1199,7 +1199,11 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
   admin.get('/escritorio/empresas/:id/obrigacoes', (req, res) => {
     const u = empresaDe(req, res);
     if (!u) return;
-    res.json({ itens: obrigacoes.daEmpresa(u, janela(req.query)), situacaoFiscal: u.situacaoFiscal || null, parcelamento: u.parcelamento || null });
+    // Certidões: o pedido em aberto e a mais recente de cada tipo já emitida
+    const pedidos = db.lista('certidoes', (x) => x.empresaId === u.id).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm));
+    const ultimas = {};
+    for (const p of pedidos) for (const [k, v] of Object.entries(p.itens || {})) if (!ultimas[k] && ['emitida', 'positiva'].includes(v.status)) ultimas[k] = v;
+    res.json({ itens: obrigacoes.daEmpresa(u, janela(req.query)), situacaoFiscal: u.situacaoFiscal || null, parcelamento: u.parcelamento || null, certidoes: { pedido: pedidos.find((x) => x.status !== 'concluido') || null, ultimas } });
   });
   admin.post('/escritorio/empresas/:id/obrigacoes', express.json(), (req, res) => {
     const u = empresaDe(req, res);
@@ -1209,6 +1213,55 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (!chave || !/^\d{4}-\d{2}$/.test(ref)) return res.status(400).json({ erro: 'Obrigação inválida.' });
     obrigacoes.marca(u, chave, ref, req.body.feito !== false);
     res.json({ ok: true });
+  });
+
+  // ---------- Fila de certidões ----------
+  // Qualquer pessoa da equipe pede; a tarefa agendada no computador do responsável tira pelo Chrome
+  // (federal e FGTS sozinha; as com captcha/login ficam "esperando o responsável") e devolve os PDFs aqui.
+  const TIPOS_CERT = { federal: 'Federal (Receita/PGFN)', estadual: 'Estadual', municipal: 'Municipal', fgts: 'FGTS (CRF)', trabalhista: 'Trabalhista (CNDT)' };
+  const resumoPedido = (p) => ({ ...p, itens: Object.fromEntries(Object.entries(p.itens || {}).map(([k, v]) => [k, v])) });
+  admin.post('/escritorio/empresas/:id/certidoes/pedido', (req, res) => {
+    const u = empresaDe(req, res);
+    if (!u) return;
+    const aberto = db.acha('certidoes', (x) => x.empresaId === u.id && x.status !== 'concluido');
+    if (aberto) return res.json({ pedido: resumoPedido(aberto), jaExistia: true });
+    const quem = req.acesso && req.acesso.usuario;
+    const e = u.empresa || {};
+    const p = db.insere('certidoes', {
+      empresaId: u.id, empresa: e.razaoSocial || u.nome, cnpj: u.cnpj, municipio: e.municipio || '', uf: e.uf || '',
+      pedidoPor: quem ? quem.nome : 'Escritório', pedidoPorId: quem ? quem.id : null, status: 'pendente',
+      itens: Object.fromEntries(Object.keys(TIPOS_CERT).map((k) => [k, { status: 'pendente' }])),
+    });
+    res.json({ pedido: resumoPedido(p) });
+  });
+  // Lista da fila: só o responsável (a tarefa usa o login dele); vê inclusive empresas de carteira privada
+  admin.get('/escritorio/certidoes/pedidos', soGestor, (req, res) => {
+    const st = String(req.query.status || '');
+    res.json({ tipos: TIPOS_CERT, pedidos: db.lista('certidoes', (x) => !st || x.status === st || (st === 'abertos' && x.status !== 'concluido')).sort((a, b) => a.criadoEm.localeCompare(b.criadoEm)).map(resumoPedido) });
+  });
+  // Atualiza um pedido: situação de cada certidão, validade e o PDF (base64)
+  admin.post('/escritorio/certidoes/pedidos/:pid', soGestor, (req, res) => {
+    const p = db.acha('certidoes', (x) => x.id === req.params.pid);
+    if (!p) return res.status(404).json({ erro: 'Pedido não encontrado.' });
+    const itens = { ...(p.itens || {}) };
+    for (const [tipo, v] of Object.entries(req.body.itens || {})) {
+      if (!TIPOS_CERT[tipo] || !v) continue;
+      const atual = { ...(itens[tipo] || {}) };
+      if (['pendente', 'emitida', 'positiva', 'aguardando', 'indisponivel'].includes(v.status)) atual.status = v.status;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(v.validade || '')) atual.validade = v.validade;
+      if (v.tipoCertidao) atual.tipoCertidao = txt(v.tipoCertidao, 80);
+      if (v.obs !== undefined) atual.obs = txt(v.obs, 300);
+      if (v.pdf) {
+        const buf = Buffer.from(String(v.pdf), 'base64');
+        if (buf.slice(0, 4).toString() !== '%PDF') return res.status(400).json({ erro: `O arquivo da certidão ${tipo} não é um PDF.` });
+        atual.pdf = guardaPdf(buf);
+      }
+      atual.em = new Date().toISOString();
+      itens[tipo] = atual;
+    }
+    const abertos = Object.values(itens).filter((x) => ['pendente', 'aguardando'].includes(x.status)).length;
+    const status = req.body.status === 'concluido' || !abertos ? 'concluido' : Object.values(itens).some((x) => x.status === 'aguardando') ? 'aguardando' : 'em_andamento';
+    res.json({ pedido: resumoPedido(db.atualiza('certidoes', p.id, { itens, status })) });
   });
 
   // ---------- WhatsApp: situação, envios e teste ----------

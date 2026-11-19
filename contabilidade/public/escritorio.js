@@ -297,7 +297,23 @@ async function abaObrigacoes(d) {
     <div class="card" style="margin-top:18px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><h2 style="margin:0">Certidões negativas</h2><button class="btn pequeno" id="btnCopiaCnpj">Copiar CNPJ ${doc(e.cnpj)}</button></div>
       <p class="suave" style="font-size:.85rem">${!sf || sf.erro ? 'Os sites oficiais pedem captcha: clique, cole o CNPJ e emita.' : sf.regular ? 'Pela situação fiscal da Receita, a certidão federal deve sair <b>negativa</b>. Os sites pedem captcha: clique, cole o CNPJ e emita.' : `<b style="color:var(--erro)">A certidão federal deve sair positiva</b> enquanto houver pendências (${sf.pendencias.length}). Veja o quadro "Situação fiscal" acima.`}</p>
-      <div class="certidoes">${certidoesDe(e).map((c) => `<a class="btn" href="${esc(c.url)}" target="_blank" rel="noopener">${icone('link')} ${esc(c.nome)}</a>`).join('')}</div>
+      ${(() => {
+        const c = o.certidoes || { ultimas: {} };
+        const NOMES = { federal: 'Federal', estadual: 'Estadual', municipal: 'Municipal', fgts: 'FGTS', trabalhista: 'Trabalhista' };
+        const ST = { pendente: ['neutro', 'Na fila'], aguardando: ['atencao', 'Esperando captcha/login'], emitida: ['ok', 'Negativa'], positiva: ['erro', 'Positiva'], indisponivel: ['neutro', 'Não disponível'] };
+        const venc = (d) => d && d < new Date().toISOString().slice(0, 10);
+        const linhas = Object.keys(NOMES).map((k) => {
+          const u = c.ultimas[k]; const p = c.pedido && c.pedido.itens[k];
+          return `<tr><td><b>${NOMES[k]}</b>${u && u.tipoCertidao ? `<br><small class="suave">${esc(u.tipoCertidao)}</small>` : ''}</td>
+            <td>${u ? `<span class="chip ${venc(u.validade) ? 'erro' : ST[u.status][0]}">${venc(u.validade) ? 'Vencida' : ST[u.status][1]}</span>` : '<span class="suave">—</span>'}${p && p.status !== 'emitida' && p.status !== 'positiva' ? `<br><small>${ST[p.status] ? ST[p.status][1] : ''}${p.obs ? ` · ${esc(p.obs)}` : ''}</small>` : ''}</td>
+            <td>${u && u.validade ? `até ${dataIso(u.validade)}` : '<span class="suave">—</span>'}</td>
+            <td class="acoes">${u && u.pdf ? `<a class="lnk" href="${esc(u.pdf)}" target="_blank" rel="noopener">${icone('pdf')} PDF</a>` : ''}</td></tr>`;
+        }).join('');
+        return `${c.pedido ? `<p class="msg info" style="margin:0 0 10px">Pedido de ${esc(c.pedido.pedidoPor)} em ${data(c.pedido.criadoEm)}: na fila do computador do escritório. Federal e FGTS saem sozinhas; as com captcha ficam prontas para o responsável.</p>` : ''}
+          <table class="tabela"><thead><tr><th>Certidão</th><th>Situação</th><th>Validade</th><th></th></tr></thead><tbody>${linhas}</tbody></table>
+          <div style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap">${c.pedido ? '' : `<button class="btn primario" id="btnPedeCert">${icone('raio')} Pedir certidões</button>`}</div>
+          <details><summary class="suave" style="cursor:pointer;font-size:.85rem">Tirar manualmente (links oficiais)</summary><div class="certidoes" style="margin-top:8px">${certidoesDe(e).map((x) => `<a class="btn" href="${esc(x.url)}" target="_blank" rel="noopener">${icone('link')} ${esc(x.nome)}</a>`).join('')}</div></details>`;
+      })()}
     </div>
     <div class="card sem-pad" style="margin-top:18px">
       <div style="padding:18px 22px 6px"><h2 style="margin:0">Calendário</h2><small class="suave">DAS, DEFIS e parcelas o site confere sozinho; as demais você marca como feitas.</small></div>
@@ -306,6 +322,7 @@ async function abaObrigacoes(d) {
     </div>`;
   const recarrega = () => abaObrigacoes(d);
   ligaMarcar(el, recarrega);
+  if ($('#btnPedeCert')) $('#btnPedeCert').addEventListener('click', async (ev) => { ev.target.disabled = true; try { await api(`/escritorio/empresas/${e.id}/certidoes/pedido`, { method: 'POST' }); aviso('Pedido de certidões na fila.'); } catch (err) { aviso(esc(err.message), 'erro'); } recarrega(); });
   $('#btnCopiaCnpj').addEventListener('click', async () => { try { await navigator.clipboard.writeText(e.cnpj); aviso('CNPJ copiado.'); } catch { aviso('Não deu para copiar.', 'erro'); } });
   $('#btnSit').addEventListener('click', async (ev) => { ev.target.disabled = true; ev.target.textContent = 'Consultando a Receita…'; try { await api(`/escritorio/empresas/${e.id}/situacao`, { method: 'POST' }); aviso('Situação fiscal atualizada.'); } catch (err) { aviso(esc(err.message), 'erro'); } recarrega(); });
   $('#btnParc').addEventListener('click', async (ev) => { ev.target.disabled = true; try { await api(`/escritorio/empresas/${e.id}/parcelamentos?atualizar=1`); aviso('Parcelamento consultado.'); } catch (err) { aviso(esc(err.message), 'erro'); } recarrega(); });
@@ -777,8 +794,9 @@ async function executaPedido(texto) {
   const e = alvo[0];
   // Certidões negativas: abre a lista oficial da empresa (não é guia de DAS)
   if (/certid|\bcnd\b|negativa/.test(q)) {
+    const r = await api(`/escritorio/empresas/${e.id}/certidoes/pedido`, { method: 'POST' });
     location.hash = `#/empresa/${e.id}/obrigacoes`;
-    return { texto: `Certidões da ${e.nome}: abri a lista com os links oficiais (federal, estadual, municipal, FGTS e trabalhista). Os sites pedem captcha, então a emissão é feita por você.`, link: `#/empresa/${e.id}/obrigacoes` };
+    return { texto: `${r.jaExistia ? 'Já havia um pedido' : 'Pedido'} de certidões da ${e.nome} na fila. Federal e FGTS saem sozinhas pelo computador do escritório; estadual, municipal e trabalhista ficam prontas para o responsável resolver o captcha.`, link: `#/empresa/${e.id}/obrigacoes` };
   }
   const d = await api(`/escritorio/empresas/${e.id}`);
   // Emitir nota: cliente (tomador), valor e descrição; abre a conferência
