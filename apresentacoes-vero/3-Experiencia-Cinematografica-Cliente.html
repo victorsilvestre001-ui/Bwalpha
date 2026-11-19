@@ -80,6 +80,17 @@ h1 i,h2 i{color:var(--gold)}
   .terms{gap:14px;flex-direction:column}
   .cta{display:block;margin:16px 0 0}
 }
+@media (max-width:800px){
+  h1{font-size:40px}h2{font-size:31px}
+  .panel p{font-size:14.5px;line-height:1.55;margin-top:12px}
+  .num{font-size:10px;margin-bottom:12px;letter-spacing:.26em}
+  .ch,.ch.r{padding-bottom:5vh}
+  .panel{padding:20px 18px 16px}
+  ul.tick{margin-top:12px;gap:6px;font-size:14px}
+  .chip{margin:12px 6px 0 0;padding:7px 12px;font-size:12px}
+  .step{font-size:17px}
+  #brand{top:18px;font-size:16px}
+}
 </style>
 </head>
 <body>
@@ -609,7 +620,7 @@ function onFrame(dt, t) {
   const pa = new THREE.Vector3(...KEYS[i][0]), pb = new THREE.Vector3(...KEYS[i + 1][0]);
   const ta = new THREE.Vector3(...KEYS[i][1]), tb = new THREE.Vector3(...KEYS[i + 1][1]);
   const pos = pa.lerp(pb, P >= KEYS.length - 1 ? 1 : f), tgt = ta.lerp(tb, P >= KEYS.length - 1 ? 1 : f);
-  if (innerWidth < 800) pos.sub(tgt).multiplyScalar(1.75).add(tgt);
+  if (innerWidth < 800) pos.sub(tgt).multiplyScalar(1.15).add(tgt);
   orbit += dt * 0.05;
   if (intro) pos.applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.sin(t * .12) * .25);
   if (chapter >= 6) pos.applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.sin(orbit) * .35);
@@ -618,7 +629,7 @@ function onFrame(dt, t) {
   V.camera.position.copy(cur.pos); V.target.copy(cur.tgt);
   // desloca o enquadramento para o lado oposto ao texto
   const mob = innerWidth < 800, sd = SIDE[Math.max(0, chapter)] || '';
-  const ox = mob ? 0 : sd === 'r' ? 0.2 : sd === 'c' ? 0 : -0.2, oy = mob ? 0.2 : 0;
+  const ox = mob ? 0 : sd === 'r' ? 0.2 : sd === 'c' ? 0 : -0.2, oy = mob ? .26 : 0;
   offX += (ox - offX) * k; offY += (oy - offY) * k;
   V.camera.setViewOffset(1000, 1000, offX * 1000, offY * 1000, 1000, 1000);
   // dia/noite

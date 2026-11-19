@@ -110,6 +110,17 @@ ul.tick li:before{content:"";flex:none;width:18px;height:1px;background:var(--go
   #rail{right:8px}.disc{display:none}#ig span{display:none}
   .cta{display:flex;justify-content:center;margin:14px 0 0}
 }
+@media (max-width:800px){
+  h1{font-size:40px}h2{font-size:31px}
+  .panel p{font-size:14.5px;line-height:1.55;margin-top:12px}
+  .num{font-size:10px;margin-bottom:12px;letter-spacing:.26em}
+  .ch,.ch.r{padding-bottom:5vh}
+  .panel{padding:20px 18px 16px}
+  ul.tick{margin-top:12px;gap:6px;font-size:14px}
+  .chip{margin:12px 6px 0 0;padding:7px 12px;font-size:12px}
+  .step{font-size:17px}
+  #brand{top:18px;font-size:16px}
+}
 </style>
 </head>
 <body>
@@ -760,14 +771,14 @@ function onFrame(dt, t) {
   const end = P >= KEYS.length - 1;
   const pos = new THREE.Vector3(...KEYS[i][0]).lerp(new THREE.Vector3(...KEYS[i + 1][0]), end ? 1 : f);
   const tgt = new THREE.Vector3(...KEYS[i][1]).lerp(new THREE.Vector3(...KEYS[i + 1][1]), end ? 1 : f);
-  if (innerWidth < 800) pos.sub(tgt).multiplyScalar(1.5).add(tgt);
+  if (innerWidth < 800) pos.sub(tgt).multiplyScalar(1.15).add(tgt);
   orbit += dt * .06;
   pos.applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.sin(intro ? t * .15 : orbit) * (intro ? .3 : .12));
   const k = Math.min(1, dt * 3);
   cur.pos.lerp(pos, k); cur.tgt.lerp(tgt, k);
   V.camera.position.copy(cur.pos); V.target.copy(cur.tgt);
   const mob = innerWidth < 800, sd = SIDE[Math.max(0, chapter)] || '';
-  const ox = mob ? 0 : sd === 'r' ? .2 : sd === 'c' ? 0 : -.2, oy = mob ? .18 : 0;
+  const ox = mob ? 0 : sd === 'r' ? .2 : sd === 'c' ? 0 : -.2, oy = mob ? .26 : 0;
   offX += (ox - offX) * k; offY += (oy - offY) * k;
   V.camera.setViewOffset(1000, 1000, offX * 1000, offY * 1000, 1000, 1000);
   nightV += (nightT - nightV) * Math.min(1, dt * 2);
