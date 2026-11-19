@@ -56,4 +56,26 @@ async function enviaWhatsapp({ numero, variaveis }) {
   return { ok: true };
 }
 
-module.exports = { emailAtivo, whatsappAtivo, enviaEmail, enviaWhatsapp, limpaVar };
+// Envio por modelo aprovado na Meta (WhatsApp Cloud API), com PDF opcional no cabeçalho do modelo.
+// Usado nos avisos do escritório: guia do DAS, nota emitida, lembrete de vencimento, parcela.
+const whatsappBase = () => !!(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_ID);
+let transporteWhats = (url, opcoes) => fetch(url, opcoes);
+async function enviaModelo({ numero, modelo, variaveis = [], documento }) {
+  if (!whatsappBase()) return { ok: false, erro: 'WhatsApp não configurado' };
+  if (!modelo) return { ok: false, erro: 'modelo de mensagem não configurado' };
+  const para = String(numero || '').replace(/\D/g, '');
+  if (para.length < 10) return { ok: false, erro: 'número de WhatsApp inválido' };
+  const componentes = [];
+  if (documento && documento.link) componentes.push({ type: 'header', parameters: [{ type: 'document', document: { link: documento.link, filename: documento.nome || 'documento.pdf' } }] });
+  if (variaveis.length) componentes.push({ type: 'body', parameters: variaveis.map((v) => ({ type: 'text', text: limpaVar(v) })) });
+  const res = await transporteWhats(`https://graph.facebook.com/v21.0/${process.env.WHATSAPP_PHONE_ID}/messages`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messaging_product: 'whatsapp', to: para.startsWith('55') ? para : `55${para}`, type: 'template', template: { name: modelo, language: { code: process.env.WHATSAPP_TEMPLATE_LANG || 'pt_BR' }, components: componentes } }),
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!res.ok) return { ok: false, erro: `WhatsApp ${res.status}: ${(await res.text()).slice(0, 200)}` };
+  return { ok: true };
+}
+
+module.exports = { emailAtivo, whatsappAtivo, whatsappBase, enviaEmail, enviaWhatsapp, enviaModelo, limpaVar, _setTransporteWhats: (f) => { transporteWhats = f || ((url, o) => fetch(url, o)); } };

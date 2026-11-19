@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const { DADOS_DIR } = require('../pgfn/formato');
 
 const ARQ = process.env.ARQ_PORTAL || path.join(DADOS_DIR, 'portal.json');
-const COLECOES = ['usuarios', 'sessoes', 'notas', 'orcamentos', 'analises', 'apuracoes', 'tomadores'];
+const COLECOES = ['usuarios', 'sessoes', 'notas', 'orcamentos', 'analises', 'apuracoes', 'tomadores', 'obrigacoes', 'envios'];
 
 let dados = null;
 let gravando = null;

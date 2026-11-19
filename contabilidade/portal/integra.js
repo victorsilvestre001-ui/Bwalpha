@@ -69,13 +69,14 @@ async function autentica() {
 
 const mensagens = (j) => ((j && j.mensagens) || []).map((m) => [m.codigo, m.texto].filter(Boolean).join(' ')).join(' | ');
 
-async function chama(verbo, cnpjContribuinte, idServico, dados, idSistema = 'PGDASD') {
+async function chama(verbo, cnpjContribuinte, idServico, dados, idSistema = 'PGDASD', versaoSistema = '1.0') {
   const t = await autentica();
   const contr = trial() ? '00000000000100' : cnpjContratante();
   const body = {
     contratante: { numero: contr, tipo: 2 }, autorPedidoDados: { numero: contr, tipo: 2 },
     contribuinte: { numero: trial() ? '00000000000100' : cnpjContribuinte, tipo: 2 },
-    pedidoDados: { idSistema, idServico, versaoSistema: '1.0', dados: JSON.stringify(dados) },
+    // Serviços sem parâmetro (SITFIS, pedidos de parcelamento) recebem dados vazio ("")
+    pedidoDados: { idSistema, idServico, versaoSistema, dados: dados === '' ? '' : JSON.stringify(dados) },
   };
   const headers = { Authorization: `Bearer ${t.access}`, 'Content-Type': 'application/json', accept: 'text/plain' };
   if (t.jwt) headers.jwt_token = t.jwt;
@@ -94,7 +95,7 @@ async function chama(verbo, cnpjContribuinte, idServico, dados, idSistema = 'PGD
 }
 
 const aaaammdd = (d) => d.toISOString().slice(0, 10).replace(/-/g, '');
-const isoDe = (s) => (/^\d{8}$/.test(String(s || '')) ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : null);
+const isoDe = (v) => { const s = String(v || ''); return /^\d{8}$/.test(s) ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : null; };
 
 // Gera o DAS de uma competência (AAAA-MM). Vencido: consolida multa e juros até `pagarAte` (padrão: hoje).
 // Devolve { pdf (Buffer), valor, principal, multa, juros, vencimento, pagarAte, numeroDocumento }.
@@ -190,6 +191,68 @@ async function entregaDefis(cnpj, ano, { socios = [], saldoCaixaInicial = 0, sal
   return { idDefis: d.idDefis, declaracao: d.declaracaoPdf ? Buffer.from(d.declaracaoPdf, 'base64') : null, recibo: d.reciboPdf ? Buffer.from(d.reciboPdf, 'base64') : null, mensagens: msgs };
 }
 
+// ---------- Situação fiscal (SITFIS) ----------
+// 1) Apoiar SOLICITARPROTOCOLO91 -> protocolo e tempo de espera; 2) Emitir RELATORIOSITFIS92 -> PDF.
+// Enquanto o relatório processa, a Receita responde 202/204 com novo tempo de espera.
+const espera = (ms) => new Promise((ok) => setTimeout(ok, ms));
+let esperaSitfis = espera; // trocável nos testes
+
+// Lê do PDF as pendências (débitos, omissões, PGFN) para o resumo do painel
+function resumoSitfis(texto) {
+  const t = String(texto || '').replace(/\r/g, '');
+  const pendencias = [...new Set([...t.matchAll(/Pend[eê]ncia\s*-\s*([^\n]{3,120})/gi)].map((m) => m[1].trim()))];
+  const semPendencia = /N[aã]o foram detectadas pend[eê]ncias/i.test(t) && !pendencias.length;
+  return { regular: semPendencia || !pendencias.length, pendencias };
+}
+
+async function situacaoFiscal(cnpj) {
+  const { dados: d1 } = await chama('Apoiar', cnpj, 'SOLICITARPROTOCOLO91', '', 'SITFIS', '2.0');
+  const p = Array.isArray(d1) ? d1[0] : d1;
+  const protocolo = p && p.protocoloRelatorio;
+  if (!protocolo) throw new ErroIntegra('A Receita não devolveu o protocolo do relatório de situação fiscal.');
+  let aguardar = Math.min(Math.max(Number(p.tempoEspera) || 4000, 1000), 30000);
+  for (let tentativa = 1; tentativa <= 8; tentativa++) {
+    await esperaSitfis(aguardar);
+    try {
+      const { dados: d2 } = await chama('Emitir', cnpj, 'RELATORIOSITFIS92', { protocoloRelatorio: protocolo }, 'SITFIS', '2.0');
+      const r = Array.isArray(d2) ? d2[0] : d2;
+      if (r && r.pdf) {
+        const pdf = Buffer.from(r.pdf, 'base64');
+        let texto = '';
+        try { texto = (await require('pdf-parse/lib/pdf-parse.js')(pdf)).text; } catch { /* sem texto */ }
+        return { pdf, ...resumoSitfis(texto) };
+      }
+      aguardar = Math.min(Math.max(Number(r && r.tempoEspera) || 4000, 1000), 30000);
+    } catch (err) {
+      if (![202, 204].includes(err.status) && !/SC02|processamento/i.test(err.message)) throw err;
+    }
+  }
+  throw new ErroIntegra('O relatório de situação fiscal ainda está em processamento na Receita. Tente de novo em alguns minutos.');
+}
+
+// ---------- Parcelamentos do Simples (PARCSN) e do MEI (PARCMEI) ----------
+const SERV_PARC = { PARCSN: { pedidos: 'PEDIDOSPARC163', parcelas: 'PARCELASPARAGERAR162', das: 'GERARDAS161' }, PARCMEI: { pedidos: 'PEDIDOSPARC203', parcelas: 'PARCELASPARAGERAR202', das: 'GERARDAS201' } };
+async function parcelamentos(cnpj, { mei = false } = {}) {
+  const sis = mei ? 'PARCMEI' : 'PARCSN';
+  const { dados: dp } = await chama('Consultar', cnpj, SERV_PARC[sis].pedidos, '', sis);
+  const pedidos = ((dp && dp.parcelamentos) || []).map((x) => ({ numero: x.numero, pedidoEm: isoDe(x.dataDoPedido), situacao: x.situacao || '', situacaoEm: isoDe(x.dataDaSituacao) }));
+  let parcelas = [];
+  if (pedidos.some((x) => /deferido|ativo|em parcelamento|consolidado/i.test(x.situacao))) {
+    try {
+      const { dados: dl } = await chama('Consultar', cnpj, SERV_PARC[sis].parcelas, '', sis);
+      parcelas = ((dl && dl.listaParcela) || []).map((x) => ({ parcela: `${String(x.parcela).slice(0, 4)}-${String(x.parcela).slice(4, 6)}`, valor: Number(x.valor) || 0 }));
+    } catch (err) { if (!/MSG|n[aã]o h[aá]/i.test(err.message)) throw err; }
+  }
+  return { modalidade: sis, pedidos, parcelas };
+}
+async function dasParcela(cnpj, parcela, { mei = false } = {}) {
+  const sis = mei ? 'PARCMEI' : 'PARCSN';
+  const { dados: d, mensagens: msgs } = await chama('Emitir', cnpj, SERV_PARC[sis].das, { parcelaParaEmitir: Number(String(parcela).replace('-', '')) }, sis);
+  const r = Array.isArray(d) ? d[0] : d;
+  if (!r || !r.docArrecadacaoPdfB64) throw new ErroIntegra(`A Receita não gerou o DAS da parcela${msgs ? `: ${msgs}` : '.'}`);
+  return Buffer.from(r.docArrecadacaoPdfB64, 'base64');
+}
+
 // ---------- Conferência: o que foi declarado no PGDAS-D ----------
 const dinheiroBr = (s) => Number(String(s || '0').replace(/\./g, '').replace(',', '.')) || 0;
 
@@ -247,4 +310,4 @@ async function declaracaoDoMes(cnpj, competencia) {
   return { numero: dados.numeroDeclaracao || '', ...lido };
 }
 
-module.exports = { situacao, geraDas, entregaSemMovimento, opcaoRegime, entregaDefis, declaracoesDoAno, declaracaoDoMes, lePdfDeclaracao, ID_CERT, trial, ErroIntegra, _setTransporte: (t) => { transporte = t || requisicao; token = null; } };
+module.exports = { situacao, geraDas, entregaSemMovimento, opcaoRegime, entregaDefis, situacaoFiscal, resumoSitfis, parcelamentos, dasParcela, _setEspera: (f) => { esperaSitfis = f || espera; }, declaracoesDoAno, declaracaoDoMes, lePdfDeclaracao, ID_CERT, trial, ErroIntegra, _setTransporte: (t) => { transporte = t || requisicao; token = null; } };

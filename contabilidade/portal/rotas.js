@@ -17,6 +17,8 @@ const nacional = require('./nfse-nacional');
 const integra = require('./integra');
 const servicos = require('./servicos');
 const obraUtil = require('./obra');
+const avisos = require('./avisos');
+const obrigacoes = require('./obrigacoes');
 const fs = require('fs');
 const path = require('path');
 const { DADOS_DIR } = require('../pgfn/formato');
@@ -129,6 +131,13 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       if (!(a > 0 && a < 100)) return res.status(400).json({ erro: 'Alíquota do Simples: informe o percentual, ex.: 6 ou 11,2.' });
       f.aliquotaSN = a;
     }
+    // Avisos ao cliente pelo WhatsApp: número (com DDD) e liga/desliga
+    if (body.whatsapp !== undefined) {
+      const w = String(body.whatsapp || '').replace(/\D/g, '');
+      if (w && (w.length < 10 || w.length > 13)) return res.status(400).json({ erro: 'WhatsApp: informe DDD + número.' });
+      if (w) f.whatsapp = w; else delete f.whatsapp;
+    }
+    if (body.avisosWhatsapp !== undefined) f.avisosWhatsapp = body.avisosWhatsapp !== false;
     // Reforma tributária: quando mandar o grupo IBS/CBS e o código da operação (cIndOp)
     if (body.ibscbs !== undefined) {
       if (!['auto', 'sempre', 'nunca'].includes(body.ibscbs)) return res.status(400).json({ erro: 'IBS/CBS na nota: use auto, sempre ou nunca.' });
@@ -230,7 +239,10 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     }
     const { nfseXml, ...resto } = r;
     const salva = db.atualiza('notas', n.id, { ...resto, token, pdf });
-    if (salva.status === 'emitida' && !salva.teste) await entregaNota(u, salva).catch((err) => console.warn('[nfse] entrega', err.message));
+    if (salva.status === 'emitida' && !salva.teste) {
+      await entregaNota(u, salva).catch((err) => console.warn('[nfse] entrega', err.message));
+      await avisos.nota(u, salva).catch((err) => console.warn('[nfse] whatsapp', err.message));
+    }
     return db.acha('notas', (x) => x.id === n.id);
   }
 
@@ -710,6 +722,8 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       pendentes: db.lista('notas', (n) => n.usuarioId === u.id && ['fila', 'erro'].includes(n.status) && !n.teste).length,
       das: das && { competencia: das.competencia, valor: das.das ? das.das.valor : das.valor, status: das.status, vencimento: (das.das && das.das.vencimento) || das.vencimento },
       ultimoTeste: ultimoTeste && { status: ultimoTeste.status, numero: ultimoTeste.numero || '', chaveAcesso: ultimoTeste.chaveAcesso || '', pdf: ultimoTeste.pdf || '', erro: ultimoTeste.erro || '', enviadaEm: ultimoTeste.enviadaEm },
+      situacaoFiscal: u.situacaoFiscal ? { em: u.situacaoFiscal.em, regular: u.situacaoFiscal.regular, pendencias: (u.situacaoFiscal.pendencias || []).length, erro: u.situacaoFiscal.erro || '' } : null,
+      parcelamentoAtivo: !!(u.parcelamento && u.parcelamento.ativo),
     };
   }
   const empresasEscritorio = () => db.lista('usuarios', (u) => u.cnpj && !auth.ehDono(u));
@@ -1005,7 +1019,9 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (canais.emailAtivo() && u.email) {
       envio = await canais.enviaEmail({ para: u.email, assunto: `DAS ${nomeComp(req.params.comp)} · ${brl(das.valor)} · pague até ${das.vencimento.split('-').reverse().join('/')}`, html: `<p>Segue a guia do DAS de <b>${nomeComp(req.params.comp)}</b> de ${(u.empresa && u.empresa.razaoSocial) || u.nome}.</p><p><b>Valor:</b> ${brl(das.valor)}${g.multa || g.juros ? ` (principal ${brl(g.principal)} + multa ${brl(g.multa)} + juros ${brl(g.juros)})` : ''}<br><b>Pagar até:</b> ${das.vencimento.split('-').reverse().join('/')}</p><p><a href="${das.pdf}">Abrir a guia (PDF)</a></p>`, anexos: [{ nome: `DAS ${req.params.comp}.pdf`, conteudo: g.pdf }] }).catch((err) => ({ ok: false, erro: err.message }));
     }
-    res.json({ linha: linhaDe(u, req.params.comp), das, envio, telefone: u.telefone || '' });
+    // WhatsApp do cliente com a guia anexa (quando o WhatsApp estiver configurado)
+    const whats = await avisos.guia(u, { descricao: `DAS ${nomeComp(req.params.comp)}`, valor: das.valor, vencimento: das.vencimento, link: das.pdf, chave: `das-${u.id}-${req.params.comp}-${das.vencimento}` });
+    res.json({ linha: linhaDe(u, req.params.comp), das, envio, whatsapp: whats, telefone: u.telefone || '' });
   });
 
   // Conferir com a Receita: o que foi declarado no PGDAS-D x o faturamento das notas
@@ -1071,6 +1087,110 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       db.atualiza('usuarios', u.id, { fiscal: { ...(u.fiscal || {}), defis: { ...((u.fiscal && u.fiscal.defis) || {}), [ano]: info } } });
       res.json({ defis: info });
     } catch (err) { res.status(502).json({ erro: `A Receita não aceitou a DEFIS: ${err.message}` }); }
+  });
+
+  // ---------- Situação fiscal (SITFIS) ----------
+  const guardaPdf = (buf) => { if (!buf) return ''; fs.mkdirSync(path.join(DADOS_DIR, 'das'), { recursive: true }); const t = crypto.randomBytes(12).toString('base64url'); fs.writeFileSync(path.join(DADOS_DIR, 'das', `${t}.pdf`), buf); return `${site}/das/${t}`; };
+  const semProcuracao = (msg) => /AcessoNegado|procura[cç][aã]o|n[aã]o tem pr/i.test(String(msg || ''));
+  async function atualizaSituacao(u) {
+    try {
+      const r = await integra.situacaoFiscal(u.cnpj);
+      const sf = { em: new Date().toISOString(), regular: r.regular, pendencias: r.pendencias, pdf: guardaPdf(r.pdf) };
+      db.atualiza('usuarios', u.id, { situacaoFiscal: sf });
+      return sf;
+    } catch (err) {
+      const sf = { em: new Date().toISOString(), erro: semProcuracao(err.message) ? 'Sem procuração para a VIMARI no e-CAC.' : err.message, semProcuracao: semProcuracao(err.message) };
+      db.atualiza('usuarios', u.id, { situacaoFiscal: { ...(u.situacaoFiscal || {}), ...sf } });
+      return sf;
+    }
+  }
+  admin.post('/escritorio/empresas/:id/situacao', async (req, res) => {
+    const u = empresaDe(req, res);
+    if (!u) return;
+    if (!integra.situacao().ativo) return res.status(409).json({ erro: 'O Integra Contador ainda não está ligado.' });
+    res.json({ situacaoFiscal: await atualizaSituacao(u) });
+  });
+
+  // ---------- Parcelamentos (PARCSN / PARCMEI) ----------
+  async function atualizaParcelamento(u) {
+    const mei = !!(u.empresa && u.empresa.mei);
+    const r = await integra.parcelamentos(u.cnpj, { mei });
+    const ativo = r.pedidos.some((x) => /deferido|ativo|em parcelamento|consolidado/i.test(x.situacao)) && r.parcelas.length > 0;
+    const p = { ...(u.parcelamento || {}), em: new Date().toISOString(), modalidade: r.modalidade, pedidos: r.pedidos, parcelas: r.parcelas, ativo, guias: (u.parcelamento && u.parcelamento.guias) || {} };
+    db.atualiza('usuarios', u.id, { parcelamento: p });
+    return p;
+  }
+  async function geraGuiaParcela(u, parcela) {
+    const mei = !!(u.empresa && u.empresa.mei);
+    const pdf = await integra.dasParcela(u.cnpj, parcela, { mei });
+    const atual = db.acha('usuarios', (x) => x.id === u.id);
+    const p = atual.parcelamento || { guias: {} };
+    const info = (p.parcelas || []).find((x) => x.parcela === parcela);
+    const [a, m] = parcela.split('-').map(Number);
+    const venc = obrigacoes.daEmpresa({ ...atual, parcelamento: { ...p, ativo: true } }, { de: parcela, ate: parcela }).find((x) => x.chave === 'parcela-parcelamento');
+    const guia = { pdf: guardaPdf(pdf), valor: info ? info.valor : null, vencimento: venc ? venc.data : `${a}-${String(m).padStart(2, '0')}-28`, em: new Date().toISOString() };
+    db.atualiza('usuarios', u.id, { parcelamento: { ...p, guias: { ...(p.guias || {}), [parcela]: guia } } });
+    const whatsapp = await avisos.guia(atual, { descricao: `parcela ${parcela.split('-').reverse().join('/')} do parcelamento`, valor: guia.valor, vencimento: guia.vencimento, link: guia.pdf, chave: `parc-${u.id}-${parcela}` });
+    return { guia, whatsapp };
+  }
+  admin.get('/escritorio/empresas/:id/parcelamentos', async (req, res) => {
+    const u = empresaDe(req, res);
+    if (!u) return;
+    if (req.query.atualizar !== '1' && u.parcelamento) return res.json({ parcelamento: u.parcelamento });
+    if (!integra.situacao().ativo) return res.status(409).json({ erro: 'O Integra Contador ainda não está ligado.' });
+    try { res.json({ parcelamento: await atualizaParcelamento(u) }); } catch (err) { res.status(502).json({ erro: semProcuracao(err.message) ? 'Sem procuração para a VIMARI no e-CAC.' : err.message }); }
+  });
+  admin.post('/escritorio/empresas/:id/parcelamentos/:parcela/das', async (req, res) => {
+    const u = empresaDe(req, res);
+    if (!u) return;
+    if (!/^\d{4}-\d{2}$/.test(req.params.parcela)) return res.status(400).json({ erro: 'Parcela inválida (AAAA-MM).' });
+    if (!integra.situacao().ativo) return res.status(409).json({ erro: 'O Integra Contador ainda não está ligado.' });
+    try { res.json(await geraGuiaParcela(u, req.params.parcela)); } catch (err) { res.status(502).json({ erro: err.message }); }
+  });
+
+  // ---------- Calendário de obrigações ----------
+  const janela = (q) => {
+    const hoje = new Date().toISOString().slice(0, 7);
+    const mes = (n) => { const d = new Date(Date.UTC(+hoje.slice(0, 4), +hoje.slice(5, 7) - 1 + n, 1)); return d.toISOString().slice(0, 7); };
+    return { de: /^\d{4}-\d{2}$/.test(q.de || '') ? q.de : mes(-2), ate: /^\d{4}-\d{2}$/.test(q.ate || '') ? q.ate : mes(1) };
+  };
+  admin.get('/escritorio/obrigacoes', (req, res) => {
+    const j = janela(req.query);
+    const ver = naCarteira(req);
+    const itens = [];
+    for (const u of empresasEscritorio().filter(ver)) {
+      const nome = (u.empresa && u.empresa.razaoSocial) || u.nome;
+      for (const it of obrigacoes.daEmpresa(u, j)) itens.push({ ...it, empresa: nome });
+    }
+    itens.sort((a, b) => a.data.localeCompare(b.data) || a.empresa.localeCompare(b.empresa, 'pt-BR'));
+    const conta = (s) => itens.filter((x) => x.status === s).length;
+    res.json({ ...j, itens, resumo: { atrasadas: conta('atrasada'), pendentes: conta('pendente'), guias: conta('guia'), ok: conta('ok') } });
+  });
+  admin.get('/escritorio/empresas/:id/obrigacoes', (req, res) => {
+    const u = empresaDe(req, res);
+    if (!u) return;
+    res.json({ itens: obrigacoes.daEmpresa(u, janela(req.query)), situacaoFiscal: u.situacaoFiscal || null, parcelamento: u.parcelamento || null });
+  });
+  admin.post('/escritorio/empresas/:id/obrigacoes', express.json(), (req, res) => {
+    const u = empresaDe(req, res);
+    if (!u) return;
+    const chave = txt(req.body.chave, 60);
+    const ref = txt(req.body.ref, 7);
+    if (!chave || !/^\d{4}-\d{2}$/.test(ref)) return res.status(400).json({ erro: 'Obrigação inválida.' });
+    obrigacoes.marca(u, chave, ref, req.body.feito !== false);
+    res.json({ ok: true });
+  });
+
+  // ---------- WhatsApp: situação, envios e teste ----------
+  admin.get('/escritorio/whatsapp', soGestor, (req, res) => {
+    const nomes = Object.fromEntries(db.lista('usuarios', (u) => u.cnpj).map((u) => [u.id, (u.empresa && u.empresa.razaoSocial) || u.nome]));
+    res.json({ ...avisos.situacao(), envios: db.lista('envios').slice(-100).reverse().map((e) => ({ ...e, empresa: nomes[e.usuarioId] || '' })) });
+  });
+  admin.post('/escritorio/whatsapp/teste', soGestor, express.json(), async (req, res) => {
+    const numero = String(req.body.numero || '').replace(/\D/g, '');
+    if (numero.length < 10) return res.status(400).json({ erro: 'Informe DDD + número.' });
+    const falso = { id: 'teste', nome: 'Teste', fiscal: { whatsapp: numero }, empresa: { nomeFantasia: 'V&J (teste)' } };
+    res.json(await avisos.lembrete(falso, { descricao: 'DAS de teste', valor: 0, vencimento: new Date().toISOString().slice(0, 10) }));
   });
 
   admin.post('/escritorio/empresas/:id/conferir', async (req, res) => {
@@ -1142,7 +1262,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     db.atualiza('apuracoes', reg.id, { status: 'entregue', aprovado: calc, aprovadoEm: reg.aprovadoEm || new Date().toISOString(), entregueEm: new Date().toISOString(), ...(entrega ? { entrega } : {}) });
     res.json({ linha: linhaDe(u, req.params.comp), entrega });
   });
-  admin.post('/apuracoes/:id/:comp/das', express.json({ limit: '4mb' }), (req, res) => {
+  admin.post('/apuracoes/:id/:comp/das', express.json({ limit: '4mb' }), async (req, res) => {
     const u = alvoApu(req, res);
     if (!u) return;
     let reg = apuracao.registro(u, req.params.comp);
@@ -1170,7 +1290,8 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     db.atualiza('apuracoes', reg.id, { status: 'das_disponivel', das: { pdf, linhaDigitavel, valor, vencimento, em: new Date().toISOString(), ...(req.body.token ? { token: req.body.token } : {}) } });
     const alerta = { em: new Date().toISOString(), texto: `Seu DAS de ${nomeComp(req.params.comp)} está disponível: ${brl(valor)}, vence em ${vencimento ? vencimento.split('-').reverse().join('/') : '—'}. Veja em Minha empresa › Seu DAS.` };
     db.atualiza('usuarios', u.id, { alertas: [alerta, ...(u.alertas || [])].slice(0, 30) });
-    res.json({ linha: linhaDe(u, req.params.comp) });
+    const whats = pdf ? await avisos.guia(u, { descricao: `DAS ${nomeComp(req.params.comp)}`, valor, vencimento, link: pdf, chave: `das-${u.id}-${req.params.comp}-${vencimento}` }) : null;
+    res.json({ linha: linhaDe(u, req.params.comp), whatsapp: whats });
   });
   admin.post('/apuracoes/:id/:comp/pago', (req, res) => {
     const u = alvoApu(req, res);
@@ -1195,7 +1316,10 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (pdf && !/^https:\/\//.test(pdf)) return res.status(400).json({ erro: 'O link do PDF precisa começar com https://' });
     const emitida = db.atualiza('notas', n.id, { status: 'emitida', numero: txt(req.body.numero, 30), pdf, emitidaEm: new Date().toISOString() });
     const dono = db.acha('usuarios', (x) => x.id === emitida.usuarioId);
-    if (dono) entregaNota(dono, emitida).catch((err) => console.warn('[nfse] entrega', err.message));
+    if (dono) {
+      entregaNota(dono, emitida).catch((err) => console.warn('[nfse] entrega', err.message));
+      avisos.nota(dono, emitida).catch((err) => console.warn('[nfse] whatsapp', err.message));
+    }
     res.json({ nota: emitida });
   });
 
@@ -1268,5 +1392,40 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
   // DAS do cliente: estimativa do mês e guias liberadas pelo contador
   r.get('/das', auth.exigePlano, (req, res) => res.json({ meses: apuracao.painel(req.usuario, { quantas: 6 }).map(({ ajuste, ...l }) => l) }));
   r.use('/analises', analises.portal());
-  return { portal: r, publico, admin, enviaPdfNota, enviaPdfDas };
+  // ---------- Rotinas automáticas (uma vez por dia) ----------
+  // Situação fiscal mensal, guia da parcela do mês e lembretes de vencimento pelo WhatsApp.
+  const DIA_MS = 24 * 60 * 60 * 1000;
+  const velho = (iso, dias) => !iso || Date.now() - Date.parse(iso) > dias * DIA_MS;
+  async function rotinas({ hoje = require('./agenda').hojeSP() } = {}) {
+    const feito = { situacao: 0, parcelas: 0, lembretes: 0 };
+    const ativo = integra.situacao().ativo;
+    for (const u of empresasEscritorio()) {
+      if (ativo) {
+        const sf = u.situacaoFiscal;
+        if (velho(sf && sf.em, 30)) { await atualizaSituacao(u); feito.situacao++; }
+        const p = u.parcelamento;
+        if (p && p.ativo) {
+          try {
+            const atual = velho(p.em, 25) ? await atualizaParcelamento(u) : p;
+            const mes = hoje.slice(0, 7);
+            if (atual.ativo && (atual.parcelas || []).some((x) => x.parcela === mes) && !(atual.guias || {})[mes]) { await geraGuiaParcela(u, mes); feito.parcelas++; }
+          } catch (err) { console.warn('[rotinas] parcela', u.id, err.message); }
+        }
+      }
+      // Lembretes: 3 dias antes e no dia do vencimento, para guias ainda não pagas
+      const emDias = (d) => Math.round((Date.parse(d) - Date.parse(hoje)) / DIA_MS);
+      for (const reg of db.lista('apuracoes', (a) => a.usuarioId === u.id && a.status === 'das_disponivel' && a.das && a.das.vencimento)) {
+        const n = emDias(reg.das.vencimento);
+        if (n === 3 || n === 0) { const r = await avisos.lembrete(u, { descricao: `DAS ${nomeComp(reg.competencia)}`, valor: reg.das.valor, vencimento: reg.das.vencimento, link: reg.das.pdf, chave: `lemb-${reg.id}-${hoje}` }); if (r.ok && !r.repetido) feito.lembretes++; }
+      }
+      for (const [parcela, g] of Object.entries((u.parcelamento && u.parcelamento.guias) || {})) {
+        const n = g.vencimento ? emDias(g.vencimento) : -1;
+        if (n === 3 || n === 0) { const r = await avisos.lembrete(u, { descricao: `parcela ${parcela.split('-').reverse().join('/')}`, valor: g.valor, vencimento: g.vencimento, link: g.pdf, chave: `lemb-parc-${u.id}-${parcela}-${hoje}` }); if (r.ok && !r.repetido) feito.lembretes++; }
+      }
+    }
+    return feito;
+  }
+  admin.post('/escritorio/rotinas', soGestor, async (req, res) => res.json(await rotinas()));
+
+  return { portal: r, publico, admin, enviaPdfNota, enviaPdfDas, rotinas };
 };

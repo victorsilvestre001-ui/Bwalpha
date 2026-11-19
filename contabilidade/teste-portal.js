@@ -735,6 +735,80 @@ const notas = require('./portal/notas');
       assert.deepStrictEqual([defisEnviada.sis, defisEnviada.srv, defisEnviada.dd.ano, defisEnviada.dd.empresa.socios[0].cpf, defisEnviada.dd.empresa.socios[0].participacaoCapitalSocial, defisEnviada.dd.empresa.estabelecimentos[0].totalEntradas], ['DEFIS', 'TRANSDECLARACAO141', 2025, '12345678909', 100, 0]);
       assert.ok(!JSON.stringify(require('./portal/db').acha('usuarios', (x) => x.id === idAp)).includes('12345678909'), 'CPF do sócio não fica guardado');
       console.log('ok DEFIS');
+
+      // Situação fiscal (SITFIS): protocolo, espera "em processamento" e o PDF com as pendências
+      integra._setEspera(async () => {});
+      const pdfSitfis = await (async () => { const t = '%PDF-1.4\n'; return Buffer.from(t).toString('base64'); })();
+      let chamadasSit = 0;
+      integra._setTransporte(async ({ url, body }) => {
+        const srv = body.pedidoDados.idServico;
+        if (srv === 'SOLICITARPROTOCOLO91') { assert.strictEqual(body.pedidoDados.dados, ''); assert.ok(url.endsWith('/Apoiar')); return { status: 200, json: { status: 200, mensagens: [{ codigo: 'Aviso-Sitfis-AV01', texto: 'ok' }], dados: JSON.stringify({ protocoloRelatorio: 'PROT123', tempoEspera: 4000 }) } }; }
+        if (srv === 'RELATORIOSITFIS92') {
+          chamadasSit++;
+          assert.strictEqual(JSON.parse(body.pedidoDados.dados).protocoloRelatorio, 'PROT123');
+          if (chamadasSit === 1) return { status: 202, json: { status: 202, mensagens: [{ codigo: '[Sucesso-Sitfis-SC02]', texto: 'em processamento' }], dados: JSON.stringify({ tempoEspera: 2000 }) } };
+          return { status: 200, json: { status: 200, mensagens: [], dados: JSON.stringify({ pdf: pdfSitfis }) } };
+        }
+        throw new Error('serviço inesperado ' + srv);
+      });
+      r = await req('POST', `/api/admin/portal/escritorio/empresas/${idAp}/situacao`, null, admin);
+      assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+      assert.ok(r.json.situacaoFiscal.pdf && chamadasSit === 2, 'esperou o processamento e trouxe o PDF');
+      assert.deepStrictEqual(integra.resumoSitfis('Pendência - Débito (SIEF)\nPendência - Omissão de declaração (DCTFWeb)\nPendência - Débito (SIEF)'), { regular: false, pendencias: ['Débito (SIEF)', 'Omissão de declaração (DCTFWeb)'] });
+      assert.strictEqual(integra.resumoSitfis('Não foram detectadas pendências/exigibilidades suspensas').regular, true);
+      integra._setTransporte(async () => ({ status: 403, json: { status: 403, mensagens: [{ codigo: 'AcessoNegado-ICGERENCIADOR-022', texto: 'não tem procuração' }] } }));
+      r = await req('POST', `/api/admin/portal/escritorio/empresas/${idAp}/situacao`, null, admin);
+      assert.strictEqual(r.json.situacaoFiscal.semProcuracao, true);
+      console.log('ok situação fiscal');
+
+      // Parcelamento do Simples: pedidos, parcelas e guia da parcela (com WhatsApp)
+      const canaisT = require('./portal/canais');
+      const whatsEnviados = [];
+      process.env.WHATSAPP_TOKEN = 'tok'; process.env.WHATSAPP_PHONE_ID = '123'; process.env.WHATSAPP_TPL_GUIA = 'guia_imposto'; process.env.WHATSAPP_TPL_LEMBRETE = 'lembrete_vencimento'; process.env.WHATSAPP_TPL_NOTA = 'nota_emitida';
+      canaisT._setTransporteWhats(async (url, o) => { whatsEnviados.push(JSON.parse(o.body)); return { ok: true, text: async () => '' }; });
+      await req('POST', `/api/admin/portal/assinantes/${idAp}/fiscal`, { codigoMunicipio: '3552205', codigoServico: '010701', whatsapp: '(15) 99999-1234' }, admin);
+      const mesAtual = new Date().toISOString().slice(0, 7);
+      integra._setTransporte(async ({ body }) => {
+        const srv = body.pedidoDados.idServico;
+        if (srv === 'PEDIDOSPARC163') return { status: 200, json: { status: 200, mensagens: [], dados: JSON.stringify({ parcelamentos: [{ numero: 1, dataDoPedido: 20260110, situacao: 'Em parcelamento', dataDaSituacao: 20260115 }] }) } };
+        if (srv === 'PARCELASPARAGERAR162') return { status: 200, json: { status: 200, mensagens: [], dados: JSON.stringify({ listaParcela: [{ parcela: Number(mesAtual.replace('-', '')), valor: 312.45 }] }) } };
+        if (srv === 'GERARDAS161') { assert.strictEqual(JSON.parse(body.pedidoDados.dados).parcelaParaEmitir, Number(mesAtual.replace('-', ''))); return { status: 200, json: { status: 200, mensagens: [], dados: JSON.stringify({ docArrecadacaoPdfB64: pdfB64 }) } }; }
+        throw new Error('serviço inesperado ' + srv);
+      });
+      r = await req('GET', `/api/admin/portal/escritorio/empresas/${idAp}/parcelamentos?atualizar=1`, null, admin);
+      assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+      assert.strictEqual(r.json.parcelamento.ativo, true);
+      assert.strictEqual(r.json.parcelamento.parcelas[0].valor, 312.45);
+      r = await req('POST', `/api/admin/portal/escritorio/empresas/${idAp}/parcelamentos/${mesAtual}/das`, null, admin);
+      assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+      assert.ok(r.json.guia.pdf && r.json.whatsapp.ok);
+      const wGuia = whatsEnviados[whatsEnviados.length - 1];
+      assert.deepStrictEqual([wGuia.to, wGuia.template.name, wGuia.template.components[0].type], ['5515999991234', 'guia_imposto', 'header']);
+      assert.strictEqual((await req('POST', `/api/admin/portal/escritorio/empresas/${idAp}/parcelamentos/${mesAtual}/das`, null, admin)).json.whatsapp.repetido, true, 'não manda a mesma guia duas vezes');
+      console.log('ok parcelamento');
+
+      // Calendário de obrigações: DAS, parcela e marcação manual
+      r = await req('GET', `/api/admin/portal/escritorio/empresas/${idAp}/obrigacoes`, null, admin);
+      assert.ok(r.json.itens.some((x) => x.chave === 'parcela-parcelamento' && x.ref === mesAtual && x.status === 'guia'), 'parcela do mês com guia');
+      const dasItem = r.json.itens.find((x) => /^DAS do Simples/.test(x.titulo) && x.competencia === '2026-08');
+      assert.ok(dasItem && dasItem.status === 'atrasada' && dasItem.link, 'guia vencida e não paga aparece atrasada, com o link');
+      const qualquer = r.json.itens.find((x) => x.status !== 'ok' && !x.automatico) || r.json.itens.find((x) => x.status !== 'ok');
+      assert.strictEqual((await req('POST', `/api/admin/portal/escritorio/empresas/${idAp}/obrigacoes`, { chave: qualquer.chave, ref: qualquer.ref }, admin)).status, 200);
+      assert.ok((await req('GET', `/api/admin/portal/escritorio/empresas/${idAp}/obrigacoes`, null, admin)).json.itens.find((x) => x.chave === qualquer.chave && x.ref === qualquer.ref).status === 'ok', 'marcado como feito');
+      r = await req('GET', '/api/admin/portal/escritorio/obrigacoes', null, admin);
+      assert.ok(r.json.itens.length && r.json.resumo && typeof r.json.resumo.atrasadas === 'number');
+      console.log('ok obrigações');
+
+      // WhatsApp: página de situação, teste e lembrete automático
+      r = await req('GET', '/api/admin/portal/escritorio/whatsapp', null, admin);
+      assert.strictEqual(r.json.ativo, true);
+      assert.ok(r.json.modelos.length === 3 && r.json.envios.length >= 1);
+      assert.ok(!JSON.stringify(r.json.envios).includes('99999'), 'número mascarado no histórico');
+      assert.strictEqual((await req('POST', '/api/admin/portal/escritorio/whatsapp/teste', { numero: '15988887777' }, admin)).json.ok, true);
+      delete process.env.WHATSAPP_TOKEN; delete process.env.WHATSAPP_PHONE_ID; delete process.env.WHATSAPP_TPL_GUIA; delete process.env.WHATSAPP_TPL_LEMBRETE; delete process.env.WHATSAPP_TPL_NOTA;
+      canaisT._setTransporteWhats(null);
+      integra._setEspera(null);
+      console.log('ok whatsapp');
       integra._setTransporte(null);
       delete process.env.INTEGRA_TRIAL;
     }

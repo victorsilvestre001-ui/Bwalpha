@@ -210,7 +210,21 @@ if (require.main === module) {
 // Área do Cliente (login + plano pago): notas fiscais, orçamentos e painel da empresa
 const SITE = process.env.SITE_URL || 'https://site-production-3edd.up.railway.app';
 const portal = rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, assistente, site: SITE });
-if (require.main === module) { require('./portal/resumo').agenda({ site: SITE }); require('./portal/captura').agenda(); }
+if (require.main === module) {
+  require('./portal/resumo').agenda({ site: SITE });
+  require('./portal/captura').agenda();
+  // Rotinas do escritório uma vez por dia, depois das 8h (horário de Brasília)
+  let ultimoDia = '';
+  const rodaRotinas = () => {
+    const agora = new Date(Date.now() - 3 * 3600 * 1000);
+    const dia = agora.toISOString().slice(0, 10);
+    if (dia === ultimoDia || agora.getUTCHours() < 8) return;
+    ultimoDia = dia;
+    portal.rotinas().then((r) => console.log('[rotinas]', dia, JSON.stringify(r))).catch((e) => console.error('[rotinas]', e.message));
+  };
+  setTimeout(rodaRotinas, 2 * 60 * 1000);
+  setInterval(rodaRotinas, 30 * 60 * 1000).unref();
+}
 app.use('/api/portal', portal.portal);
 app.use('/api/orcamento-publico', portal.publico);
 app.use('/api/asaas/webhook', webhookAsaas);

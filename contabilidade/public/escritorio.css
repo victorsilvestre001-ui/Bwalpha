@@ -240,3 +240,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--marca-2); box-sh
 .form-obra { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
 .reforma-box { border: 1px dashed var(--borda); border-radius: 12px; padding: 12px 14px; margin: 0 0 14px; background: #fafbfd; }
 .reforma-box > b { display: block; margin-bottom: 8px; font-size: .9rem; }
+.cont-aba.alerta { background: var(--erro); color: #fff; }
+.lista-pend { margin: 0 0 8px; padding-left: 18px; font-size: .9rem; }
+.lista-pend li { margin: 2px 0; }
+.modelo-wa { border-bottom: 1px solid var(--linha); padding: 10px 0; }
+.modelo-wa:last-child { border-bottom: 0; }
+.modelo-wa p { margin: 6px 0 0; font-size: .88rem; background: #f5f8fc; border-radius: 8px; padding: 8px 10px; }

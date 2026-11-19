@@ -123,6 +123,7 @@ const PAPEL = { dono: 'Responsável', equipe: 'Funcionário' };
 function desenhaConta() {
   const u = EU.usuario;
   $('#menuEquipe').hidden = !EU.gestor;
+  $('#menuWhats').hidden = !EU.gestor;
   $('#menuAdmin').hidden = !EU.gestor;
   $('#menuConta').hidden = !u;
   if (u) { $('#contaIni').textContent = iniciais(u.nome); $('#contaNome').textContent = u.nome; $('#contaPapel').textContent = PAPEL[u.papel] || ''; }
@@ -137,6 +138,8 @@ function rota() {
   if (partes[0] === 'integra') return telaIntegra();
   if (EU.usuario && EU.usuario.trocarSenha) return telaConta();
   if (partes[0] === 'equipe' && EU.gestor) return telaEquipe();
+  if (partes[0] === 'obrigacoes') return telaObrigacoes();
+  if (partes[0] === 'whatsapp' && EU.gestor) return telaWhatsapp();
   if (partes[0] === 'conta' && EU.usuario) return telaConta();
   if (partes[0] === 'assistente') return telaAssistente();
   if (partes[0] === 'empresas') return telaEmpresas();
@@ -240,10 +243,131 @@ async function telaEmpresa(id, aba) {
       <a href="#/empresa/${id}/notas" class="${aba === 'notas' ? 'ativo' : ''}">${icone('nota')} Notas fiscais</a>
       <a href="#/empresa/${id}/clientes" class="${aba === 'clientes' ? 'ativo' : ''}">${icone('pessoas')} Clientes <span class="cont-aba">${d.clientes.filter((c) => c.salvo).length}</span></a>
       <a href="#/empresa/${id}/das" class="${aba === 'das' ? 'ativo' : ''}">${icone('calc')} PGDAS-D e DAS</a>
+      <a href="#/empresa/${id}/obrigacoes" class="${aba === 'obrigacoes' ? 'ativo' : ''}">${icone('fila')} Obrigações${e.situacaoFiscal && e.situacaoFiscal.regular === false ? ' <span class="cont-aba alerta">!</span>' : ''}</a>
       <a href="#/empresa/${id}/config" class="${aba === 'config' ? 'ativo' : ''}">${icone('engr')} Configuração</a>
     </nav>
     <section id="abaCorpo"></section>`;
-  ({ notas: abaNotas, clientes: abaClientes, das: abaDas, config: abaConfig })[aba]?.(d);
+  ({ notas: abaNotas, clientes: abaClientes, das: abaDas, obrigacoes: abaObrigacoes, config: abaConfig })[aba]?.(d);
+}
+
+// ----- Obrigações: situação fiscal, parcelamento e calendário -----
+const ST_OBR = { ok: ['ok', 'Feito'], guia: ['info', 'Guia gerada'], pendente: ['neutro', 'A fazer'], atrasada: ['erro', 'Atrasada'] };
+const linhaObrigacao = (x, comEmpresa) => `<tr data-e="${x.empresaId}" data-c="${esc(x.chave)}" data-r="${esc(x.ref)}">
+  <td>${dataIso(x.data)}</td>
+  ${comEmpresa ? `<td><a href="#/empresa/${x.empresaId}/obrigacoes"><b class="trunca">${esc(x.empresa)}</b></a></td>` : ''}
+  <td><b>${esc(x.titulo)}</b><br><small>${esc(x.detalhe || '')}</small></td>
+  <td class="num">${x.valor ? brl(x.valor) : '<span class="suave">—</span>'}</td>
+  <td><span class="chip ${ST_OBR[x.status][0]}">${ST_OBR[x.status][1]}</span>${x.manual ? '<br><small class="suave">marcado à mão</small>' : ''}</td>
+  <td class="acoes">${x.link ? `<a class="lnk" href="${esc(x.link)}" target="_blank" rel="noopener">${icone('pdf')} PDF</a> ` : ''}${x.status !== 'ok' ? '<button class="lnk" data-feito="1">Marcar feito</button>' : x.manual ? '<button class="lnk" data-feito="0">Desfazer</button>' : ''}</td>
+</tr>`;
+function ligaMarcar(el, recarrega) {
+  $$('[data-feito]', el).forEach((b) => b.addEventListener('click', async () => {
+    const tr = b.closest('tr');
+    try { await api(`/escritorio/empresas/${tr.dataset.e}/obrigacoes`, { body: { chave: tr.dataset.c, ref: tr.dataset.r, feito: b.dataset.feito === '1' } }); recarrega(); } catch (err) { aviso(esc(err.message), 'erro'); }
+  }));
+}
+async function abaObrigacoes(d) {
+  const e = d.empresa;
+  const el = $('#abaCorpo');
+  el.innerHTML = '<p class="vazio">Carregando obrigações…</p>';
+  const o = await api(`/escritorio/empresas/${e.id}/obrigacoes`);
+  const sf = o.situacaoFiscal;
+  const p = o.parcelamento;
+  el.innerHTML = `
+    <div class="grade-2">
+      <div class="card">
+        <h2>Situação fiscal (Receita)</h2>
+        ${!sf ? '<p class="suave">Ainda não consultada. O site consulta sozinho uma vez por mês.</p>'
+          : sf.erro ? `<p class="msg atencao" style="margin:0">${esc(sf.erro)}</p>`
+          : sf.regular ? '<p class="msg ok" style="margin:0">Sem pendências na Receita e na PGFN.</p>'
+          : `<p class="msg erro" style="margin:0 0 8px">Pendências encontradas:</p><ul class="lista-pend">${sf.pendencias.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`}
+        ${sf ? `<div class="linha-info"><span class="suave">Consultado em</span><span>${data(sf.em)}</span></div>` : ''}
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">${sf && sf.pdf ? `<a class="btn" href="${esc(sf.pdf)}" target="_blank" rel="noopener">${icone('pdf')} Relatório (PDF)</a>` : ''}<button class="btn" id="btnSit">${icone('raio')} Consultar agora</button></div>
+      </div>
+      <div class="card">
+        <h2>Parcelamento ${p && p.modalidade === 'PARCMEI' ? 'do MEI' : 'do Simples'}</h2>
+        ${!p ? '<p class="suave">Ainda não consultado.</p>'
+          : !p.pedidos.length ? '<p class="msg ok" style="margin:0">Nenhum parcelamento na Receita.</p>'
+          : `${p.pedidos.map((x) => `<div class="linha-info"><span>Pedido nº ${esc(x.numero)} · ${dataIso(x.pedidoEm)}</span><span class="chip ${/deferido|ativo|parcelamento|consolidado/i.test(x.situacao) ? 'info' : 'neutro'}">${esc(x.situacao)}</span></div>`).join('')}
+             ${p.parcelas.length ? `<table class="tabela" style="margin-top:8px"><tbody>${p.parcelas.map((x) => { const g = (p.guias || {})[x.parcela]; return `<tr><td>Parcela ${comp(x.parcela)}</td><td class="num">${brl(x.valor)}</td><td class="acoes">${g ? `<a class="lnk" href="${esc(g.pdf)}" target="_blank" rel="noopener">${icone('pdf')} Guia</a>` : `<button class="lnk" data-parcela="${x.parcela}">Gerar guia</button>`}</td></tr>`; }).join('')}</tbody></table>` : ''}`}
+        <p class="suave" style="font-size:.82rem">Com parcelamento ativo, a guia do mês sai sozinha no dia 1º e vai para o cliente pelo WhatsApp.</p>
+        <button class="btn" id="btnParc">${icone('raio')} Consultar agora</button>
+      </div>
+    </div>
+    <div class="card sem-pad" style="margin-top:18px">
+      <div style="padding:18px 22px 6px"><h2 style="margin:0">Calendário</h2><small class="suave">DAS, DEFIS e parcelas o site confere sozinho; as demais você marca como feitas.</small></div>
+      <table class="tabela"><thead><tr><th>Vence</th><th>Obrigação</th><th class="num">Valor</th><th>Situação</th><th></th></tr></thead>
+      <tbody>${o.itens.map((x) => linhaObrigacao(x, false)).join('') || '<tr><td colspan="5" class="vazio">Nada no período.</td></tr>'}</tbody></table>
+    </div>`;
+  const recarrega = () => abaObrigacoes(d);
+  ligaMarcar(el, recarrega);
+  $('#btnSit').addEventListener('click', async (ev) => { ev.target.disabled = true; ev.target.textContent = 'Consultando a Receita…'; try { await api(`/escritorio/empresas/${e.id}/situacao`, { method: 'POST' }); aviso('Situação fiscal atualizada.'); } catch (err) { aviso(esc(err.message), 'erro'); } recarrega(); });
+  $('#btnParc').addEventListener('click', async (ev) => { ev.target.disabled = true; try { await api(`/escritorio/empresas/${e.id}/parcelamentos?atualizar=1`); aviso('Parcelamento consultado.'); } catch (err) { aviso(esc(err.message), 'erro'); } recarrega(); });
+  $$('[data-parcela]', el).forEach((b) => b.addEventListener('click', async () => {
+    b.disabled = true;
+    try { const r = await api(`/escritorio/empresas/${e.id}/parcelamentos/${b.dataset.parcela}/das`, { method: 'POST' }); aviso(r.whatsapp && r.whatsapp.ok ? 'Guia gerada e enviada ao cliente pelo WhatsApp.' : 'Guia gerada.'); } catch (err) { aviso(esc(err.message), 'erro'); }
+    recarrega();
+  }));
+}
+
+// Visão geral: obrigações de todas as empresas
+async function telaObrigacoes() {
+  const el = $('#conteudo');
+  el.innerHTML = '<p class="vazio">Carregando obrigações…</p>';
+  const o = await api('/escritorio/obrigacoes');
+  let filtro = telaObrigacoes.filtro || 'abertas';
+  const desenha = () => {
+    const lista = o.itens.filter((x) => filtro === 'todas' || (filtro === 'abertas' ? x.status !== 'ok' : x.status === filtro));
+    $('#linhasObr').innerHTML = lista.map((x) => linhaObrigacao(x, true)).join('') || '<tr><td colspan="6" class="vazio">Nada aqui.</td></tr>';
+    $$('.filtros [data-f]').forEach((b) => b.classList.toggle('ativo', b.dataset.f === filtro));
+    ligaMarcar($('#linhasObr'), telaObrigacoes);
+  };
+  el.innerHTML = `
+    <div class="cab"><div><h1>Obrigações</h1><p>O que vence para cada empresa, de ${comp(o.de)} a ${comp(o.ate)}.</p></div></div>
+    <div class="kpis">
+      <div class="kpi"><span>Atrasadas</span><b style="color:var(--erro)">${o.resumo.atrasadas}</b><small>precisam de atenção</small></div>
+      <div class="kpi"><span>A fazer</span><b>${o.resumo.pendentes}</b><small>no período</small></div>
+      <div class="kpi"><span>Guias geradas</span><b>${o.resumo.guias}</b><small>aguardando pagamento</small></div>
+      <div class="kpi"><span>Feitas</span><b>${o.resumo.ok}</b><small>no período</small></div>
+    </div>
+    <div class="ferramentas"><div class="filtros">${[['abertas', 'Em aberto'], ['atrasada', 'Atrasadas'], ['guia', 'Guias geradas'], ['ok', 'Feitas'], ['todas', 'Todas']].map(([v, t]) => `<button class="filtro" data-f="${v}">${t}</button>`).join('')}</div></div>
+    <div class="card sem-pad"><table class="tabela"><thead><tr><th>Vence</th><th>Empresa</th><th>Obrigação</th><th class="num">Valor</th><th>Situação</th><th></th></tr></thead><tbody id="linhasObr"></tbody></table></div>`;
+  $$('.filtros [data-f]').forEach((b) => b.addEventListener('click', () => { filtro = b.dataset.f; telaObrigacoes.filtro = filtro; desenha(); }));
+  desenha();
+}
+
+// WhatsApp: situação da conexão, modelos a cadastrar na Meta, histórico e teste
+async function telaWhatsapp() {
+  const el = $('#conteudo');
+  el.innerHTML = '<p class="vazio">Carregando…</p>';
+  const w = await api('/escritorio/whatsapp');
+  const tipos = { guia: 'Guia (DAS e parcelas)', nota: 'Nota emitida', lembrete: 'Lembrete de vencimento' };
+  el.innerHTML = `
+    <div class="cab"><div><h1>WhatsApp</h1><p>Avisos automáticos para os clientes: guia do DAS, parcela, nota emitida e lembrete de vencimento.</p></div></div>
+    <div class="grade-2">
+      <div class="card">
+        <h2>Conexão</h2>
+        <div class="linha-info"><span class="suave">WhatsApp Business (Meta)</span>${w.ativo ? '<span class="chip ok">Conectado</span>' : '<span class="chip erro">Falta conectar</span>'}</div>
+        ${w.modelos.map((m) => `<div class="linha-info"><span class="suave">${tipos[m.tipo]}</span>${m.configurado ? '<span class="chip ok">Pronto</span>' : '<span class="chip atencao">Falta o modelo</span>'}</div>`).join('')}
+        ${!w.ativo ? `<p class="msg atencao">Para ligar: 1) crie o app do WhatsApp Business em developers.facebook.com com o número do escritório; 2) cadastre os 3 modelos ao lado em "Modelos de mensagem" (categoria Utilidade); 3) no Railway, crie as variáveis WHATSAPP_TOKEN, WHATSAPP_PHONE_ID e os nomes dos modelos (${w.modelos.map((m) => m.variavel).join(', ')}).</p>` : ''}
+        <label class="campo" style="margin-top:12px"><span>Enviar um teste para</span><input id="wTeste" inputmode="numeric" placeholder="(11) 99999-9999"></label>
+        <button class="btn" id="wEnviar" ${w.ativo ? '' : 'disabled'}>Enviar teste</button>
+      </div>
+      <div class="card">
+        <h2>Modelos para cadastrar na Meta</h2>
+        ${w.modelos.map((m) => `<div class="modelo-wa"><b>${esc(m.nome)}</b> <small class="suave">· ${tipos[m.tipo]} · cabeçalho: ${esc(m.cabecalho)} · variável ${esc(m.variavel)}</small><p>${esc(m.texto)}</p></div>`).join('')}
+      </div>
+    </div>
+    <div class="card sem-pad" style="margin-top:18px">
+      <div style="padding:18px 22px 6px"><h2 style="margin:0">Últimos envios</h2></div>
+      <table class="tabela"><thead><tr><th>Quando</th><th>Empresa</th><th>Aviso</th><th>Para</th><th>Situação</th></tr></thead><tbody>
+      ${w.envios.map((x) => `<tr><td>${new Date(x.em).toLocaleString('pt-BR')}</td><td class="trunca">${esc(x.empresa || '—')}</td><td>${esc(x.descricao || x.tipo)}</td><td>${esc(x.para)}</td><td>${x.ok ? '<span class="chip ok">Enviado</span>' : `<span class="chip erro">Não enviado</span><br><small>${esc(x.erro)}</small>`}</td></tr>`).join('') || '<tr><td colspan="5" class="vazio">Nenhum envio ainda.</td></tr>'}
+      </tbody></table>
+    </div>`;
+  $('#wEnviar').addEventListener('click', async () => {
+    try { const r = await api('/escritorio/whatsapp/teste', { body: { numero: $('#wTeste').value } }); aviso(r.ok ? 'Mensagem de teste enviada.' : esc(r.erro), r.ok ? 'ok' : 'erro'); } catch (err) { aviso(esc(err.message), 'erro'); }
+    telaWhatsapp();
+  });
 }
 
 // ----- Notas fiscais -----
@@ -964,6 +1088,13 @@ function abaConfig(d) {
         </div>
         <p id="descServ" class="suave" style="font-size:.82rem;margin:-6px 0 14px"></p>
         <div class="reforma-box">
+          <b>Avisos ao cliente pelo WhatsApp</b>
+          <div class="form-2">
+            <label class="campo"><span>WhatsApp do cliente (DDD + número)</span><input id="fWhats" inputmode="numeric" value="${esc(f.whatsapp || e.telefone || '')}" placeholder="(11) 99999-9999"></label>
+            <label class="campo"><span>Enviar avisos</span><select id="fAvisos"><option value="1">Sim: guias, notas e lembretes</option><option value="0" ${f.avisosWhatsapp === false ? 'selected' : ''}>Não enviar</option></select></label>
+          </div>
+        </div>
+        <div class="reforma-box">
           <b>Reforma tributária (IBS/CBS na nota)</b>
           <div class="form-2">
             <label class="campo"><span>Enviar o grupo IBS/CBS</span><select id="fIbs">
@@ -1003,7 +1134,7 @@ function abaConfig(d) {
       if (!seguir) return;
     }
     try {
-      await api(`/assinantes/${e.id}/fiscal`, { body: { codigoMunicipio: $('#fMun').value, codigoServico: $('#fServ').value.replace(/\D/g, '').slice(0, 6), serieDps: $('#fSerie').value, proximoDps: $('#fNum').value, aliquotaSN: $('#fAliq') ? $('#fAliq').value : undefined, pTribFed: $('#fFed') ? $('#fFed').value : undefined, pTribMun: $('#fIss') ? $('#fIss').value : undefined, ibscbs: $('#fIbs').value, cIndOp: $('#fIndOp').value, codigoNbs: $('#fNbs').value, cClassTrib: $('#fClass').value, emissao } });
+      await api(`/assinantes/${e.id}/fiscal`, { body: { codigoMunicipio: $('#fMun').value, codigoServico: $('#fServ').value.replace(/\D/g, '').slice(0, 6), serieDps: $('#fSerie').value, proximoDps: $('#fNum').value, aliquotaSN: $('#fAliq') ? $('#fAliq').value : undefined, pTribFed: $('#fFed') ? $('#fFed').value : undefined, pTribMun: $('#fIss') ? $('#fIss').value : undefined, ibscbs: $('#fIbs').value, cIndOp: $('#fIndOp').value, codigoNbs: $('#fNbs').value, cClassTrib: $('#fClass').value, whatsapp: $('#fWhats').value, avisosWhatsapp: $('#fAvisos').value === '1', emissao } });
       aviso('Configuração salva.'); telaEmpresa(e.id, 'config');
     } catch (err) { aviso(esc(err.message), 'erro'); }
   });
