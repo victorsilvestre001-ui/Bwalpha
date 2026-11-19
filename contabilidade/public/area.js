@@ -83,8 +83,8 @@ async function mostraPlanos() {
 $$('.lateral button').forEach((b) => b.addEventListener('click', () => abre(b.dataset.aba)));
 function abre(aba) {
   $$('.lateral button').forEach((x) => x.classList.toggle('ativa', x.dataset.aba === aba));
-  ['empresa', 'notas', 'orcamentos', 'conta', 'simulador', 'recuperar'].forEach((a) => { $('#aba' + a[0].toUpperCase() + a.slice(1)).hidden = a !== aba; });
-  ({ empresa: abaEmpresa, notas: abaNotas, orcamentos: abaOrcamentos, conta: abaConta, simulador: () => ferramenta('Simulador', '/planejamento'), recuperar: () => ferramenta('Recuperar', '/economia') })[aba]();
+  ['empresa', 'notas', 'cupom', 'orcamentos', 'conta', 'simulador', 'recuperar'].forEach((a) => { $('#aba' + a[0].toUpperCase() + a.slice(1)).hidden = a !== aba; });
+  ({ empresa: abaEmpresa, notas: abaNotas, cupom: abaCupom, orcamentos: abaOrcamentos, conta: abaConta, simulador: () => ferramenta('Simulador', '/planejamento'), recuperar: () => ferramenta('Recuperar', '/economia') })[aba]();
 }
 
 // Simulador e Recuperar impostos abrem dentro do painel, já com o CNPJ do assinante
@@ -422,6 +422,67 @@ async function geraRascunho(ev) {
 }
 
 // ----- Orçamentos -----
+// ----- Cupom fiscal (NFC-e): digita o produto, o sistema sugere o tipo e os impostos, informa o valor -----
+const PAGTOS_CUPOM = [['01', 'Dinheiro'], ['17', 'PIX'], ['04', 'Débito'], ['03', 'Crédito']];
+async function abaCupom() {
+  const el = $('#abaCupom');
+  el.innerHTML = '<p class="vazio">Carregando…</p>';
+  try {
+    const v = await api('/vendas');
+    const c = v.config;
+    const bloqueio = !c.focus ? 'A emissão de cupom fiscal ainda está sendo ligada pelo escritório. Assim que estiver pronta, aparece aqui.'
+      : !c.simples ? 'O cupom fiscal por aqui é para empresas do Simples Nacional e MEI. Fale com a equipe.' : '';
+    el.innerHTML = `
+      <h1>Cupom fiscal</h1>
+      <p class="sub">Digite o <b>nome do produto</b> e o <b>valor</b>. O sistema já preenche o resto (NCM e impostos).${c.ambiente !== 'producao' ? ' <b>Modo de teste:</b> os cupons ainda não têm valor fiscal.' : ''}</p>
+      ${bloqueio ? `<div class="card aviso-sim">${bloqueio}</div>` : ''}
+      <p id="msgCupom" hidden></p>
+      <section class="card">
+        <div id="cItens"></div>
+        <button type="button" class="sec" id="cMais">${icone('mais')} Mais um produto</button>
+        <span class="rotulo" style="display:block;margin-top:16px">Pagamento</span>
+        <div class="pagtos">${PAGTOS_CUPOM.map(([k, n], i) => `<label><input type="radio" name="cPag" value="${k}" ${i === 0 ? 'checked' : ''}>${n}</label>`).join('')}</div>
+        <label class="campo" style="margin-top:10px"><span>CPF na nota <small>(opcional)</small></span><input id="cCpf" inputmode="numeric" maxlength="18" placeholder="000.000.000-00"></label>
+        <div class="cupom-total"><span class="suave">Total</span><b id="cTotal">R$ 0,00</b></div>
+        <div class="linha-botoes"><button class="btn azul largo" id="cEmitir" ${bloqueio ? 'disabled' : ''}>Emitir cupom ${icone('seta')}</button></div>
+      </section>
+      <section class="card">
+        <h2>Últimos cupons</h2>
+        <table class="lista-docs"><thead><tr><th>Data</th><th>Itens</th><th>Total</th><th></th></tr></thead><tbody>
+        ${v.vendas.filter((x) => x.modelo === 'nfce').map((x) => `<tr><td>${data(x.criadoEm)}${x.numero ? `<br><small>Nº ${esc(x.numero)}</small>` : ''}</td><td>${esc(x.itens.map((i) => i.descricao).join(', ').slice(0, 80))}${x.ambiente === 'homologacao' ? ' <small>(teste)</small>' : ''}</td><td><b>${brl(x.total)}</b>${x.status !== 'emitida' ? `<br><small>${esc({ processando: 'processando', cancelada: 'cancelado' }[x.status] || x.status)}</small>` : ''}</td><td>${x.danfe ? `<a class="sec" href="${esc(x.danfe)}" target="_blank" rel="noopener">Ver cupom</a>` : ''}</td></tr>`).join('') || '<tr><td colspan="4" class="vazio">Nenhum cupom ainda.</td></tr>'}
+        </tbody></table>
+      </section>`;
+    const msg = (t, tipo = 'erro') => { const m = $('#msgCupom'); m.className = tipo === 'ok' ? 'ok-form' : 'erro-form'; m.innerHTML = t; m.hidden = !t; };
+    const itens = () => lerItensVendaRapida($('#cItens'));
+    const soma = () => { $('#cTotal').textContent = brl(itens().reduce((t, i) => t + (Number(i.quantidade) || 0) * valorNumero(i.valor), 0)); };
+    const linha = () => $('#cItens').append(linhaVendaRapida({ buscar: (q) => api(`/produtos/sugestoes?q=${encodeURIComponent(q)}`).then((r) => r.sugestoes), aoMudar: soma }));
+    linha();
+    $('#cMais').addEventListener('click', linha);
+    $('#cCpf').addEventListener('input', (ev) => { ev.target.value = mascaraDoc(ev.target.value); });
+    $('#cEmitir').addEventListener('click', async () => {
+      msg('');
+      const it = itens();
+      if (!it.length) return msg('Digite ao menos um produto.');
+      const semTipo = it.find((i) => !i.produtoId && !i.ncm);
+      if (semTipo) return msg(`Escolha na lista o tipo de "${esc(semTipo.descricao)}".`);
+      const semValor = it.find((i) => !valorNumero(i.valor) && !i.produtoId);
+      if (semValor) return msg(`Informe o valor de "${esc(semValor.descricao)}".`);
+      const cpf = $('#cCpf').value.replace(/\D/g, '');
+      if (cpf && cpf.length !== 11 && cpf.length !== 14) return msg('CPF/CNPJ na nota incompleto.');
+      $('#cEmitir').disabled = true;
+      try {
+        const r = await api('/vendas', { body: { modelo: 'nfce', itens: it, pagamento: document.querySelector('[name=cPag]:checked').value, destinatario: { documento: cpf } } });
+        if (r.venda.danfe) window.open(r.venda.danfe, '_blank', 'noopener');
+        await abaCupom();
+        msg(r.venda.status === 'emitida' ? `Cupom nº ${esc(r.venda.numero)} emitido. ${r.venda.danfe ? `<a href="${esc(r.venda.danfe)}" target="_blank" rel="noopener">Abrir para imprimir</a>` : ''}` : 'Cupom enviado; ainda processando na SEFAZ.', 'ok');
+      } catch (err) {
+        if (err.status === 401 || err.status === 402) return trataErro(err, el);
+        msg(esc(err.message)); $('#cEmitir').disabled = false;
+      }
+    });
+  } catch (err) { trataErro(err, el); }
+}
+
 async function abaOrcamentos() {
   const el = $('#abaOrcamentos');
   el.innerHTML = '<p class="vazio">Carregando orçamentos…</p>';

@@ -254,3 +254,17 @@ input:focus, select:focus, textarea:focus { border-color: var(--marca-2); box-sh
 .item-venda { display: grid; grid-template-columns: 1fr 70px 100px 28px; gap: 6px; align-items: center; margin-bottom: 6px; }
 .item-venda select, .item-venda input { margin: 0; }
 .faixa.atencao { background: var(--atencao-bg); color: #7a4800; }
+.venda-rapida { grid-template-columns: 90px 1fr 28px; align-items: start; padding-bottom: 8px; border-bottom: 1px dashed var(--borda, #e3e7ee); }
+.venda-rapida .vr-busca { grid-column: 1 / -1; }
+.vr-busca { position: relative; min-width: 0; }
+.vr-busca input { width: 100%; margin: 0; }
+.vr-lista { position: absolute; z-index: 30; left: 0; right: 0; top: 100%; margin-top: 2px; background: var(--card, #fff); border: 1px solid var(--borda, #d9dee7); border-radius: 10px; box-shadow: 0 10px 28px rgba(15, 30, 60, .16); max-height: 300px; overflow: auto; }
+.vr-lista button { display: block; width: 100%; text-align: left; padding: 8px 12px; border: 0; background: none; cursor: pointer; font: inherit; color: inherit; border-bottom: 1px solid var(--borda, #eef0f4); }
+.vr-lista button:hover, .vr-lista button.sel { background: rgba(201, 162, 39, .12); }
+.vr-lista b { display: block; font-size: .9rem; font-weight: 600; }
+.vr-lista small { display: block; font-size: .76rem; opacity: .7; }
+.vr-info { display: block; font-size: .74rem; opacity: .75; margin-top: 3px; line-height: 1.35; }
+.vr-info .lnk { font-size: .74rem; padding: 0; }
+.vr-falta { color: #b7791f; opacity: 1; }
+.vr-conf { color: #b7791f; }
+

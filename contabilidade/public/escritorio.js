@@ -290,14 +290,14 @@ async function abaVendas(d) {
         <button type="button" class="lnk" id="vMais">${icone('mais')} Adicionar produto</button>
         <label class="campo" style="margin-top:12px"><span>Pagamento</span><select id="vPag">${PAGTOS.map(([k, n]) => `<option value="${k}">${n}</option>`).join('')}</select></label>
         <div class="linha-info"><span class="suave">Total</span><b id="vTotal" style="font-size:1.3rem">R$ 0,00</b></div>
-        <button class="btn primario largo" id="vEmitir" ${!c.focus || !c.simples || !prod.length ? 'disabled' : ''}>Conferir e emitir ${icone('seta')}</button>
-        ${!prod.length ? '<p class="msg atencao">Cadastre os produtos ao lado primeiro.</p>' : ''}
+        <button class="btn primario largo" id="vEmitir" ${!c.focus || !c.simples ? 'disabled' : ''}>Conferir e emitir ${icone('seta')}</button>
+        <p class="suave" style="font-size:.82rem">Digite o nome do produto: o sistema sugere o NCM e os impostos. Produto novo fica cadastrado e marcado para conferir.</p>
         <p id="vMsg" class="msg erro" hidden></p>
       </div>
       <div class="card sem-pad">
         <div style="padding:18px 22px 6px;display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0">Produtos</h2><button class="btn pequeno" id="pNovo">${icone('mais')} Produto</button></div>
         <table class="tabela"><thead><tr><th>Produto</th><th>NCM</th><th class="num">Preço</th><th></th></tr></thead><tbody>
-        ${prod.map((p) => `<tr data-p="${p.id}"><td><b>${esc(p.descricao)}</b><br><small class="suave">${esc(p.codigo || '')} · ${esc(p.unidade)} · CFOP ${esc(p.cfop)} · CSOSN ${esc(p.csosn)}</small></td><td>${esc(p.ncm)}</td><td class="num">${brl(p.valor)}</td><td class="acoes"><button class="lnk" data-pe="${p.id}">Editar</button><button class="lnk perigo" data-px="${p.id}">Excluir</button></td></tr>`).join('') || '<tr><td colspan="4" class="vazio">Nenhum produto cadastrado.</td></tr>'}
+        ${prod.map((p) => `<tr data-p="${p.id}"><td><b>${esc(p.descricao)}</b>${p.conferir ? ' <span class="chip atencao">conferir</span>' : ''}<br><small class="suave">${esc(p.codigo || '')} · ${esc(p.unidade)} · CFOP ${esc(p.cfop)} · CSOSN ${esc(p.csosn)}</small></td><td>${esc(p.ncm)}</td><td class="num">${brl(p.valor)}</td><td class="acoes"><button class="lnk" data-pe="${p.id}">Editar</button><button class="lnk perigo" data-px="${p.id}">Excluir</button></td></tr>`).join('') || '<tr><td colspan="4" class="vazio">Nenhum produto cadastrado.</td></tr>'}
         </tbody></table>
       </div>
     </div>
@@ -318,23 +318,20 @@ async function abaVendas(d) {
     await api(`/escritorio/empresas/${e.id}/vendas/ambiente`, { body: { ambiente: prodNovo ? 'producao' : 'homologacao' } }); recarrega();
   });
   // Itens da venda
-  const linhaItem = () => {
-    const div = document.createElement('div'); div.className = 'item-venda';
-    div.innerHTML = `<select class="iProd"><option value="">Produto…</option>${prod.map((p) => `<option value="${p.id}">${esc(p.descricao)}</option>`).join('')}</select><input class="iQtd" inputmode="decimal" value="1" title="Quantidade"><input class="iVal" inputmode="decimal" placeholder="Preço"><button type="button" class="lnk perigo iX" title="Tirar">×</button>`;
-    $('.iProd', div).addEventListener('change', () => { const p = prod.find((x) => x.id === $('.iProd', div).value); if (p) $('.iVal', div).value = String(p.valor.toFixed(2)).replace('.', ','); soma(); });
-    [$('.iQtd', div), $('.iVal', div)].forEach((i) => i.addEventListener('input', soma));
-    $('.iX', div).addEventListener('click', () => { div.remove(); soma(); });
-    $('#vItens').append(div);
-  };
+  const linhaItem = () => $('#vItens').append(linhaVendaRapida({ buscar: (q) => api(`/escritorio/empresas/${e.id}/produtos/sugestoes?q=${encodeURIComponent(q)}`).then((r) => r.sugestoes), aoMudar: soma }));
   const num = (s) => Number(String(s || '').replace(/\./g, '').replace(',', '.')) || 0;
-  const itens = () => $$('.item-venda').map((dv) => ({ produtoId: $('.iProd', dv).value, quantidade: $('.iQtd', dv).value.replace(',', '.'), valor: $('.iVal', dv).value })).filter((i) => i.produtoId);
+  const itens = () => lerItensVendaRapida($('#vItens'));
   const soma = () => { $('#vTotal').textContent = brl(itens().reduce((t, i) => t + Number(i.quantidade || 0) * num(i.valor), 0)); };
-  if (prod.length) linhaItem();
+  linhaItem();
   $('#vMais').addEventListener('click', linhaItem);
   $('#vEmitir').addEventListener('click', async () => {
     msg('');
     const it = itens();
-    if (!it.length) return msg('Escolha ao menos um produto.');
+    if (!it.length) return msg('Digite ao menos um produto.');
+    const semTipo = it.find((i) => !i.produtoId && !i.ncm);
+    if (semTipo) return msg(`Escolha na lista o tipo de "${semTipo.descricao}".`);
+    const semValor = it.find((i) => !i.produtoId && !num(i.valor));
+    if (semValor) return msg(`Informe o valor de "${semValor.descricao}".`);
     const docC = $('#vDoc').value.replace(/\D/g, '');
     if (modelo() === 'nfe' && docC.length !== 11 && docC.length !== 14) return msg('Na NF-e informe o CPF ou CNPJ do cliente.');
     if (modelo() === 'nfe' && docC.length === 11 && $('#vCep').value.replace(/\D/g, '').length !== 8) return msg('Na NF-e para CPF informe o CEP e o número do cliente.');

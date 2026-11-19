@@ -19,6 +19,7 @@ const servicos = require('./servicos');
 const obraUtil = require('./obra');
 const avisos = require('./avisos');
 const vendas = require('./vendas');
+const ncmUtil = require('./ncm');
 const obrigacoes = require('./obrigacoes');
 const fs = require('fs');
 const path = require('path');
@@ -1219,7 +1220,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
   // ---------- Vendas: NF-e e NFC-e pela Focus ----------
   const ambVendas = (u) => (u.fiscal && u.fiscal.vendasAmbiente === 'producao' ? 'producao' : 'homologacao');
   const simplesOuMei = (u) => !!(u.empresa && (u.empresa.mei || u.empresa.simples !== false));
-  const prodPublico = (p) => ({ id: p.id, codigo: p.codigo, descricao: p.descricao, ncm: p.ncm, unidade: p.unidade, valor: p.valor, cfop: p.cfop, csosn: p.csosn, origem: p.origem, pisCst: p.pisCst });
+  const prodPublico = (p) => ({ id: p.id, codigo: p.codigo, descricao: p.descricao, ncm: p.ncm, unidade: p.unidade, valor: p.valor, cfop: p.cfop, csosn: p.csosn, origem: p.origem, pisCst: p.pisCst, conferir: !!p.conferir });
   function validaProduto(b) {
     const p = {
       codigo: txt(b.codigo, 60), descricao: txt(b.descricao, 120), ncm: String(b.ncm || '').replace(/\D/g, ''), unidade: txt(b.unidade || 'UN', 6).toUpperCase(),
@@ -1270,7 +1271,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (!p) return res.status(404).json({ erro: 'Produto não encontrado.' });
     const r = validaProduto(req.body || {});
     if (r.erro) return res.status(400).json({ erro: r.erro });
-    res.json({ produto: prodPublico(db.atualiza('produtos', p.id, r.produto)) });
+    res.json({ produto: prodPublico(db.atualiza('produtos', p.id, { ...r.produto, conferir: false })) });
   });
   admin.delete('/escritorio/empresas/:id/produtos/:pid', (req, res) => {
     const u = empresaDe(req, res);
@@ -1278,25 +1279,33 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     db.remove('produtos', (x) => x.id === req.params.pid && x.usuarioId === u.id);
     res.json({ ok: true });
   });
-  admin.post('/escritorio/empresas/:id/vendas', express.json(), async (req, res) => {
-    const u = empresaDe(req, res);
-    if (!u) return;
-    if (!vendas.ativo()) return res.status(409).json({ erro: 'A emissão de NF-e/NFC-e ainda não está ligada: falta o token da Focus NFe no Railway.' });
-    if (!simplesOuMei(u)) return res.status(409).json({ erro: 'Nesta primeira versão a emissão de NF-e/NFC-e é para empresas do Simples Nacional e MEI.' });
-    const modelo = req.body.modelo === 'nfe' ? 'nfe' : 'nfce';
-    const itensPedido = Array.isArray(req.body.itens) ? req.body.itens.slice(0, 100) : [];
+  // Emissão de venda (painel do escritório e Área do Cliente). Item: { produtoId } de produto cadastrado
+  // ou { descricao, ncm } de produto novo (é cadastrado na hora com a sugestão fiscal e fica "conferir").
+  // Devolve { venda } ou { status, erro }.
+  async function emiteVenda(u, body, quem, { espera = true } = {}) {
+    if (!vendas.ativo()) return { status: 409, erro: 'A emissão de NF-e/NFC-e ainda não está ligada: falta o token da Focus NFe no Railway.' };
+    if (!simplesOuMei(u)) return { status: 409, erro: 'Nesta primeira versão a emissão de NF-e/NFC-e é para empresas do Simples Nacional e MEI.' };
+    const modelo = body.modelo === 'nfe' ? 'nfe' : 'nfce';
+    const itensPedido = Array.isArray(body.itens) ? body.itens.slice(0, 100) : [];
     const itens = [];
     for (const it of itensPedido) {
-      const p = db.acha('produtos', (x) => x.id === it.produtoId && x.usuarioId === u.id);
+      let p = it.produtoId ? db.acha('produtos', (x) => x.id === it.produtoId && x.usuarioId === u.id) : null;
+      if (!p && it.descricao) {
+        const ncmNovo = String(it.ncm || '').replace(/\D/g, '');
+        if (ncmNovo.length !== 8) return { status: 400, erro: `Escolha o tipo (NCM) de "${txt(it.descricao, 60)}".` };
+        p = db.acha('produtos', (x) => x.usuarioId === u.id && ncmUtil.semAcento(x.descricao) === ncmUtil.semAcento(txt(it.descricao, 120)))
+          || db.insere('produtos', { usuarioId: u.id, descricao: txt(it.descricao, 120), ncm: ncmNovo, ...ncmUtil.sugestaoFiscal(ncmNovo, { uf: (u.empresa && u.empresa.uf) || 'SP' }), valor: 0, conferir: true, criadoPor: quem });
+      }
       const q = Number(String(it.quantidade || '1').replace(',', '.'));
-      if (!p || !(q > 0)) return res.status(400).json({ erro: 'Item inválido: escolha um produto cadastrado e a quantidade.' });
+      if (!p || !(q > 0)) return { status: 400, erro: 'Item inválido: escolha o produto e a quantidade.' };
       const valor = it.valor !== undefined && it.valor !== '' ? dinheiro(String(it.valor).replace(/\./g, '').replace(',', '.')) : p.valor;
-      if (!(valor > 0)) return res.status(400).json({ erro: `Informe o preço de ${p.descricao}.` });
+      if (!(valor > 0)) return { status: 400, erro: `Informe o preço de ${p.descricao}.` };
+      if (!p.valor) db.atualiza('produtos', p.id, { valor }); // guarda o primeiro preço usado
       itens.push({ ...prodPublico(p), quantidade: q, valor });
     }
-    if (!itens.length) return res.status(400).json({ erro: 'Adicione ao menos um produto.' });
+    if (!itens.length) return { status: 400, erro: 'Adicione ao menos um produto.' };
     // Cliente: obrigatório na NF-e (com endereço); no cupom, CPF/CNPJ é opcional
-    const b = req.body.destinatario || {};
+    const b = body.destinatario || {};
     const doc = String(b.documento || '').replace(/\D/g, '');
     const destinatario = { documento: doc, nome: txt(b.nome, 60), ie: String(b.ie || '').replace(/\D/g, '') };
     if (doc.length === 14) {
@@ -1314,21 +1323,61 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       if (c) { destinatario.endereco.municipio = c.municipio; destinatario.uf = destinatario.uf || c.uf; }
     }
     const ambiente = ambVendas(u);
-    let venda = db.insere('vendas', { usuarioId: u.id, modelo, ambiente, status: 'processando', itens, destinatario, pagamento: String(req.body.pagamento || '01'), total: Math.round(itens.reduce((t, i) => t + i.quantidade * i.valor, 0) * 100) / 100, pedidoPor: req.acesso && req.acesso.usuario ? req.acesso.usuario.nome : 'Escritório' });
+    let venda = db.insere('vendas', { usuarioId: u.id, modelo, ambiente, status: 'processando', itens, destinatario, pagamento: String(body.pagamento || '01'), total: Math.round(itens.reduce((t, i) => t + i.quantidade * i.valor, 0) * 100) / 100, pedidoPor: quem });
     try {
       venda = db.atualiza('vendas', venda.id, await vendas.emite(venda, u, ambiente));
       // NF-e é assíncrona: confere algumas vezes antes de responder
       for (let i = 0; i < 4 && venda.status === 'processando'; i++) {
-        await new Promise((ok) => setTimeout(ok, req.query.espera === '0' ? 0 : 2000));
+        await new Promise((ok) => setTimeout(ok, espera ? 2000 : 0));
         venda = db.atualiza('vendas', venda.id, await vendas.consulta(venda, ambiente));
       }
     } catch (err) {
       db.remove('vendas', (x) => x.id === venda.id);
-      return res.status(400).json({ erro: err.message });
+      return { status: 400, erro: err.message };
     }
-    if (venda.status === 'erro') { db.remove('vendas', (x) => x.id === venda.id); return res.status(400).json({ erro: `A SEFAZ recusou: ${venda.erro}` }); }
+    if (venda.status === 'erro') { db.remove('vendas', (x) => x.id === venda.id); return { status: 400, erro: `A SEFAZ recusou: ${venda.erro}` }; }
     if (venda.status === 'emitida' && ambiente === 'producao') avisos.nota(u, { id: venda.id, numero: venda.numero, tomador: { nome: destinatario.nome || 'consumidor' }, valor: venda.total, pdf: venda.danfe }).catch(() => {});
-    res.json({ venda });
+    return { venda };
+  }
+  // Sugestões para o campo "produto": primeiro os produtos da empresa, depois o que outras empresas já
+  // cadastraram (nome + NCM) e por fim a tabela oficial de NCM
+  function sugestoesProduto(u, q) {
+    const nq = ncmUtil.semAcento(q).trim();
+    if (nq.length < 2) return [];
+    const casa = (d) => nq.split(/\s+/).every((p) => ncmUtil.semAcento(d).includes(p));
+    const meus = db.lista('produtos', (p) => p.usuarioId === u.id && casa(p.descricao)).slice(0, 5).map((p) => ({ tipo: 'meu', ...prodPublico(p) }));
+    const vistos = new Set(meus.map((p) => p.ncm + ncmUtil.semAcento(p.descricao)));
+    const outros = [];
+    for (const p of db.lista('produtos', (x) => x.usuarioId !== u.id && casa(x.descricao))) {
+      const k = p.ncm + ncmUtil.semAcento(p.descricao);
+      if (!vistos.has(k) && outros.length < 3) { vistos.add(k); outros.push({ tipo: 'catalogo', descricao: p.descricao, ncm: p.ncm, ncmDescricao: ncmUtil.descricaoDe(p.ncm) }); }
+    }
+    const oficiais = ncmUtil.busca(q, 6).map((x) => ({ tipo: 'ncm', ncm: x.ncm, ncmDescricao: x.descricao, sugestao: ncmUtil.sugestaoFiscal(x.ncm, { uf: (u.empresa && u.empresa.uf) || 'SP' }) }));
+    return [...meus, ...outros, ...oficiais];
+  }
+  admin.get('/escritorio/empresas/:id/produtos/sugestoes', (req, res) => {
+    const u = empresaDe(req, res);
+    if (!u) return;
+    res.json({ sugestoes: sugestoesProduto(u, String(req.query.q || '').slice(0, 80)) });
+  });
+  admin.post('/escritorio/empresas/:id/vendas', express.json(), async (req, res) => {
+    const u = empresaDe(req, res);
+    if (!u) return;
+    responde2(res, await emiteVenda(u, req.body || {}, req.acesso && req.acesso.usuario ? req.acesso.usuario.nome : 'Escritório', { espera: req.query.espera !== '0' }));
+  });
+  // Área do Cliente: cupom fiscal rápido (digita o produto, escolhe o tipo sugerido, informa o valor)
+  r.get('/vendas', auth.exigePlano, async (req, res) => {
+    const u = req.usuario;
+    if (vendas.ativo()) await atualizaVendasProcessando(u);
+    res.json({
+      config: { focus: vendas.ativo(), ambiente: ambVendas(u), simples: simplesOuMei(u) },
+      produtos: db.lista('produtos', (p) => p.usuarioId === u.id).sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR')).map(prodPublico),
+      vendas: db.lista('vendas', (v) => v.usuarioId === u.id).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)).slice(0, 30),
+    });
+  });
+  r.get('/produtos/sugestoes', auth.exigePlano, (req, res) => res.json({ sugestoes: sugestoesProduto(req.usuario, String(req.query.q || '').slice(0, 80)) }));
+  r.post('/vendas', auth.exigePlano, async (req, res) => {
+    responde2(res, await emiteVenda(req.usuario, req.body || {}, 'Cliente', { espera: req.query.espera !== '0' }));
   });
   admin.post('/escritorio/empresas/:id/vendas/:vid/cancelar', express.json(), async (req, res) => {
     const u = empresaDe(req, res);
