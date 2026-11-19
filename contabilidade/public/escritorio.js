@@ -28,8 +28,15 @@ let senha = '';
 try { senha = sessionStorage.getItem('senhaAdmin') || ''; } catch { /* sem armazenamento */ }
 
 async function api(caminho, { method, body } = {}) {
-  const r = await fetch('/api/admin/portal' + caminho, { method: method || (body ? 'POST' : 'GET'), headers: { 'x-admin-senha': senha, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, credentials: 'same-origin' });
+  const r = await fetch('/api/admin/portal' + caminho, { method: method || (body ? 'POST' : 'GET'), headers: { 'x-admin-senha': senha, 'Content-Type': 'application/json', ...(api.versao ? { 'x-versao-painel': api.versao } : {}) }, body: body ? JSON.stringify(body) : undefined, credentials: 'same-origin' });
   const j = await r.json().catch(() => ({}));
+  if (r.status === 409 && j.versaoNova) { aviso(j.erro); setTimeout(() => location.reload(), 800); throw new Error('Painel atualizado. Faça o pedido de novo em instantes.'); }
+  // Saiu versão nova do site com a página aberta: recarrega para não usar código antigo
+  const versao = r.headers.get('x-versao');
+  if (versao) {
+    if (api.versao && api.versao !== versao) { aviso('Saiu uma versão nova do painel. Atualizando…'); setTimeout(() => location.reload(), 800); throw new Error('Painel atualizado. Faça o pedido de novo em instantes.'); }
+    api.versao = versao;
+  }
   if (!r.ok) throw Object.assign(new Error(j.erro || 'Erro inesperado'), { status: r.status });
   return j;
 }

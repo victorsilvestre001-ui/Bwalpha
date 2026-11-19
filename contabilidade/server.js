@@ -83,6 +83,15 @@ app.use(helmet({ contentSecurityPolicy: false }));
 // JSON pequeno em tudo; o anexo do PDF do DAS pelo escritório precisa de mais espaço
 const jsonPequeno = express.json({ limit: '50kb' });
 const jsonGuia = express.json({ limit: '4mb' });
+// Versão desta publicação: o painel compara e recarrega quando sai versão nova
+const VERSAO = process.env.RAILWAY_DEPLOYMENT_ID || String(Date.now());
+app.use('/api/', (req, res, next) => {
+  res.set('x-versao', VERSAO);
+  // Tela aberta com versão antiga tentando agir (POST/PUT/DELETE): recusa para ela recarregar antes
+  const doCliente = req.get('x-versao-painel');
+  if (doCliente && doCliente !== VERSAO && req.method !== 'GET') return res.status(409).json({ erro: 'Saiu uma versão nova do painel. Atualizando a página…', versaoNova: true });
+  next();
+});
 app.use((req, res, next) => (/^\/api\/admin\/portal\/(apuracoes\/[^/]+\/[^/]+\/das|escritorio\/certidoes\/pedidos\/[^/]+)$/.test(req.path) ? jsonGuia : jsonPequeno)(req, res, next));
 app.use('/api/', rateLimit({ windowMs: 60 * 1000, limit: Number(process.env.LIMITE_API) || 120 }));
 // Simulador de impostos e Recuperar impostos são exclusivos da Área do Cliente (plano ativo)
