@@ -10,6 +10,8 @@ const https = require('https');
 const certificado = require('./certificado');
 
 const ID_CERT = 'integra-contratante';
+const ID_PROC = 'integra-procurador'; // e-CPF de quem tem procuração das empresas (opcional)
+const procurador = require('./procurador');
 const TRIAL_TOKEN = '06aef429-a981-3ec5-a1f8-71d38d86481e'; // token público da demonstração
 const trial = () => process.env.INTEGRA_TRIAL === '1';
 const cnpjContratante = () => String(process.env.INTEGRA_CNPJ || '24961340000147').replace(/\D/g, '');
@@ -19,7 +21,17 @@ function situacao() {
   if (trial()) return { ativo: true, modo: 'demonstracao', contratante: cnpjContratante() };
   const chaves = !!(process.env.INTEGRA_CONSUMER_KEY && process.env.INTEGRA_CONSUMER_SECRET);
   const cert = !!certificado.carrega(ID_CERT);
-  return { ativo: chaves && cert, modo: 'producao', contratante: cnpjContratante(), chaves, certificado: cert };
+  return { ativo: chaves && cert, modo: 'producao', contratante: cnpjContratante(), chaves, certificado: cert, procurador: infoProcurador() };
+}
+
+// Dados públicos do procurador conectado (nome, CPF mascarado, validade)
+function infoProcurador() {
+  const c = certificado.carrega(ID_PROC);
+  if (!c) return null;
+  try {
+    const i = certificado.le(c.pfx, c.senha);
+    return { nome: i.titular, cpf: i.cpf ? `${i.cpf.slice(0, 3)}.•••.•••-${i.cpf.slice(9)}` : '', validoAte: i.validoAte, token: tokenProc ? { expira: tokenProc.expiraIso } : null };
+  } catch { return { erro: 'Não foi possível abrir o certificado do procurador.' }; }
 }
 
 class ErroIntegra extends Error {
@@ -38,7 +50,7 @@ function requisicao({ url, method = 'POST', headers = {}, body, pfx, senha }) {
         const txt = Buffer.concat(partes).toString('utf8');
         let json = null;
         try { json = txt ? JSON.parse(txt) : null; } catch { json = { bruto: txt.slice(0, 500) }; }
-        resolve({ status: res.statusCode, json });
+        resolve({ status: res.statusCode, json, headers: res.headers });
       });
     });
     req.on('timeout', () => req.destroy(new ErroIntegra('O SERPRO não respondeu a tempo. Tente de novo.')));
@@ -69,17 +81,82 @@ async function autentica() {
 
 const mensagens = (j) => ((j && j.mensagens) || []).map((m) => [m.codigo, m.texto].filter(Boolean).join(' ')).join(' | ');
 
+// ---------- Procurador: termo assinado -> token do dia ----------
+let tokenProc = null; // { token, expira (ms), expiraIso, cpf }
+function abreProcurador() {
+  const c = certificado.carrega(ID_PROC);
+  if (!c) return null;
+  const info = certificado.le(c.pfx, c.senha);
+  if (!/^\d{11}$/.test(info.cpf || '')) throw new ErroIntegra('O certificado do procurador precisa ser um e-CPF.');
+  const { chavePem, certB64 } = require('./nfse-nacional').abreCertificado(c.pfx, c.senha);
+  return { cpf: info.cpf, nome: info.titular, chavePem, certB64 };
+}
+async function tokenProcurador({ forcar = false } = {}) {
+  const p = abreProcurador();
+  if (!p) return null;
+  if (!forcar && tokenProc && tokenProc.cpf === p.cpf && tokenProc.expira > Date.now() + 60000) return tokenProc;
+  const t = await autentica();
+  const contr = cnpjContratante();
+  const cc = certificado.carrega(ID_CERT);
+  const nomeContr = cc ? certificado.le(cc.pfx, cc.senha).titular : contr;
+  const xml = procurador.termoAssinado({ contratante: { numero: contr, nome: nomeContr }, procurador: { numero: p.cpf, nome: p.nome }, chavePem: p.chavePem, certB64: p.certB64 });
+  const body = {
+    contratante: { numero: contr, tipo: 2 }, autorPedidoDados: { numero: p.cpf, tipo: 1 }, contribuinte: { numero: p.cpf, tipo: 1 },
+    pedidoDados: { idSistema: 'AUTENTICAPROCURADOR', idServico: 'ENVIOXMLASSINADO81', versaoSistema: '1.0', dados: JSON.stringify({ xml: Buffer.from(xml, 'utf8').toString('base64') }) },
+  };
+  const headers = { Authorization: `Bearer ${t.access}`, 'Content-Type': 'application/json', accept: 'text/plain' };
+  if (t.jwt) headers.jwt_token = t.jwt;
+  const r = await transporte({ url: `${GATEWAY()}/Apoiar`, headers, body });
+  let tok = null;
+  let expiraIso = null;
+  const etag = String((r.headers && (r.headers.etag || r.headers.ETag)) || '');
+  if (r.status === 304 || (!r.json && etag)) tok = (etag.match(/autenticar_procurador_token:([\w-]+)/) || [])[1];
+  else {
+    const j = r.json || {};
+    if (r.status !== 200 || (j.status && j.status !== 200)) throw new ErroIntegra(`Termo do procurador não aceito: ${mensagens(j) || `SERPRO ${r.status}`}`, r.status);
+    let d = j.dados;
+    if (typeof d === 'string') { try { d = JSON.parse(d); } catch { d = null; } }
+    tok = d && d.autenticar_procurador_token;
+    expiraIso = d && d.data_hora_expiracao;
+  }
+  if (!tok) throw new ErroIntegra('O SERPRO não devolveu o token do procurador.');
+  // Vale até a meia-noite do dia seguinte (Brasília); sem data, renova em 12 horas
+  const expira = expiraIso ? Date.parse(`${expiraIso}-03:00`) : Date.now() + 12 * 3600 * 1000;
+  tokenProc = { token: tok, cpf: p.cpf, expira, expiraIso: new Date(expira).toISOString() };
+  return tokenProc;
+}
+
+// Chama o serviço como o escritório; se a empresa não deu procuração ao CNPJ do escritório e houver
+// procurador conectado, repete como procurador (autor = CPF dele + token do termo).
 async function chama(verbo, cnpjContribuinte, idServico, dados, idSistema = 'PGDASD', versaoSistema = '1.0') {
+  try {
+    return await chamaComo(null, verbo, cnpjContribuinte, idServico, dados, idSistema, versaoSistema);
+  } catch (err) {
+    if (trial() || !/AcessoNegado|procura[cç][aã]o/i.test(err.message) || !certificado.carrega(ID_PROC)) throw err;
+    let tp;
+    try { tp = await tokenProcurador(); } catch (e2) { throw new ErroIntegra(`${err.message} | Procurador: ${e2.message}`, err.status); }
+    try {
+      return await chamaComo(tp, verbo, cnpjContribuinte, idServico, dados, idSistema, versaoSistema);
+    } catch (e3) {
+      // Token recusado (expirou antes da hora): renova uma vez
+      if (/token|AUTENTICAPROCURADOR/i.test(e3.message)) return chamaComo(await tokenProcurador({ forcar: true }), verbo, cnpjContribuinte, idServico, dados, idSistema, versaoSistema);
+      throw e3;
+    }
+  }
+}
+
+async function chamaComo(tp, verbo, cnpjContribuinte, idServico, dados, idSistema = 'PGDASD', versaoSistema = '1.0') {
   const t = await autentica();
   const contr = trial() ? '00000000000100' : cnpjContratante();
   const body = {
-    contratante: { numero: contr, tipo: 2 }, autorPedidoDados: { numero: contr, tipo: 2 },
+    contratante: { numero: contr, tipo: 2 }, autorPedidoDados: tp ? { numero: tp.cpf, tipo: 1 } : { numero: contr, tipo: 2 },
     contribuinte: { numero: trial() ? '00000000000100' : cnpjContribuinte, tipo: 2 },
     // Serviços sem parâmetro (SITFIS, pedidos de parcelamento) recebem dados vazio ("")
     pedidoDados: { idSistema, idServico, versaoSistema, dados: dados === '' ? '' : JSON.stringify(dados) },
   };
   const headers = { Authorization: `Bearer ${t.access}`, 'Content-Type': 'application/json', accept: 'text/plain' };
   if (t.jwt) headers.jwt_token = t.jwt;
+  if (tp) headers.autenticar_procurador_token = tp.token;
   let r;
   for (let tentativa = 1; tentativa <= 4; tentativa++) {
     r = await transporte({ url: `${GATEWAY()}/${verbo}`, headers, body });
@@ -310,4 +387,4 @@ async function declaracaoDoMes(cnpj, competencia) {
   return { numero: dados.numeroDeclaracao || '', ...lido };
 }
 
-module.exports = { situacao, geraDas, entregaSemMovimento, opcaoRegime, entregaDefis, situacaoFiscal, resumoSitfis, parcelamentos, dasParcela, _setEspera: (f) => { esperaSitfis = f || espera; }, declaracoesDoAno, declaracaoDoMes, lePdfDeclaracao, ID_CERT, trial, ErroIntegra, _setTransporte: (t) => { transporte = t || requisicao; token = null; } };
+module.exports = { ID_PROC, tokenProcurador, situacao, geraDas, entregaSemMovimento, opcaoRegime, entregaDefis, situacaoFiscal, resumoSitfis, parcelamentos, dasParcela, _setEspera: (f) => { esperaSitfis = f || espera; }, declaracoesDoAno, declaracaoDoMes, lePdfDeclaracao, ID_CERT, trial, ErroIntegra, _setTransporte: (t) => { transporte = t || requisicao; token = null; } };

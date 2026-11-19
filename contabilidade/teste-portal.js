@@ -820,6 +820,58 @@ const notas = require('./portal/notas');
       integra._setTransporte(null);
       delete process.env.INTEGRA_TRIAL;
     }
+    // Procurador (e-CPF): termo de autorização assinado e repetição da chamada como procurador
+    {
+      const integra = require('./portal/integra');
+      const procT = require('./portal/procurador');
+      const forge = require('node-forge');
+      const { pfxTeste } = require('./teste-xml-util');
+      const nacionalP = require('./portal/nfse-nacional');
+      // 1) Termo: forma canônica, digest do documento e assinatura conferidos com a chave pública
+      const pfxCpf = pfxTeste({ cpf: '12345678909', nomeTitular: 'MARIA PROCURADORA' });
+      const { chavePem, certB64 } = nacionalP.abreCertificado(pfxCpf, 'senha123');
+      const xml = procT.termoAssinado({ contratante: { numero: '24961340000147', nome: 'VIMARI & CIA' }, procurador: { numero: '12345678909', nome: 'MARIA PROCURADORA' }, chavePem, certB64, hoje: new Date('2026-11-19T15:00:00Z') });
+      assert.ok(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?><termoDeAutorizacao><dados><sistema id="API Integra Contador"></sistema>'));
+      assert.match(xml, /<dataAssinatura data="20261119"><\/dataAssinatura><vigencia data="20261219"><\/vigencia><destinatario nome="VIMARI &amp; CIA" numero="24961340000147" papel="contratante" tipo="PJ"><\/destinatario><assinadoPor nome="MARIA PROCURADORA" numero="12345678909" papel="autor pedido de dados" tipo="PF"><\/assinadoPor><\/dados><Signature/);
+      const semAss = xml.replace('<?xml version="1.0" encoding="UTF-8"?>', '').replace(/<Signature[\s\S]*<\/Signature>/, '');
+      const digest = require('crypto').createHash('sha256').update(semAss, 'utf8').digest('base64');
+      assert.ok(xml.includes(`<DigestValue>${digest}</DigestValue>`), 'digest do documento sem a assinatura');
+      const signedInfo = xml.match(/<SignedInfo[\s\S]*<\/SignedInfo>/)[0];
+      const valor = xml.match(/<SignatureValue>([^<]+)<\/SignatureValue>/)[1];
+      const pub = forge.pki.certificateToPem(forge.pki.certificateFromAsn1(forge.asn1.fromDer(forge.util.decode64(certB64))));
+      assert.ok(require('crypto').createVerify('RSA-SHA256').update(signedInfo, 'utf8').verify(pub, valor, 'base64'), 'assinatura confere');
+      assert.ok(xml.includes('<Reference URI="">') && xml.includes(procT.TERMO.slice(0, 40)));
+
+      // 2) Fluxo: empresa sem procuração para o CNPJ -> termo -> token -> repete como procurador
+      process.env.INTEGRA_CONSUMER_KEY = 'k'; process.env.INTEGRA_CONSUMER_SECRET = 's';
+      const certificadoT = require('./portal/certificado');
+      certificadoT.guarda(integra.ID_CERT, pfxTeste({ cnpj: '24961340000147' }), 'senha123');
+      assert.strictEqual((await req('POST', '/api/admin/portal/escritorio/integra/procurador', { pfx: pfxTeste({ cnpj: '11444777000161' }).toString('base64'), senha: 'senha123' }, admin)).status, 400, 'e-CNPJ não serve como procurador');
+      const chamadas = [];
+      integra._setTransporte(async ({ url, headers, body }) => {
+        chamadas.push({ url, headers, body });
+        if (url.includes('/authenticate')) return { status: 200, json: { access_token: 'acc', jwt_token: 'jwt', expires_in: 1800 } };
+        if (url.endsWith('/Apoiar') && body.pedidoDados.idSistema === 'AUTENTICAPROCURADOR') return { status: 200, json: { status: 200, mensagens: [{ codigo: '200', texto: 'Sucesso na execução.' }], dados: JSON.stringify({ autenticar_procurador_token: 'tok-proc-1', data_hora_expiracao: '2099-01-01T00:00:01' }) } };
+        if (!headers.autenticar_procurador_token) return { status: 403, json: { status: 403, mensagens: [{ codigo: 'AcessoNegado-ICGERENCIADOR-022', texto: 'O autor do pedido de dados não tem procuração' }] } };
+        return { status: 200, json: { status: 200, mensagens: [], dados: JSON.stringify({ periodos: [] }) } };
+      });
+      r = await req('POST', '/api/admin/portal/escritorio/integra/procurador', { pfx: pfxCpf.toString('base64'), senha: 'senha123' }, admin);
+      assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+      assert.deepStrictEqual([r.json.teste.ok, r.json.procurador.nome, r.json.procurador.cpf], [true, 'MARIA PROCURADORA', '123.•••.•••-09']);
+      const envioTermo = chamadas.find((c) => c.body && c.body.pedidoDados && c.body.pedidoDados.idSistema === 'AUTENTICAPROCURADOR');
+      assert.deepStrictEqual([envioTermo.body.autorPedidoDados, envioTermo.body.pedidoDados.idServico], [{ numero: '12345678909', tipo: 1 }, 'ENVIOXMLASSINADO81']);
+      assert.ok(Buffer.from(JSON.parse(envioTermo.body.pedidoDados.dados).xml, 'base64').toString('utf8').includes('<termoDeAutorizacao>'));
+      chamadas.length = 0;
+      await integra.declaracoesDoAno('11444777000161', '2026');
+      const [primeira, segunda] = chamadas.filter((c) => c.url.endsWith('/Consultar'));
+      assert.deepStrictEqual(primeira.body.autorPedidoDados, { numero: '24961340000147', tipo: 2 }, 'tenta primeiro como escritório');
+      assert.deepStrictEqual([segunda.body.autorPedidoDados, segunda.headers.autenticar_procurador_token], [{ numero: '12345678909', tipo: 1 }, 'tok-proc-1'], 'repete como procurador com o token');
+      assert.strictEqual((await req('DELETE', '/api/admin/portal/escritorio/integra/procurador', null, admin)).json.procurador, null);
+      certificadoT.apaga(integra.ID_CERT);
+      delete process.env.INTEGRA_CONSUMER_KEY; delete process.env.INTEGRA_CONSUMER_SECRET;
+      integra._setTransporte(null);
+      console.log('ok procurador');
+    }
     r = await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-09/ajuste`, { extra: { servicos: '1.000,00' } }, admin);
     assert.strictEqual(r.json.linha.receita, 37500);
     r = await req('POST', `/api/admin/portal/apuracoes/${idAp}/2026-09/ajuste`, {}, admin);

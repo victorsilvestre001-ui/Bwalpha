@@ -38,7 +38,17 @@ function le(pfx, senha) {
     const pos = der.indexOf(forge.asn1.oidToDer('2.16.76.1.3.3').getBytes());
     if (pos >= 0) cnpj = (der.slice(pos, pos + 40).match(/\d{14}/) || [])[0];
   }
-  return { titular: cn.split(':')[0].trim() || cn, cnpj: cnpj || '', validoDe: cert.validity.notBefore.toISOString(), validoAte: cert.validity.notAfter.toISOString() };
+  // e-CPF: CPF no CN ("NOME:12345678900") ou no otherName 2.16.76.1.3.1 (nascimento AAAAMMDD + CPF)
+  let cpf = '';
+  if (!cnpj) {
+    cpf = (cn.match(/:(\d{11})\b/) || [])[1] || '';
+    if (!cpf) {
+      const der = forge.asn1.toDer(forge.pki.certificateToAsn1(cert)).getBytes();
+      const pos = der.indexOf(forge.asn1.oidToDer('2.16.76.1.3.1').getBytes());
+      if (pos >= 0) cpf = ((der.slice(pos, pos + 40).match(/\d{19}/) || [])[0] || '').slice(8, 19);
+    }
+  }
+  return { titular: cn.split(':')[0].trim() || cn, cnpj: cnpj || '', cpf, validoDe: cert.validity.notBefore.toISOString(), validoAte: cert.validity.notAfter.toISOString() };
 }
 
 // Muitos A1 vêm cifrados com RC2-40 (formato antigo). O forge abre, mas a conexão segura do

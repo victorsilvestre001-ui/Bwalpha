@@ -995,6 +995,26 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       res.json({ ...integra.situacao(), titular: info.titular, validoAte: info.validoAte });
     } catch (err) { res.status(400).json({ erro: err.message }); }
   });
+  // e-CPF do procurador (quem tem procuração das empresas no e-CAC): assina o termo e libera o acesso
+  // às empresas que não deram procuração ao CNPJ do escritório
+  admin.post('/escritorio/integra/procurador', soGestor, express.json({ limit: '100kb' }), async (req, res) => {
+    let info;
+    const pfx = Buffer.from(String(req.body.pfx || ''), 'base64');
+    const senha = String(req.body.senha || '');
+    try { info = certificado.le(pfx, senha); } catch (err) { return res.status(400).json({ erro: err.message }); }
+    if (!/^\d{11}$/.test(info.cpf || '')) return res.status(400).json({ erro: 'Este não é um e-CPF. Envie o certificado A1 (.pfx) da pessoa que tem as procurações.' });
+    if (Date.parse(info.validoAte) < Date.now()) return res.status(400).json({ erro: 'Este certificado está vencido.' });
+    certificado.guarda(integra.ID_PROC, pfx, senha);
+    let teste = null;
+    if (integra.situacao().ativo) {
+      try { const t = await integra.tokenProcurador({ forcar: true }); teste = { ok: true, expira: t.expiraIso }; } catch (err) { teste = { ok: false, erro: err.message }; }
+    }
+    res.json({ ...integra.situacao(), teste });
+  });
+  admin.delete('/escritorio/integra/procurador', soGestor, (req, res) => {
+    certificado.apaga(integra.ID_PROC);
+    res.json(integra.situacao());
+  });
   // Puxar guia: gera o DAS na Receita (vencido: já com multa e juros até hoje), guarda o PDF e manda ao cliente
   admin.post('/apuracoes/:id/:comp/puxar', async (req, res) => {
     const u = alvoApu(req, res);

@@ -17,7 +17,7 @@ function cancelamento(chave) {
 module.exports = { nfe, cancelamento };
 
 // Certificado A1 de teste (autoassinado), no formato .pfx
-function pfxTeste({ cnpj = '12345678000195', senha = 'senha123', dias = 365 } = {}) {
+function pfxTeste({ cnpj = '12345678000195', senha = 'senha123', dias = 365, cpf = '', nomeTitular = 'FULANO DE TAL' } = {}) {
   const forge = require('node-forge');
   const chaves = forge.pki.rsa.generateKeyPair(1024);
   const c = forge.pki.createCertificate();
@@ -25,7 +25,7 @@ function pfxTeste({ cnpj = '12345678000195', senha = 'senha123', dias = 365 } = 
   c.serialNumber = '01';
   c.validity.notBefore = new Date(Date.now() - 86400000);
   c.validity.notAfter = new Date(Date.now() + dias * 86400000);
-  const nome = [{ name: 'commonName', value: `EMPRESA TESTE LTDA:${cnpj}` }];
+  const nome = [{ name: 'commonName', value: cpf ? `${nomeTitular}:${cpf}` : `EMPRESA TESTE LTDA:${cnpj}` }];
   c.setSubject(nome); c.setIssuer(nome);
   c.sign(chaves.privateKey);
   const p12 = forge.pkcs12.toPkcs12Asn1(chaves.privateKey, [c], senha, { algorithm: '3des' });

@@ -833,7 +833,35 @@ async function telaIntegra() {
         <button class="btn primario" id="iEnviar">${icone('chave')} Conectar</button>
         <p id="iMsg" class="msg" hidden></p>
       </div>
-    </div>`;
+    </div>
+    ${s.modo === 'producao' && EU.gestor ? `<div class="card" style="margin-top:18px">
+      <h2>Procurador (e-CPF)</h2>
+      <p class="suave" style="margin-top:0">Para as empresas que não deram procuração ao CNPJ do escritório, o site usa o e-CPF de quem tem a procuração delas no e-CAC. Ele assina sozinho um termo de autorização do SERPRO, renovado todo dia. O certificado fica guardado criptografado.</p>
+      ${s.procurador ? `<div class="linha-info"><span class="suave">Procurador</span><b>${esc(s.procurador.nome || '')} ${esc(s.procurador.cpf || '')}</b></div>
+        <div class="linha-info"><span class="suave">Certificado válido até</span><span>${data(s.procurador.validoAte)}</span></div>
+        <div class="linha-info"><span class="suave">Autorização do dia</span>${s.procurador.token ? '<span class="chip ok">Ativa</span>' : '<span class="chip neutro">Gera no próximo uso</span>'}</div>` : '<p class="msg atencao">Nenhum procurador conectado.</p>'}
+      <div class="form-2" style="margin-top:12px">
+        <label class="campo"><span>Arquivo do e-CPF (.pfx ou .p12)</span><input type="file" id="pArq" accept=".pfx,.p12"></label>
+        <label class="campo"><span>Senha do certificado</span><input type="password" id="pSenha" autocomplete="off"></label>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primario" id="pEnviar">${icone('chave')} ${s.procurador ? 'Trocar procurador' : 'Conectar procurador'}</button>${s.procurador ? '<button class="btn perigo" id="pRemover">Remover</button>' : ''}</div>
+      <p id="pMsg" class="msg" hidden></p>
+    </div>` : ''}`;
+  if ($('#pEnviar')) {
+    const pmsg = (t, c) => { $('#pMsg').className = `msg ${c}`; $('#pMsg').textContent = t; $('#pMsg').hidden = false; };
+    $('#pEnviar').addEventListener('click', async (ev) => {
+      const arq = $('#pArq').files[0];
+      if (!arq) return pmsg('Escolha o arquivo do e-CPF.', 'erro');
+      ev.target.disabled = true;
+      const b64 = await new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1]); fr.readAsDataURL(arq); });
+      try {
+        const r = await api('/escritorio/integra/procurador', { body: { pfx: b64, senha: $('#pSenha').value } });
+        if (r.teste && !r.teste.ok) { pmsg(`Certificado guardado, mas o SERPRO não aceitou o termo: ${r.teste.erro}`, 'erro'); ev.target.disabled = false; return; }
+        aviso('Procurador conectado.'); telaIntegra();
+      } catch (err) { pmsg(err.message, 'erro'); ev.target.disabled = false; }
+    });
+    if ($('#pRemover')) $('#pRemover').addEventListener('click', async () => { await api('/escritorio/integra/procurador', { method: 'DELETE' }); aviso('Procurador removido.'); telaIntegra(); });
+  }
   $('#iEnviar').addEventListener('click', async () => {
     const arq = $('#iArq').files[0];
     const msg = (t, c) => { $('#iMsg').className = `msg ${c}`; $('#iMsg').textContent = t; $('#iMsg').hidden = false; };
