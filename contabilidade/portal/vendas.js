@@ -7,7 +7,13 @@
 // Primeira versão: empresas do Simples Nacional e MEI (ICMS por CSOSN).
 
 const HOST = { producao: 'https://api.focusnfe.com.br', homologacao: 'https://homologacao.focusnfe.com.br' };
-const tokenDe = (amb) => (amb === 'homologacao' ? process.env.FOCUS_NFE_TOKEN_HOMOLOGACAO || process.env.FOCUS_NFE_TOKEN : process.env.FOCUS_NFE_TOKEN);
+const tokenGeral = (amb) => (amb === 'homologacao' ? process.env.FOCUS_NFE_TOKEN_HOMOLOGACAO || process.env.FOCUS_NFE_TOKEN : process.env.FOCUS_NFE_TOKEN);
+// Empresa cadastrada pelo painel: usa os tokens que a Focus devolveu para ela (guardados cifrados).
+const tokenDe = (amb, emitente) => {
+  const f = emitente && emitente.fiscal && emitente.fiscal.focus;
+  const proprio = f && f.tokens && f.tokens[amb] ? require('./certificado').abreSelo(f.tokens[amb]) : '';
+  return proprio || tokenGeral(amb);
+};
 const ativo = () => !!process.env.FOCUS_NFE_TOKEN;
 
 const transportePadrao = async (url, opcoes) => {
@@ -18,10 +24,10 @@ let transporte = transportePadrao;
 
 class ErroVenda extends Error {}
 
-async function focus(amb, caminho, { method = 'GET', body } = {}) {
-  const tk = tokenDe(amb);
+async function focus(amb, caminho, { method = 'GET', body, emitente, host } = {}) {
+  const tk = tokenDe(amb, emitente);
   if (!tk) throw new ErroVenda('Falta o token da Focus NFe (FOCUS_NFE_TOKEN no Railway).');
-  const r = await transporte(`${HOST[amb]}/v2${caminho}`, {
+  const r = await transporte(`${host || HOST[amb]}/v2${caminho}`, {
     method,
     headers: { Authorization: `Basic ${Buffer.from(`${tk}:`).toString('base64')}`, 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
@@ -108,16 +114,39 @@ function resultado(r, amb) {
 
 async function emite(venda, emitente, amb) {
   const { corpo: c } = corpo(venda, emitente);
-  const r = await focus(amb, `/${venda.modelo}?ref=${encodeURIComponent(venda.id)}`, { method: 'POST', body: c });
+  const r = await focus(amb, `/${venda.modelo}?ref=${encodeURIComponent(venda.id)}`, { method: 'POST', body: c, emitente });
   return resultado(r, amb);
 }
-async function consulta(venda, amb) { return resultado(await focus(amb, `/${venda.modelo}/${encodeURIComponent(venda.id)}`), amb); }
-async function cancela(venda, justificativa, amb) {
+async function consulta(venda, amb, emitente) { return resultado(await focus(amb, `/${venda.modelo}/${encodeURIComponent(venda.id)}`, { emitente }), amb); }
+async function cancela(venda, justificativa, amb, emitente) {
   const j = String(justificativa || '').trim();
   if (j.length < 15) throw new ErroVenda('Explique o motivo do cancelamento (mínimo 15 caracteres).');
-  const r = await focus(amb, `/${venda.modelo}/${encodeURIComponent(venda.id)}`, { method: 'DELETE', body: { justificativa: j.slice(0, 255) } });
+  const r = await focus(amb, `/${venda.modelo}/${encodeURIComponent(venda.id)}`, { method: 'DELETE', body: { justificativa: j.slice(0, 255) }, emitente });
   if (r.status !== 'cancelado') throw new ErroVenda(r.mensagem_sefaz || 'Não foi possível cancelar.');
   return { status: 'cancelada' };
 }
 
-module.exports = { ativo, emite, consulta, cancela, corpo, item, ErroVenda, _setTransporte: (f) => { transporte = f || transportePadrao; } };
+// Cadastro da empresa na Focus (API de Empresas: só produção, token master do escritório).
+// dados: { ie, cscProducao, idTokenProducao, cscHomologacao, idTokenHomologacao }; cert: { pfx, senha } ou null.
+async function cadastraEmpresa(u, dados, cert) {
+  const e = u.empresa || {};
+  const end = e.endereco || {};
+  const num = (v) => (so(v) ? Number(so(v)) : undefined);
+  const corpoEmp = {
+    nome: e.razaoSocial || u.nome, nome_fantasia: e.nomeFantasia || undefined, cnpj: so(u.cnpj),
+    inscricao_estadual: num(dados.ie), regime_tributario: e.mei ? 4 : 1,
+    email: u.email || undefined, telefone: so(u.telefone) || undefined,
+    logradouro: end.logradouro || e.logradouro, numero: end.numero || e.numero || 'SN', complemento: end.complemento || e.complemento || undefined,
+    bairro: end.bairro || e.bairro, cep: num(end.cep || e.cep), municipio: end.municipio || e.municipio, uf: end.uf || e.uf,
+    habilita_nfe: true, habilita_nfce: true, enviar_email_destinatario: false, discrimina_impostos: true,
+    ...(dados.cscProducao ? { csc_nfce_producao: dados.cscProducao, id_token_nfce_producao: num(dados.idTokenProducao) } : {}),
+    ...(dados.cscHomologacao ? { csc_nfce_homologacao: dados.cscHomologacao, id_token_nfce_homologacao: num(dados.idTokenHomologacao) } : {}),
+    ...(cert ? { arquivo_certificado_base64: Buffer.from(cert.pfx).toString('base64'), senha_certificado: cert.senha } : {}),
+  };
+  Object.keys(corpoEmp).forEach((k) => corpoEmp[k] === undefined && delete corpoEmp[k]);
+  const atual = u.fiscal && u.fiscal.focus && u.fiscal.focus.id;
+  const r = await focus('producao', atual ? `/empresas/${atual}` : '/empresas', { method: atual ? 'PUT' : 'POST', body: corpoEmp, host: HOST.producao });
+  return { id: r.id || atual, tokenProducao: r.token_producao || '', tokenHomologacao: r.token_homologacao || '', certificadoValidoAte: r.certificado_valido_ate || '' };
+}
+
+module.exports = { ativo, cadastraEmpresa, emite, consulta, cancela, corpo, item, ErroVenda, _setTransporte: (f) => { transporte = f || transportePadrao; } };

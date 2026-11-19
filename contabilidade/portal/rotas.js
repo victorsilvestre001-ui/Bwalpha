@@ -1236,7 +1236,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
   }
   async function atualizaVendasProcessando(u) {
     for (const v of db.lista('vendas', (x) => x.usuarioId === u.id && x.status === 'processando')) {
-      try { db.atualiza('vendas', v.id, await vendas.consulta(v, v.ambiente)); } catch (err) { console.warn('[vendas] consulta', v.id, err.message); }
+      try { db.atualiza('vendas', v.id, await vendas.consulta(v, v.ambiente, u)); } catch (err) { console.warn('[vendas] consulta', v.id, err.message); }
     }
   }
   admin.get('/escritorio/empresas/:id/vendas', async (req, res) => {
@@ -1244,10 +1244,65 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (!u) return;
     if (vendas.ativo()) await atualizaVendasProcessando(u);
     res.json({
-      config: { focus: vendas.ativo(), ambiente: ambVendas(u), simples: simplesOuMei(u), uf: (u.empresa && u.empresa.uf) || '' },
+      config: { focus: vendas.ativo(), ambiente: ambVendas(u), simples: simplesOuMei(u), uf: (u.empresa && u.empresa.uf) || '', empresaFocus: focusPublico(u) },
       produtos: db.lista('produtos', (p) => p.usuarioId === u.id).sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR')).map(prodPublico),
       vendas: db.lista('vendas', (v) => v.usuarioId === u.id).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)).slice(0, 60),
     });
+  });
+  // ---- Cupom fiscal: empresas prontas para emitir e cadastro na Focus ----
+  const focusPublico = (u) => {
+    const f = (u.fiscal && u.fiscal.focus) || null;
+    return f ? { configurada: true, ie: f.ie || '', producao: !!f.cscProducao, homologacao: !!f.cscHomologacao, idTokenProducao: f.idTokenProducao || '', idTokenHomologacao: f.idTokenHomologacao || '', certificadoValidoAte: f.certificadoValidoAte || '', em: f.em, por: f.por || '' } : { configurada: false };
+  };
+  admin.get('/escritorio/cupom', (req, res) => {
+    const ver = naCarteira(req);
+    const mes = new Date().toISOString().slice(0, 7);
+    const empresas = empresasEscritorio().filter(ver).map((u) => {
+      const doMes = db.lista('vendas', (v) => v.usuarioId === u.id && v.status === 'emitida' && v.ambiente === 'producao' && (v.criadoEm || '').startsWith(mes));
+      return {
+        id: u.id, nome: (u.empresa && u.empresa.razaoSocial) || u.nome, cnpj: u.cnpj, uf: (u.empresa && u.empresa.uf) || '', simples: simplesOuMei(u),
+        certificado: !!(u.certificado && u.certificado.ativo), ambiente: ambVendas(u), focus: focusPublico(u),
+        mes: { quantidade: doMes.length, total: Math.round(doMes.reduce((t, v) => t + v.total, 0) * 100) / 100 },
+      };
+    }).sort((a, b) => Number(b.focus.configurada) - Number(a.focus.configurada) || a.nome.localeCompare(b.nome, 'pt-BR'));
+    res.json({ focus: vendas.ativo(), empresas });
+  });
+  admin.post('/escritorio/empresas/:id/focus', express.json(), async (req, res) => {
+    const u = empresaDe(req, res);
+    if (!u) return;
+    if (!vendas.ativo()) return res.status(409).json({ erro: 'Falta o token master da Focus NFe no Railway (FOCUS_NFE_TOKEN).' });
+    if (!simplesOuMei(u)) return res.status(409).json({ erro: 'Nesta versão o cupom fiscal é para empresas do Simples Nacional e MEI.' });
+    const b = req.body || {};
+    const antes = (u.fiscal && u.fiscal.focus) || {};
+    const so = (v) => String(v || '').replace(/\D/g, '');
+    const dados = {
+      ie: so(b.ie) || antes.ie || '',
+      cscProducao: txt(b.cscProducao, 60), idTokenProducao: so(b.idTokenProducao) || antes.idTokenProducao || '',
+      cscHomologacao: txt(b.cscHomologacao, 60), idTokenHomologacao: so(b.idTokenHomologacao) || antes.idTokenHomologacao || '',
+    };
+    if (!dados.ie) return res.status(400).json({ erro: 'Informe a inscrição estadual da empresa.' });
+    if (dados.cscProducao && !dados.idTokenProducao) return res.status(400).json({ erro: 'Informe o ID do token (CSC) de produção.' });
+    if (dados.cscHomologacao && !dados.idTokenHomologacao) return res.status(400).json({ erro: 'Informe o ID do token (CSC) de homologação.' });
+    if (!antes.id && !dados.cscProducao && !dados.cscHomologacao) return res.status(400).json({ erro: 'Informe o CSC do cupom (gerado no site da SEFAZ), de teste ou de produção.' });
+    let cert = null;
+    if (b.enviarCertificado) {
+      cert = certificado.carrega(u.id);
+      if (!cert) return res.status(409).json({ erro: 'Esta empresa não tem certificado A1 conectado no painel. Conecte em Configurações ou desmarque o envio.' });
+    } else if (!antes.id) return res.status(400).json({ erro: 'Na primeira configuração o certificado A1 vai para a Focus (ela assina os cupons).' });
+    try {
+      const r = await vendas.cadastraEmpresa(u, dados, cert);
+      const tokens = { ...(antes.tokens || {}) };
+      if (r.tokenProducao) tokens.producao = certificado.sela(r.tokenProducao);
+      if (r.tokenHomologacao) tokens.homologacao = certificado.sela(r.tokenHomologacao);
+      const focus = {
+        id: r.id, ie: dados.ie, idTokenProducao: dados.idTokenProducao, idTokenHomologacao: dados.idTokenHomologacao,
+        cscProducao: !!(dados.cscProducao || antes.cscProducao), cscHomologacao: !!(dados.cscHomologacao || antes.cscHomologacao),
+        certificadoValidoAte: r.certificadoValidoAte || antes.certificadoValidoAte || '', tokens,
+        em: new Date().toISOString(), por: req.acesso && req.acesso.usuario ? req.acesso.usuario.nome : 'Escritório',
+      };
+      const nu = db.atualiza('usuarios', u.id, { fiscal: { ...(u.fiscal || {}), focus } });
+      res.json({ focus: focusPublico(nu) });
+    } catch (err) { res.status(400).json({ erro: `A Focus recusou: ${err.message}` }); }
   });
   // Ambiente da emissão de vendas: homologação (teste, sem valor fiscal) ou produção
   admin.post('/escritorio/empresas/:id/vendas/ambiente', express.json(), (req, res) => {
@@ -1329,7 +1384,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       // NF-e é assíncrona: confere algumas vezes antes de responder
       for (let i = 0; i < 4 && venda.status === 'processando'; i++) {
         await new Promise((ok) => setTimeout(ok, espera ? 2000 : 0));
-        venda = db.atualiza('vendas', venda.id, await vendas.consulta(venda, ambiente));
+        venda = db.atualiza('vendas', venda.id, await vendas.consulta(venda, ambiente, u));
       }
     } catch (err) {
       db.remove('vendas', (x) => x.id === venda.id);
@@ -1384,7 +1439,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (!u) return;
     const v = db.acha('vendas', (x) => x.id === req.params.vid && x.usuarioId === u.id);
     if (!v || v.status !== 'emitida') return res.status(404).json({ erro: 'Nota emitida não encontrada.' });
-    try { res.json({ venda: db.atualiza('vendas', v.id, { ...(await vendas.cancela(v, req.body.justificativa, v.ambiente)), canceladaEm: new Date().toISOString() }) }); } catch (err) { res.status(400).json({ erro: err.message }); }
+    try { res.json({ venda: db.atualiza('vendas', v.id, { ...(await vendas.cancela(v, req.body.justificativa, v.ambiente, u)), canceladaEm: new Date().toISOString() }) }); } catch (err) { res.status(400).json({ erro: err.message }); }
   });
 
   // ---------- Fila de certidões ----------

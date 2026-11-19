@@ -146,6 +146,7 @@ function rota() {
   if (EU.usuario && EU.usuario.trocarSenha) return telaConta();
   if (partes[0] === 'equipe' && EU.gestor) return telaEquipe();
   if (partes[0] === 'obrigacoes') return telaObrigacoes();
+  if (partes[0] === 'cupom') return telaCupom();
   if (partes[0] === 'whatsapp' && EU.gestor) return telaWhatsapp();
   if (partes[0] === 'conta' && EU.usuario) return telaConta();
   if (partes[0] === 'assistente') return telaAssistente();
@@ -270,6 +271,7 @@ async function abaVendas(d) {
   const prod = v.produtos;
   const faixa = !c.focus ? '<div class="faixa atencao">Para emitir NF-e e cupom fiscal, falta ligar a Focus NFe: crie a conta, cadastre a empresa lá (certificado A1, inscrição estadual e CSC) e coloque o token no Railway (FOCUS_NFE_TOKEN).</div>'
     : !c.simples ? '<div class="faixa atencao">Nesta primeira versão a emissão é para empresas do Simples Nacional e MEI.</div>'
+    : !(c.empresaFocus && c.empresaFocus.configurada) ? `<div class="faixa atencao">${icone('chave')}<span>Esta empresa ainda não foi configurada para o cupom fiscal (inscrição estadual, CSC e certificado na Focus).</span><button class="btn pequeno primario" id="vConf">Configurar agora</button></div>`
     : `<div class="faixa ${c.ambiente === 'producao' ? 'ok' : 'info'}">${icone('raio')}<span>${c.ambiente === 'producao' ? '<b>Produção:</b> as notas têm valor fiscal.' : '<b>Teste (homologação):</b> as notas não têm valor fiscal.'}</span><button class="btn pequeno" id="vAmb">${c.ambiente === 'producao' ? 'Voltar para teste' : 'Ligar produção'}</button></div>`;
   el.innerHTML = `${faixa}
     <div class="grade-nota">
@@ -312,6 +314,7 @@ async function abaVendas(d) {
   const msg = (t) => { $('#vMsg').textContent = t; $('#vMsg').hidden = !t; };
   const modelo = () => $$('[name=vMod]').find((r) => r.checked).value;
   $$('[name=vMod]').forEach((r) => r.addEventListener('change', () => { $('#vNfe').hidden = modelo() !== 'nfe'; $('#vDocObs').textContent = modelo() === 'nfe' ? '(obrigatório)' : '(opcional no cupom)'; }));
+  if ($('#vConf')) $('#vConf').addEventListener('click', async () => { if (await configuraFocus({ id: e.id, nome: e.nome, cnpj: e.cnpj, certificado: !!(e.certificado && e.certificado.ativo) }, c.empresaFocus)) recarrega(); });
   if ($('#vAmb')) $('#vAmb').addEventListener('click', async () => {
     const prodNovo = c.ambiente !== 'producao';
     if (prodNovo && !(await dialogo({ titulo: 'Ligar produção?', sub: 'As próximas notas terão valor fiscal. Faça antes um teste em homologação.', botoes: [{ texto: 'Cancelar', valor: false }, { texto: 'Ligar produção', classe: 'primario', valor: true }] }))) return;
@@ -365,6 +368,67 @@ async function abaVendas(d) {
     const r = await dialogo({ titulo: 'Cancelar nota?', sub: 'A NF-e pode ser cancelada em até 24 horas; o cupom, em até 30 minutos.', corpo: '<label class="campo"><span>Motivo (mínimo 15 caracteres)</span><textarea id="vcMot" rows="3" maxlength="255"></textarea></label>', botoes: [{ texto: 'Voltar', valor: null }, { texto: 'Cancelar nota', classe: 'primario', acao: () => api(`/escritorio/empresas/${e.id}/vendas/${b.dataset.vc}/cancelar`, { body: { justificativa: $('#vcMot').value } }) }] });
     if (r) { aviso('Nota cancelada.'); recarrega(); }
   }));
+}
+
+// ----- Cupom fiscal: lista das empresas, configuração na Focus (uma vez) e atalho para emitir -----
+async function configuraFocus(emp, f = {}) {
+  const r = await dialogo({
+    titulo: `${f.configurada ? 'Ajustar' : 'Configurar'} cupom fiscal`,
+    sub: `${esc(emp.nome)} · CNPJ ${doc(emp.cnpj)}. A empresa é cadastrada na Focus NFe, que assina e transmite os cupons.`,
+    corpo: `<div class="form-2">
+      <label class="campo"><span>Inscrição estadual</span><input id="fzIe" inputmode="numeric" value="${esc(f.ie || '')}" placeholder="somente números"></label>
+      <span></span>
+      <label class="campo"><span>CSC de teste (homologação)</span><input id="fzCscH" autocomplete="off" placeholder="${f.homologacao ? 'já informado (deixe vazio para manter)' : 'código CSC'}"></label>
+      <label class="campo"><span>ID do CSC de teste</span><input id="fzIdH" inputmode="numeric" value="${esc(f.idTokenHomologacao || '')}" placeholder="ex.: 1"></label>
+      <label class="campo"><span>CSC de produção</span><input id="fzCscP" autocomplete="off" placeholder="${f.producao ? 'já informado (deixe vazio para manter)' : 'código CSC'}"></label>
+      <label class="campo"><span>ID do CSC de produção</span><input id="fzIdP" inputmode="numeric" value="${esc(f.idTokenProducao || '')}" placeholder="ex.: 1"></label>
+    </div>
+    <label style="display:flex;gap:10px;align-items:flex-start;margin-top:6px;font-size:.88rem"><input type="checkbox" style="width:auto;flex:none;margin:3px 0 0" id="fzCert" ${emp.certificado && !f.configurada ? 'checked' : ''} ${emp.certificado ? '' : 'disabled'}><span>Enviar o certificado A1 desta empresa (já conectado no painel) para a Focus${emp.certificado ? '' : ' <b>· esta empresa ainda não tem certificado no painel</b>'}</span></label>
+    <p class="suave" style="font-size:.8rem;margin:10px 0 0">O CSC (código de segurança do contribuinte) é gerado no site da SEFAZ do estado com o certificado da empresa; em SP, no Portal da NFC-e › Acesso restrito › CSC. Gere um de homologação para testar e um de produção para valer.</p>`,
+    botoes: [{ texto: 'Cancelar', valor: null }, {
+      texto: f.configurada ? 'Salvar' : 'Cadastrar na Focus', classe: 'primario',
+      acao: () => api(`/escritorio/empresas/${emp.id}/focus`, { body: { ie: $('#fzIe').value, cscHomologacao: $('#fzCscH').value, idTokenHomologacao: $('#fzIdH').value, cscProducao: $('#fzCscP').value, idTokenProducao: $('#fzIdP').value, enviarCertificado: $('#fzCert').checked } }),
+    }],
+  });
+  if (r) aviso(`${esc(emp.nome)} pronta para emitir cupom.`);
+  return r;
+}
+async function telaCupom() {
+  const el = $('#conteudo');
+  el.innerHTML = '<p class="vazio">Carregando…</p>';
+  const c = await api('/escritorio/cupom');
+  const est = telaCupom.est || (telaCupom.est = { busca: '' });
+  const prontas = c.empresas.filter((e) => e.focus.configurada).length;
+  el.innerHTML = `
+    <div class="cab"><div><h1>Cupom fiscal</h1><p>Escolha a empresa, configure uma vez e emita. Depois é só digitar o produto e o valor.</p></div></div>
+    ${!c.focus ? '<div class="faixa atencao">Falta ligar a Focus NFe: crie a conta, gere o token master e coloque no Railway como FOCUS_NFE_TOKEN. Depois disso o botão "Configurar" de cada empresa passa a funcionar.</div>' : ''}
+    <div class="card sem-pad">
+      <div style="padding:16px 22px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">
+        <span class="suave"><b>${prontas}</b> de ${c.empresas.length} empresas prontas para emitir</span>
+        <input id="cBusca" placeholder="Buscar empresa ou CNPJ" value="${esc(est.busca)}" style="max-width:280px;margin:0">
+      </div>
+      <table class="tabela"><thead><tr><th>Empresa</th><th>Situação</th><th class="num">Cupons no mês</th><th></th></tr></thead><tbody id="cLinhas"></tbody></table>
+    </div>`;
+  const linhas = () => {
+    const q = est.busca.toLowerCase().replace(/[./-]/g, '');
+    const lista = c.empresas.filter((e) => !q || e.nome.toLowerCase().includes(q) || String(e.cnpj).includes(q));
+    $('#cLinhas').innerHTML = lista.map((e) => {
+      const f = e.focus;
+      const sit = !e.simples ? '<span class="chip neutro">Fora do Simples</span>'
+        : !f.configurada ? '<span class="chip atencao">Falta configurar</span>'
+        : `<span class="chip ok">Pronta · ${e.ambiente === 'producao' ? 'produção' : 'teste'}</span>${f.certificadoValidoAte ? `<br><small class="suave">certificado até ${dataIso(f.certificadoValidoAte.slice(0, 10))}</small>` : ''}`;
+      const acoes = !e.simples ? ''
+        : !f.configurada ? `<button class="btn pequeno primario" data-conf="${e.id}" ${c.focus ? '' : 'disabled'}>Configurar</button>`
+        : `<a class="btn pequeno primario" href="#/empresa/${e.id}/vendas">Emitir cupom ${icone('seta')}</a> <button class="lnk" data-conf="${e.id}">Ajustar</button>`;
+      return `<tr><td><b>${esc(e.nome)}</b><br><small class="suave">${doc(e.cnpj)}${e.uf ? ` · ${esc(e.uf)}` : ''}${e.certificado ? '' : ' · sem certificado A1'}</small></td><td>${sit}</td><td class="num">${e.mes.quantidade ? `${e.mes.quantidade} · ${brl(e.mes.total)}` : '<span class="suave">—</span>'}</td><td class="acoes">${acoes}</td></tr>`;
+    }).join('') || '<tr><td colspan="4" class="vazio">Nenhuma empresa encontrada.</td></tr>';
+    $$('[data-conf]', el).forEach((b) => b.addEventListener('click', async () => {
+      const emp = c.empresas.find((x) => x.id === b.dataset.conf);
+      if (await configuraFocus(emp, emp.focus)) location.hash = `#/empresa/${emp.id}/vendas`;
+    }));
+  };
+  $('#cBusca').addEventListener('input', (ev) => { est.busca = ev.target.value; linhas(); });
+  linhas();
 }
 
 // ----- Obrigações: situação fiscal, parcelamento e calendário -----

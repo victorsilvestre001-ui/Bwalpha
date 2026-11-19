@@ -109,6 +109,26 @@ function carrega(id) {
   return { pfx, senha: j.senha };
 }
 
+// Segredos curtos (tokens de provedores) cifrados com a mesma chave: 'iv.tag.texto' em base64
+function sela(texto) {
+  const k = chave();
+  if (!k) throw new ErroCertificado('Recurso ainda não ativado no servidor (CERT_CHAVE).');
+  const iv = crypto.randomBytes(12);
+  const c = crypto.createCipheriv('aes-256-gcm', k, iv);
+  const corpo = Buffer.concat([c.update(String(texto), 'utf8'), c.final()]);
+  return [iv, c.getAuthTag(), corpo].map((b) => b.toString('base64')).join('.');
+}
+function abreSelo(selo) {
+  const k = chave();
+  if (!k || !selo) return '';
+  try {
+    const [iv, tag, corpo] = String(selo).split('.').map((s) => Buffer.from(s, 'base64'));
+    const d = crypto.createDecipheriv('aes-256-gcm', k, iv);
+    d.setAuthTag(tag);
+    return Buffer.concat([d.update(corpo), d.final()]).toString('utf8');
+  } catch { return ''; }
+}
+
 const apaga = (id) => fs.rmSync(arq(id), { force: true });
 
-module.exports = { ativo, le, confere, guarda, carrega, apaga, ErroCertificado };
+module.exports = { ativo, le, confere, guarda, carrega, apaga, sela, abreSelo, ErroCertificado };

@@ -674,6 +674,47 @@ const notas = require('./portal/notas');
         r = await req('PUT', `${bv}/produtos/${pOleo.id}`, { ...pOleo, valor: '38,50' }, admin);
         assert.strictEqual(r.json.produto.conferir, false, 'escritório conferiu');
         console.log('ok venda rápida');
+        // Cupom fiscal: cadastro da empresa na Focus pelo painel e emissão com o token dela
+        {
+          const chamadas = [];
+          vendasT._setTransporte(async (url, o) => {
+            chamadas.push({ url, metodo: o.method, auth: o.headers.Authorization, corpo: o.body ? JSON.parse(o.body) : null });
+            if (url === 'https://api.focusnfe.com.br/v2/empresas' && o.method === 'POST') return { status: 201, json: { id: 77, token_producao: 'tk-prod-maria', token_homologacao: 'tk-hom-maria', certificado_valido_ate: '2027-05-01T10:00:00-03:00' } };
+            if (url === 'https://api.focusnfe.com.br/v2/empresas/77' && o.method === 'PUT') return { status: 200, json: { id: 77, token_producao: '', token_homologacao: '' } };
+            if (url.includes('/v2/nfce')) return { status: 201, json: { status: 'autorizado', numero: '13', serie: '1' } };
+            return { status: 404, json: {} };
+          });
+          r = await req('GET', '/api/admin/portal/escritorio/cupom', null, admin);
+          assert.strictEqual(r.json.focus, true);
+          assert.strictEqual(r.json.empresas.find((x) => x.id === idMaria).focus.configurada, false);
+          const bf = `${bv}/focus`;
+          assert.strictEqual((await req('POST', bf, { cscHomologacao: 'CSC-TESTE', idTokenHomologacao: '1', enviarCertificado: true }, admin)).status, 400, 'sem IE');
+          assert.strictEqual((await req('POST', bf, { ie: '123.456.789.110', enviarCertificado: true }, admin)).status, 400, 'sem CSC');
+          assert.strictEqual((await req('POST', bf, { ie: '123456789110', cscHomologacao: 'CSC-TESTE', idTokenHomologacao: '1' }, admin)).status, 400, 'primeira vez exige certificado');
+          r = await req('POST', bf, { ie: '123.456.789.110', cscHomologacao: 'CSC-TESTE', idTokenHomologacao: '1', enviarCertificado: true }, admin);
+          assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+          assert.deepStrictEqual([r.json.focus.configurada, r.json.focus.homologacao, r.json.focus.producao, r.json.focus.ie], [true, true, false, '123456789110']);
+          assert.ok(!/tk-|CSC-TESTE/.test(JSON.stringify(r.json)), 'tokens e CSC não voltam para a tela');
+          const cad = chamadas[0];
+          assert.strictEqual(cad.auth, `Basic ${Buffer.from('tok-focus:').toString('base64')}`, 'cadastro com o token master');
+          assert.deepStrictEqual([cad.corpo.cnpj, cad.corpo.inscricao_estadual, cad.corpo.regime_tributario, cad.corpo.habilita_nfce, cad.corpo.csc_nfce_homologacao, cad.corpo.id_token_nfce_homologacao], ['12345678000195', 123456789110, 4, true, 'CSC-TESTE', 1], 'MEI = regime 4');
+          assert.ok(cad.corpo.arquivo_certificado_base64 && cad.corpo.senha_certificado, 'manda o A1');
+          const guardado = JSON.stringify(require('./portal/db').acha('usuarios', (x) => x.id === idMaria).fiscal.focus);
+          assert.ok(!guardado.includes('tk-hom-maria'), 'token guardado cifrado');
+          r = await req('POST', `${bv}/vendas`, { modelo: 'nfce', itens: [{ produtoId: idProd, quantidade: 1 }] }, admin);
+          assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+          assert.strictEqual(chamadas.slice(-1)[0].auth, `Basic ${Buffer.from('tk-hom-maria:').toString('base64')}`, 'emite com o token da empresa');
+          // Ajuste depois (sem reenviar certificado nem CSC): atualiza na Focus e mantém os tokens
+          r = await req('POST', bf, { ie: '123456789110', cscProducao: 'CSC-PROD', idTokenProducao: '2' }, admin);
+          assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+          const aj = chamadas.slice(-1)[0];
+          assert.deepStrictEqual([aj.metodo, aj.url, 'arquivo_certificado_base64' in aj.corpo, aj.corpo.csc_nfce_producao], ['PUT', 'https://api.focusnfe.com.br/v2/empresas/77', false, 'CSC-PROD']);
+          assert.deepStrictEqual([r.json.focus.homologacao, r.json.focus.producao], [true, true]);
+          await req('POST', `${bv}/vendas`, { modelo: 'nfce', itens: [{ produtoId: idProd, quantidade: 1 }] }, admin);
+          assert.strictEqual(chamadas.slice(-1)[0].auth, `Basic ${Buffer.from('tk-hom-maria:').toString('base64')}`, 'token mantido');
+          assert.strictEqual((await req('GET', '/api/admin/portal/escritorio/cupom', null, admin)).json.empresas.find((x) => x.id === idMaria).focus.configurada, true);
+          console.log('ok cupom fiscal: cadastro na Focus');
+        }
         vendasT._setTransporte(null);
         delete process.env.FOCUS_NFE_TOKEN;
         console.log('ok vendas NF-e/NFC-e');
