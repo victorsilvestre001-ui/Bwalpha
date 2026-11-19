@@ -145,8 +145,9 @@ function montaDps(nota, prestador, { agora = new Date(), ambiente = 1 } = {}) {
     el('nDPS', numero),
     el('dCompet', dh.slice(0, 10)),
     el('tpEmit', '1'),
-    // Leiaute antigo da produção restrita pedia finNFSe aqui; com o grupo IBSCBS ela vai dentro dele
-    ambiente === 2 && !incluiIbsCbs(f, op, dh.slice(0, 10)) ? el('finNFSe', '0') : '',
+    // Produção restrita (homologação) ainda usa o leiaute do piloto RTC: finNFSe aqui, fora do grupo IBSCBS.
+    // Em produção (Anexo I v1.01) a finNFSe vai dentro do grupo IBSCBS.
+    ambiente === 2 ? el('finNFSe', '0') : '',
     el('cLocEmi', String(f.codigoMunicipio)),
     el('prest', [
       el('CNPJ', prestador.cnpj),
@@ -181,7 +182,7 @@ function montaDps(nota, prestador, { agora = new Date(), ambiente = 1 } = {}) {
     ]),
     // IBS/CBS declarado: tributação integral (CST 000 / cClassTrib 000001); a Receita calcula os valores
     incluiIbsCbs(f, op, dh.slice(0, 10)) ? el('IBSCBS', [
-      el('finNFSe', '0'),
+      ambiente === 2 ? '' : el('finNFSe', '0'),
       el('cIndOp', /^\d{6}$/.test(String(f.cIndOp || '')) ? String(f.cIndOp) : indOpServico(f.codigoServico)),
       el('indDest', '0'),
       el('valores', [el('trib', [el('gIBSCBS', [el('CST', /^\d{3}$/.test(String(f.cstIbsCbs || '')) ? String(f.cstIbsCbs) : '000'), el('cClassTrib', /^\d{6}$/.test(String(f.cClassTrib || '')) ? String(f.cClassTrib) : '000001')])])]),
