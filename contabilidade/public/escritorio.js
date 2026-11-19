@@ -294,6 +294,11 @@ async function abaObrigacoes(d) {
         <button class="btn" id="btnParc">${icone('raio')} Consultar agora</button>
       </div>
     </div>
+    <div class="card" style="margin-top:18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><h2 style="margin:0">Certidões negativas</h2><button class="btn pequeno" id="btnCopiaCnpj">Copiar CNPJ ${doc(e.cnpj)}</button></div>
+      <p class="suave" style="font-size:.85rem">${!sf || sf.erro ? 'Os sites oficiais pedem captcha: clique, cole o CNPJ e emita.' : sf.regular ? 'Pela situação fiscal da Receita, a certidão federal deve sair <b>negativa</b>. Os sites pedem captcha: clique, cole o CNPJ e emita.' : `<b style="color:var(--erro)">A certidão federal deve sair positiva</b> enquanto houver pendências (${sf.pendencias.length}). Veja o quadro "Situação fiscal" acima.`}</p>
+      <div class="certidoes">${certidoesDe(e).map((c) => `<a class="btn" href="${esc(c.url)}" target="_blank" rel="noopener">${icone('link')} ${esc(c.nome)}</a>`).join('')}</div>
+    </div>
     <div class="card sem-pad" style="margin-top:18px">
       <div style="padding:18px 22px 6px"><h2 style="margin:0">Calendário</h2><small class="suave">DAS, DEFIS e parcelas o site confere sozinho; as demais você marca como feitas.</small></div>
       <table class="tabela"><thead><tr><th>Vence</th><th>Obrigação</th><th class="num">Valor</th><th>Situação</th><th></th></tr></thead>
@@ -301,6 +306,7 @@ async function abaObrigacoes(d) {
     </div>`;
   const recarrega = () => abaObrigacoes(d);
   ligaMarcar(el, recarrega);
+  $('#btnCopiaCnpj').addEventListener('click', async () => { try { await navigator.clipboard.writeText(e.cnpj); aviso('CNPJ copiado.'); } catch { aviso('Não deu para copiar.', 'erro'); } });
   $('#btnSit').addEventListener('click', async (ev) => { ev.target.disabled = true; ev.target.textContent = 'Consultando a Receita…'; try { await api(`/escritorio/empresas/${e.id}/situacao`, { method: 'POST' }); aviso('Situação fiscal atualizada.'); } catch (err) { aviso(esc(err.message), 'erro'); } recarrega(); });
   $('#btnParc').addEventListener('click', async (ev) => { ev.target.disabled = true; try { await api(`/escritorio/empresas/${e.id}/parcelamentos?atualizar=1`); aviso('Parcelamento consultado.'); } catch (err) { aviso(esc(err.message), 'erro'); } recarrega(); });
   $$('[data-parcela]', el).forEach((b) => b.addEventListener('click', async () => {
@@ -726,9 +732,32 @@ async function puxaGuia(e, competencia) {
 // "emitir nota da AGEN para VIMARI de 2.750,00 manutenção do motor", "cadastrar empresa 12.345.678/0001-90"
 const MESES_NOME = { jan: '01', fev: '02', mar: '03', abr: '04', mai: '05', jun: '06', jul: '07', ago: '08', set: '09', out: '10', nov: '11', dez: '12' };
 const semAcento = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-const IGNORAR = ['puxar', 'puxa', 'guia', 'gerar', 'emitir', 'emite', 'nota', 'fiscal', 'cliente', 'empresa', 'para', 'pagar', 'mandar', 'manda', 'enviar', 'envia', 'vencida', 'ltda', 'das', 'servicos', 'servico', 'referente', 'valor', 'reais', 'cadastrar'];
-const palavrasDe = (q) => q.split(/[^a-z0-9]+/).filter((p) => p.length >= 3 && !IGNORAR.includes(p) && !MESES_NOME[p.slice(0, 3)]);
-const melhor = (lista, nomeDe, palavras) => lista.map((x) => [x, palavras.filter((p) => semAcento(nomeDe(x)).includes(p)).length]).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1])[0];
+const IGNORAR = ['puxar', 'puxa', 'puxe', 'guia', 'gerar', 'emitir', 'emite', 'nota', 'fiscal', 'cliente', 'empresa', 'para', 'pagar', 'mandar', 'manda', 'enviar', 'envia', 'vencida', 'ltda', 'das', 'servicos', 'servico', 'referente', 'valor', 'reais', 'cadastrar',
+  'de', 'da', 'do', 'em', 'no', 'na', 'os', 'as', 'me', 'ao', 'nf', 'pf', 'pj',
+  'preciso', 'quero', 'favor', 'todas', 'todos', 'certidao', 'certidoes', 'negativa', 'negativas', 'municipal', 'estadual', 'federal', 'trabalhista', 'fgts', 'tirar', 'pedir', 'cnd', 'por', 'que', 'com', 'dos', 'das', 'uma'];
+// Palavras comuns em razão social: sozinhas não bastam para escolher a empresa
+const GENERICAS = ['comercio', 'demolidora', 'engenharia', 'construcao', 'construtora', 'locacao', 'maquinas', 'equipamentos', 'administrativos', 'tecnicos', 'solucoes', 'comerciais', 'acessorios', 'sociedade', 'individual', 'advocacia', 'logistica', 'qualidade', 'clinic', 'academy', 'odontologicos', 'fisioterapia', 'contabilidade', 'data', 'tech', 'pecas', 'motos', 'terra'];
+const palavrasDe = (q) => q.split(/[^a-z0-9]+/).filter((p) => p.length >= 2 && !IGNORAR.includes(p) && !MESES_NOME[p.slice(0, 3)]);
+const melhor = (lista, nomeDe, palavras) => lista.map((x) => { const achou = palavras.filter((p) => semAcento(nomeDe(x)).split(/[^a-z0-9]+/).includes(p) || (p.length >= 5 && semAcento(nomeDe(x)).includes(p))); return [x, achou.length, achou.some((p) => !GENERICAS.includes(p))]; }).filter(([, n, forte]) => n > 0 && forte).sort((a, b) => b[1] - a[1])[0];
+
+// Certidões: links oficiais por esfera (todas pedem captcha; quem tira é a pessoa)
+function certidoesDe(e) {
+  const uf = String(e.uf || '').toUpperCase();
+  const cidade = String(e.municipio || '');
+  const busca = (q) => `https://www.google.com/search?q=${encodeURIComponent(q)}`;
+  const estadual = uf === 'SP'
+    ? [{ nome: 'Estadual: débitos não inscritos (SEFAZ-SP)', url: 'https://www10.fazenda.sp.gov.br/CertidaoNegativaDeb/Pages/EmissaoCertidaoNegativa.aspx' }, { nome: 'Estadual: dívida ativa (PGE-SP)', url: 'https://www.dividaativa.pge.sp.gov.br/sc/pages/crda/emitirCrda.jsf' }]
+    : [{ nome: `Estadual (${uf || 'UF'})`, url: busca(`certidão negativa de débitos estaduais ${uf} sefaz`) }];
+  const municipal = /^S[AÃ]O PAULO$/i.test(cidade) && uf === 'SP'
+    ? { nome: 'Municipal (Prefeitura de São Paulo)', url: 'https://duc.prefeitura.sp.gov.br/certidoes/forms_anonimo/frmConsultaEmissaoCertificado.aspx' }
+    : { nome: `Municipal (${cidade || 'prefeitura'}${uf ? '/' + uf : ''})`, url: busca(`certidão negativa de débitos tributários prefeitura ${cidade} ${uf}`) };
+  return [
+    { nome: 'Federal: Receita Federal e PGFN (CND/CPEN)', url: 'https://servicos.receitafederal.gov.br/servico/certidoes/#/home/cnpj' },
+    ...estadual, municipal,
+    { nome: 'FGTS (CRF, Caixa)', url: 'https://consulta-crf.caixa.gov.br/consultacrf/pages/consultaEmpregador.jsf' },
+    { nome: 'Trabalhista (CNDT, TST)', url: 'https://cndt-certidao.tst.jus.br/inicio.faces' },
+  ];
+}
 
 // Executa o pedido e devolve { texto, link? } para o histórico
 async function executaPedido(texto) {
@@ -742,9 +771,15 @@ async function executaPedido(texto) {
   }
   // Empresa: o que vem antes de "para" (depois é o tomador da nota)
   const [antes, depois = ''] = q.split(/\bpara\b/);
-  const alvo = melhor(empresas, (e) => `${e.nome} ${e.fantasia} ${e.cnpj}`, palavrasDe(antes)) || melhor(empresas, (e) => `${e.nome} ${e.fantasia}`, palavrasDe(q));
-  if (!alvo) throw new Error('Não achei a empresa. Use o nome do cadastro, por exemplo "puxar guia da AGEN".');
+  const porCnpj = cnpj && empresas.find((x) => x.cnpj === cnpj.replace(/\D/g, ''));
+  const alvo = porCnpj ? [porCnpj] : melhor(empresas, (e) => `${e.nome} ${e.fantasia} ${e.cnpj}`, palavrasDe(antes)) || melhor(empresas, (e) => `${e.nome} ${e.fantasia}`, palavrasDe(q));
+  if (!alvo) throw new Error('Não achei essa empresa no cadastro. Confira o nome (ou mande o CNPJ), por exemplo "puxar guia da AGEN".');
   const e = alvo[0];
+  // Certidões negativas: abre a lista oficial da empresa (não é guia de DAS)
+  if (/certid|\bcnd\b|negativa/.test(q)) {
+    location.hash = `#/empresa/${e.id}/obrigacoes`;
+    return { texto: `Certidões da ${e.nome}: abri a lista com os links oficiais (federal, estadual, municipal, FGTS e trabalhista). Os sites pedem captcha, então a emissão é feita por você.`, link: `#/empresa/${e.id}/obrigacoes` };
+  }
   const d = await api(`/escritorio/empresas/${e.id}`);
   // Emitir nota: cliente (tomador), valor e descrição; abre a conferência
   if (/\bnota|\bnf/.test(q) && !/\bguia|\bdas\b/.test(q)) {
@@ -756,7 +791,8 @@ async function executaPedido(texto) {
     location.hash = `#/empresa/${e.id}/notas`;
     return { texto: `Nota da ${e.nome}${cli ? ' para ' + cli[0].nome : ''}${valor ? ' de ' + brl(valor) : ''} aberta para conferir e emitir.`, link: `#/empresa/${e.id}/notas` };
   }
-  // Puxar guia do DAS
+  // Puxar guia do DAS (só quando o pedido fala de guia/DAS)
+  if (!/\bguia|\bdas\b|\bdarf|\bboleto|\bimposto|\bpagar/.test(q)) throw new Error('Não entendi o pedido. Use, por exemplo: "puxar guia da AGEN", "emitir nota da AGEN para VIMARI de 500,00", "certidões da AGEN" ou "cadastrar empresa 00.000.000/0000-00".');
   if (!d.apuracao) throw new Error(`${e.nome} não está no Simples Nacional.`);
   const mesTxt = Object.keys(MESES_NOME).find((m) => new RegExp(`\\b${m}`).test(q));
   const ano = (q.match(/\b(20\d{2})\b/) || [])[1];

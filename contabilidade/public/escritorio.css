@@ -249,3 +249,5 @@ input:focus, select:focus, textarea:focus { border-color: var(--marca-2); box-sh
 .filtros-obr { display: grid; grid-template-columns: minmax(220px, 340px) 1fr; gap: 14px; align-items: end; margin-bottom: 14px; }
 .filtros-obr .campo { margin: 0; }
 @media (max-width: 1000px) { .filtros-obr { grid-template-columns: 1fr; } }
+.certidoes { display: flex; flex-wrap: wrap; gap: 8px; }
+.certidoes .btn { font-size: .85rem; }
