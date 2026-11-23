@@ -1252,7 +1252,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
   // ---- Cupom fiscal: empresas prontas para emitir e cadastro na Focus ----
   const focusPublico = (u) => {
     const f = (u.fiscal && u.fiscal.focus) || null;
-    return f ? { configurada: true, ie: f.ie || '', producao: !!f.cscProducao, homologacao: !!f.cscHomologacao, idTokenProducao: f.idTokenProducao || '', idTokenHomologacao: f.idTokenHomologacao || '', certificadoValidoAte: f.certificadoValidoAte || '', em: f.em, por: f.por || '' } : { configurada: false };
+    return f ? { configurada: true, ie: f.ie || '', producao: !!f.cscProducao, homologacao: !!f.cscHomologacao, idTokenProducao: f.idTokenProducao || '', idTokenHomologacao: f.idTokenHomologacao || '', certificadoValidoAte: f.certificadoValidoAte || '', serieNfe: f.serieNfe || '', em: f.em, por: f.por || '' } : { configurada: false };
   };
   admin.get('/escritorio/cupom', (req, res) => {
     const ver = naCarteira(req);
@@ -1279,6 +1279,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       ie: so(b.ie) || antes.ie || '',
       cscProducao: txt(b.cscProducao, 60), idTokenProducao: so(b.idTokenProducao) || antes.idTokenProducao || '',
       cscHomologacao: txt(b.cscHomologacao, 60), idTokenHomologacao: so(b.idTokenHomologacao) || antes.idTokenHomologacao || '',
+      serieNfeProducao: so(b.serieNfeProducao).slice(0, 3), proximoNfeProducao: so(b.proximoNfeProducao).slice(0, 9),
     };
     if (!dados.ie) return res.status(400).json({ erro: 'Informe a inscrição estadual da empresa.' });
     if (dados.cscProducao && !dados.idTokenProducao) return res.status(400).json({ erro: 'Informe o ID do token (CSC) de produção.' });
@@ -1303,7 +1304,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       const focus = {
         id: r.id, ie: dados.ie, idTokenProducao: dados.idTokenProducao, idTokenHomologacao: dados.idTokenHomologacao,
         cscProducao: !!(dados.cscProducao || antes.cscProducao), cscHomologacao: !!(dados.cscHomologacao || antes.cscHomologacao),
-        certificadoValidoAte: r.certificadoValidoAte || antes.certificadoValidoAte || '', tokens,
+        certificadoValidoAte: r.certificadoValidoAte || antes.certificadoValidoAte || '', tokens, serieNfe: dados.serieNfeProducao || antes.serieNfe || '',
         em: new Date().toISOString(), por: req.acesso && req.acesso.usuario ? req.acesso.usuario.nome : 'Escritório',
       };
       const nu = db.atualiza('usuarios', u.id, { fiscal: { ...(u.fiscal || {}), focus } });

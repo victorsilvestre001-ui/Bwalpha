@@ -773,11 +773,12 @@ const notas = require('./portal/notas');
           assert.strictEqual(r.status, 200, JSON.stringify(r.json));
           assert.strictEqual(chamadas.slice(-1)[0].auth, `Basic ${Buffer.from('tk-hom-maria:').toString('base64')}`, 'emite com o token da empresa');
           // Ajuste depois (sem reenviar certificado nem CSC): atualiza na Focus e mantém os tokens
-          r = await req('POST', bf, { ie: '123456789110', cscProducao: 'CSC-PROD', idTokenProducao: '2' }, admin);
+          r = await req('POST', bf, { ie: '123456789110', cscProducao: 'CSC-PROD', idTokenProducao: '2', serieNfeProducao: '2', proximoNfeProducao: '1' }, admin);
           assert.strictEqual(r.status, 200, JSON.stringify(r.json));
           const aj = chamadas.slice(-1)[0];
           assert.deepStrictEqual([aj.metodo, aj.url, 'arquivo_certificado_base64' in aj.corpo, aj.corpo.csc_nfce_producao], ['PUT', 'https://api.focusnfe.com.br/v2/empresas/77', false, 'CSC-PROD']);
           assert.deepStrictEqual([r.json.focus.homologacao, r.json.focus.producao], [true, true]);
+          assert.deepStrictEqual([aj.corpo.serie_nfe_producao, aj.corpo.proximo_numero_nfe_producao, r.json.focus.serieNfe], ['2', '1', '2'], 'série própria do painel');
           await req('POST', `${bv}/vendas`, { modelo: 'nfce', itens: [{ produtoId: idProd, quantidade: 1 }] }, admin);
           assert.strictEqual(chamadas.slice(-1)[0].auth, `Basic ${Buffer.from('tk-hom-maria:').toString('base64')}`, 'token mantido');
           assert.strictEqual((await req('GET', '/api/admin/portal/escritorio/cupom', null, admin)).json.empresas.find((x) => x.id === idMaria).focus.configurada, true);

@@ -163,6 +163,9 @@ async function cadastraEmpresa(u, dados, cert) {
     ...(dados.cscProducao ? { csc_nfce_producao: dados.cscProducao, id_token_nfce_producao: num(dados.idTokenProducao) } : {}),
     ...(dados.cscHomologacao ? { csc_nfce_homologacao: dados.cscHomologacao, id_token_nfce_homologacao: num(dados.idTokenHomologacao) } : {}),
     ...(cert ? { arquivo_certificado_base64: Buffer.from(cert.pfx).toString('base64'), senha_certificado: cert.senha } : {}),
+    // Série própria do painel (evita colidir com outro sistema que emite pelo mesmo CNPJ) e o próximo número
+    ...(dados.serieNfeProducao ? { serie_nfe_producao: String(dados.serieNfeProducao) } : {}),
+    ...(dados.proximoNfeProducao ? { proximo_numero_nfe_producao: String(dados.proximoNfeProducao) } : {}),
   };
   Object.keys(corpoEmp).forEach((k) => corpoEmp[k] === undefined && delete corpoEmp[k]);
   const atual = u.fiscal && u.fiscal.focus && u.fiscal.focus.id;

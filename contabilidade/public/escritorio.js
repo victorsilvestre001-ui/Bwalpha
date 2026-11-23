@@ -458,12 +458,14 @@ async function configuraFocus(emp, f = {}) {
       <label class="campo"><span>ID do CSC de teste</span><input id="fzIdH" inputmode="numeric" value="${esc(f.idTokenHomologacao || '')}" placeholder="ex.: 1"></label>
       <label class="campo"><span>CSC de produção</span><input id="fzCscP" autocomplete="off" placeholder="${f.producao ? 'já informado (deixe vazio para manter)' : 'código CSC'}"></label>
       <label class="campo"><span>ID do CSC de produção</span><input id="fzIdP" inputmode="numeric" value="${esc(f.idTokenProducao || '')}" placeholder="ex.: 1"></label>
+      <label class="campo"><span>Série da NF-e <small>(se a loja já emite em outro sistema, use outra série, ex.: 2)</small></span><input id="fzSerie" inputmode="numeric" value="${esc(f.serieNfe || '')}" placeholder="1"></label>
+      <label class="campo"><span>Próximo número da NF-e <small>(opcional)</small></span><input id="fzProx" inputmode="numeric" placeholder="automático"></label>
     </div>
     <label style="display:flex;gap:10px;align-items:flex-start;margin-top:6px;font-size:.88rem"><input type="checkbox" style="width:auto;flex:none;margin:3px 0 0" id="fzCert" ${emp.certificado && !f.configurada ? 'checked' : ''} ${emp.certificado ? '' : 'disabled'}><span>Enviar o certificado A1 desta empresa (já conectado no painel) para a Focus${emp.certificado ? '' : ' <b>· esta empresa ainda não tem certificado no painel</b>'}</span></label>
     <p class="suave" style="font-size:.8rem;margin:10px 0 0">O CSC (código de segurança do contribuinte) é gerado no site da SEFAZ do estado com o certificado da empresa; em SP, no Portal da NFC-e › Acesso restrito › CSC. Gere um de homologação para testar e um de produção para valer.</p>`,
     botoes: [{ texto: 'Cancelar', valor: null }, {
       texto: f.configurada ? 'Salvar' : 'Cadastrar na Focus', classe: 'primario',
-      acao: () => api(`/escritorio/empresas/${emp.id}/focus`, { body: { ie: $('#fzIe').value, cscHomologacao: $('#fzCscH').value, idTokenHomologacao: $('#fzIdH').value, cscProducao: $('#fzCscP').value, idTokenProducao: $('#fzIdP').value, enviarCertificado: $('#fzCert').checked } }),
+      acao: () => api(`/escritorio/empresas/${emp.id}/focus`, { body: { ie: $('#fzIe').value, cscHomologacao: $('#fzCscH').value, idTokenHomologacao: $('#fzIdH').value, cscProducao: $('#fzCscP').value, idTokenProducao: $('#fzIdP').value, serieNfeProducao: $('#fzSerie').value, proximoNfeProducao: $('#fzProx').value, enviarCertificado: $('#fzCert').checked } }),
     }],
   });
   if (r) aviso(`${esc(emp.nome)} pronta para emitir cupom.`);
