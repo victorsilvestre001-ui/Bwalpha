@@ -1283,7 +1283,6 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
     if (!dados.ie) return res.status(400).json({ erro: 'Informe a inscrição estadual da empresa.' });
     if (dados.cscProducao && !dados.idTokenProducao) return res.status(400).json({ erro: 'Informe o ID do token (CSC) de produção.' });
     if (dados.cscHomologacao && !dados.idTokenHomologacao) return res.status(400).json({ erro: 'Informe o ID do token (CSC) de homologação.' });
-    if (!antes.id && !dados.cscProducao && !dados.cscHomologacao) return res.status(400).json({ erro: 'Informe o CSC do cupom (gerado no site da SEFAZ), de teste ou de produção.' });
     let cert = null;
     if (b.enviarCertificado) {
       cert = certificado.carrega(u.id);
@@ -1340,10 +1339,40 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
   async function emiteVenda(u, body, quem, { espera = true } = {}) {
     if (!vendas.ativo()) return { status: 409, erro: 'A emissão de NF-e/NFC-e ainda não está ligada: falta o token da Focus NFe no Railway.' };
     if (!simplesOuMei(u)) return { status: 409, erro: 'Nesta primeira versão a emissão de NF-e/NFC-e é para empresas do Simples Nacional e MEI.' };
-    const modelo = body.modelo === 'nfe' ? 'nfe' : 'nfce';
+    // Remessa para conserto: NF-e com os itens copiados da NF de compra (não entram no cadastro de produtos)
+    const remessa = body.operacao === 'conserto';
+    const modelo = remessa || body.modelo === 'nfe' ? 'nfe' : 'nfce';
     const itensPedido = Array.isArray(body.itens) ? body.itens.slice(0, 100) : [];
     const itens = [];
-    for (const it of itensPedido) {
+    const so = (v) => String(v || '').replace(/\D/g, '');
+    const numBr = (v) => Number(String(v ?? '').trim().replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'));
+    let extrasRemessa = {};
+    if (remessa) {
+      const chave = so(body.referenciada);
+      if (chave.length !== 44) return { status: 400, erro: 'Informe a chave de acesso da NF de compra (44 números).' };
+      if (so(body.destinatario && body.destinatario.documento).length !== 14 || !so(body.destinatario && body.destinatario.ie)) return { status: 400, erro: 'Na remessa para conserto informe o CNPJ e a inscrição estadual de quem vendeu (o mesmo da NF de compra).' };
+      const t = body.transporte || {};
+      const v = t.volumes || {};
+      const modalidade = ['0', '1', '2', '3', '4', '9'].includes(String(t.modalidade ?? '9')) ? String(t.modalidade ?? '9') : '9';
+      extrasRemessa = {
+        operacao: 'conserto', referenciada: chave,
+        transporte: {
+          modalidade, cnpj: so(t.cnpj), nome: txt(t.nome, 60), ie: so(t.ie), endereco: txt(t.endereco, 60), municipio: txt(t.municipio, 60), uf: txt(t.uf, 2).toUpperCase(),
+          volumes: { quantidade: Math.max(0, Math.round(numBr(v.quantidade) || 0)), especie: txt(v.especie, 60), marca: txt(v.marca, 60), numeracao: txt(v.numeracao, 60), pesoBruto: numBr(v.pesoBruto) || 0, pesoLiquido: numBr(v.pesoLiquido) || 0 },
+        },
+        informacoes: txt(body.informacoes, 2000),
+      };
+      for (const it of itensPedido) {
+        const ncm = so(it.ncm);
+        const q = numBr(it.quantidade || '1');
+        const valor = dinheiro(numBr(it.valor));
+        if (!txt(it.descricao, 120)) return { status: 400, erro: 'Cada item precisa da descrição igual à da NF de compra.' };
+        if (ncm.length !== 8) return { status: 400, erro: `NCM de "${txt(it.descricao, 60)}" precisa ter 8 números.` };
+        if (!(q > 0) || !(valor > 0)) return { status: 400, erro: `Informe a quantidade e o valor unitário de "${txt(it.descricao, 60)}" (igual ao da NF de compra).` };
+        itens.push({ codigo: txt(it.codigo, 60), descricao: txt(it.descricao, 120), ncm, unidade: txt(it.unidade || 'UN', 6).toUpperCase(), quantidade: q, valor, cfop: '5915', csosn: '400', pisCst: '49', origem: Number(it.origem || 0) });
+      }
+    }
+    for (const it of remessa ? [] : itensPedido) {
       let p = it.produtoId ? db.acha('produtos', (x) => x.id === it.produtoId && x.usuarioId === u.id) : null;
       if (!p && it.descricao) {
         const ncmNovo = String(it.ncm || '').replace(/\D/g, '');
@@ -1378,7 +1407,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       if (c) { destinatario.endereco.municipio = c.municipio; destinatario.uf = destinatario.uf || c.uf; }
     }
     const ambiente = ambVendas(u);
-    let venda = db.insere('vendas', { usuarioId: u.id, modelo, ambiente, status: 'processando', itens, destinatario, pagamento: String(body.pagamento || '01'), total: Math.round(itens.reduce((t, i) => t + i.quantidade * i.valor, 0) * 100) / 100, pedidoPor: quem });
+    let venda = db.insere('vendas', { usuarioId: u.id, modelo, ambiente, status: 'processando', itens, destinatario, ...extrasRemessa, pagamento: remessa ? '90' : String(body.pagamento || '01'), total: Math.round(itens.reduce((t, i) => t + i.quantidade * i.valor, 0) * 100) / 100, pedidoPor: quem });
     try {
       venda = db.atualiza('vendas', venda.id, await vendas.emite(venda, u, ambiente));
       // NF-e é assíncrona: confere algumas vezes antes de responder
@@ -1391,7 +1420,7 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       return { status: 400, erro: err.message };
     }
     if (venda.status === 'erro') { db.remove('vendas', (x) => x.id === venda.id); return { status: 400, erro: `A SEFAZ recusou: ${venda.erro}` }; }
-    if (venda.status === 'emitida' && ambiente === 'producao') avisos.nota(u, { id: venda.id, numero: venda.numero, tomador: { nome: destinatario.nome || 'consumidor' }, valor: venda.total, pdf: venda.danfe }).catch(() => {});
+    if (venda.status === 'emitida' && ambiente === 'producao' && !remessa) avisos.nota(u, { id: venda.id, numero: venda.numero, tomador: { nome: destinatario.nome || 'consumidor' }, valor: venda.total, pdf: venda.danfe }).catch(() => {});
     return { venda };
   }
   // Sugestões para o campo "produto": primeiro os produtos da empresa, depois o que outras empresas já

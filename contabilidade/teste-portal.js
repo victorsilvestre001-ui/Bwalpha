@@ -704,6 +704,40 @@ const notas = require('./portal/notas');
           vendasT._setBuscaHtml(null);
           console.log('ok impressão do cupom');
         }
+        // Remessa para conserto (CFOP 5915/6915): itens da NF de compra, sem cobrança, com NF referenciada e transporte
+        {
+          const chaveCompra = '42261178658846000291550010000141571721486307';
+          const remBase = {
+            operacao: 'conserto', referenciada: chaveCompra, destinatario: { documento: '11222333000181', ie: '258365595' },
+            itens: [{ codigo: 'Z7020.31117', descricao: 'SANDALIA FEMININA', ncm: '64029990', unidade: 'PAR', quantidade: '1', valor: '85,62' }],
+            transporte: { modalidade: '1', cnpj: '88.380.498/0002-97', nome: 'RAPIDO LABARCA TRANS. LTDA', ie: '206058971117', uf: 'SP', volumes: { quantidade: '1', especie: 'CAIXA', pesoBruto: '2,5', pesoLiquido: '1,8' } },
+            informacoes: 'Defeito no solado.',
+          };
+          const prodAntes = (await req('GET', `${bv}/vendas`, null, admin)).json.produtos.length;
+          assert.strictEqual((await req('POST', `${bv}/vendas`, { ...remBase, referenciada: '123' }, admin)).status, 400, 'exige a chave da NF de compra');
+          assert.strictEqual((await req('POST', `${bv}/vendas`, { ...remBase, destinatario: { documento: '11222333000181' } }, admin)).status, 400, 'exige a IE de quem vendeu');
+          assert.strictEqual((await req('POST', `${bv}/vendas`, { ...remBase, itens: [{ ...remBase.itens[0], valor: '' }] }, admin)).status, 400, 'exige o valor da compra');
+          const envRem = [];
+          vendasT._setTransporte(async (url, o) => {
+            envRem.push({ url, metodo: o.method, corpo: o.body ? JSON.parse(o.body) : null });
+            if (o.method === 'POST') return { status: 202, json: { status: 'processando_autorizacao' } };
+            return { status: 200, json: { status: 'autorizado', numero: '7', serie: '1', caminho_danfe: '/arquivos/r.pdf' } };
+          });
+          r = await req('POST', `${bv}/vendas?espera=0`, remBase, admin);
+          assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+          assert.deepStrictEqual([r.json.venda.status, r.json.venda.operacao, r.json.venda.total], ['emitida', 'conserto', 85.62]);
+          const cr = envRem.find((x) => x.metodo === 'POST' && x.url.includes('/v2/nfe?')).corpo;
+          assert.strictEqual(cr.natureza_operacao, 'Remessa de mercadoria ou bem para conserto ou reparo');
+          assert.deepStrictEqual([cr.items[0].cfop, cr.items[0].icms_situacao_tributaria, cr.items[0].codigo_produto, cr.items[0].unidade_comercial, cr.items[0].valor_unitario_comercial], ['6915', '400', 'Z7020.31117', 'PAR', 85.62], 'outro estado: 6915');
+          assert.deepStrictEqual(cr.notas_referenciadas, [{ chave_nfe: chaveCompra }]);
+          assert.deepStrictEqual(cr.formas_pagamento, [{ forma_pagamento: '90', valor_pagamento: 0 }], 'sem cobrança');
+          assert.deepStrictEqual([cr.modalidade_frete, cr.consumidor_final, cr.indicador_inscricao_estadual_destinatario, cr.inscricao_estadual_destinatario], [1, 0, 1, '258365595']);
+          assert.deepStrictEqual([cr.cnpj_transportador, cr.inscricao_estadual_transportador, cr.uf_transportador], ['88380498000297', '206058971117', 'SP']);
+          assert.deepStrictEqual(cr.volumes, [{ quantidade: 1, especie: 'CAIXA', peso_bruto: 2.5, peso_liquido: 1.8 }]);
+          assert.strictEqual(cr.informacoes_adicionais_contribuinte, 'Defeito no solado.');
+          assert.strictEqual((await req('GET', `${bv}/vendas`, null, admin)).json.produtos.length, prodAntes, 'itens da remessa não viram produto');
+          console.log('ok remessa para conserto');
+        }
         // Cupom fiscal: cadastro da empresa na Focus pelo painel e emissão com o token dela
         {
           const chamadas = [];
@@ -719,7 +753,6 @@ const notas = require('./portal/notas');
           assert.strictEqual(r.json.empresas.find((x) => x.id === idMaria).focus.configurada, false);
           const bf = `${bv}/focus`;
           assert.strictEqual((await req('POST', bf, { cscHomologacao: 'CSC-TESTE', idTokenHomologacao: '1', enviarCertificado: true }, admin)).status, 400, 'sem IE');
-          assert.strictEqual((await req('POST', bf, { ie: '123.456.789.110', enviarCertificado: true }, admin)).status, 400, 'sem CSC');
           assert.strictEqual((await req('POST', bf, { ie: '123456789110', cscHomologacao: 'CSC-TESTE', idTokenHomologacao: '1' }, admin)).status, 400, 'primeira vez exige certificado');
           r = await req('POST', bf, { ie: '123.456.789.110', cscHomologacao: 'CSC-TESTE', idTokenHomologacao: '1', enviarCertificado: true }, admin);
           assert.strictEqual(r.status, 200, JSON.stringify(r.json));

@@ -278,7 +278,7 @@ async function abaVendas(d) {
   el.innerHTML = `${faixa}
     <div class="grade-nota">
       <div class="card">
-        <h2>Nova venda</h2>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h2 style="margin:0">Nova venda</h2><button type="button" class="btn pequeno" id="vRem" ${!c.focus || !c.simples ? 'disabled' : ''}>Remessa para conserto</button></div>
         <div class="segmentos" style="grid-template-columns:1fr 1fr">
           <label><input type="radio" name="vMod" value="nfce" checked><b>Cupom fiscal (NFC-e)</b><small class="suave">venda no balcão, consumidor final</small></label>
           <label><input type="radio" name="vMod" value="nfe"><b>NF-e de venda</b><small class="suave">para empresa ou entrega</small></label>
@@ -329,6 +329,7 @@ async function abaVendas(d) {
   const soma = () => { $('#vTotal').textContent = brl(itens().reduce((t, i) => t + Number(i.quantidade || 0) * num(i.valor), 0)); };
   linhaItem();
   $('#vMais').addEventListener('click', linhaItem);
+  $('#vRem').addEventListener('click', () => remessaConserto(e, recarrega));
   $('#vEmitir').addEventListener('click', async () => {
     msg('');
     const it = itens();
@@ -374,6 +375,75 @@ async function abaVendas(d) {
     const r = await dialogo({ titulo: 'Cancelar nota?', sub: 'A NF-e pode ser cancelada em até 24 horas; o cupom, em até 30 minutos.', corpo: '<label class="campo"><span>Motivo (mínimo 15 caracteres)</span><textarea id="vcMot" rows="3" maxlength="255"></textarea></label>', botoes: [{ texto: 'Voltar', valor: null }, { texto: 'Cancelar nota', classe: 'primario', acao: () => api(`/escritorio/empresas/${e.id}/vendas/${b.dataset.vc}/cancelar`, { body: { justificativa: $('#vcMot').value } }) }] });
     if (r) { aviso('Nota cancelada.'); recarrega(); }
   }));
+}
+
+// ----- NF-e de remessa para conserto (devolver mercadoria ao fornecedor para reparo) -----
+async function remessaConserto(e, recarrega) {
+  const linhaItemRem = (x = {}) => `<tr class="rItem">
+      <td><input class="rCod" value="${esc(x.codigo || '')}" placeholder="Z7020.31117"></td>
+      <td><input class="rDesc" value="${esc(x.descricao || '')}" placeholder="igual à NF de compra"></td>
+      <td><input class="rNcm" inputmode="numeric" value="${esc(x.ncm || '')}" placeholder="64029990"></td>
+      <td><input class="rUn" value="${esc(x.unidade || 'PAR')}" style="width:56px"></td>
+      <td><input class="rQtd" inputmode="decimal" value="${esc(x.quantidade || '1')}" style="width:64px"></td>
+      <td><input class="rVal" inputmode="decimal" value="${esc(x.valor || '')}" placeholder="85,62" style="width:90px"></td>
+      <td><button type="button" class="lnk perigo rX" title="Tirar">×</button></td></tr>`;
+  const corpo = `
+    <p class="suave" style="margin-top:0;font-size:.85rem">Copie da NF de compra: quem vendeu, a chave e os itens que voltam, com o <b>mesmo valor unitário</b>. CFOP 5915 (mesmo estado) ou 6915 (outro estado) sai sozinho.</p>
+    <div class="form-2">
+      <label class="campo"><span>Chave da NF de compra (44 números)</span><input id="rChave" inputmode="numeric" placeholder="4226 1178 6588 ..."></label>
+      <label class="campo"><span>Informações complementares <small>(opcional)</small></span><input id="rInfo" placeholder="ex.: defeito no solado"></label>
+      <label class="campo"><span>CNPJ de quem vendeu</span><input id="rDest" inputmode="numeric" placeholder="78.658.846/0002-91"><small id="rDestNome" class="suave"></small></label>
+      <label class="campo"><span>Inscrição estadual de quem vendeu</span><input id="rDestIe" inputmode="numeric"></label>
+    </div>
+    <span class="rotulo">Itens que vão para conserto</span>
+    <div style="overflow-x:auto"><table class="tabela tab-rem"><thead><tr><th>Código</th><th>Descrição</th><th>NCM</th><th>Un.</th><th>Qtd.</th><th>Valor unit.</th><th></th></tr></thead><tbody id="rItens">${linhaItemRem()}</tbody></table></div>
+    <button type="button" class="lnk" id="rMais">${icone('mais')} Mais um item</button>
+    <span class="rotulo" style="margin-top:12px;display:block">Transporte</span>
+    <div class="form-2">
+      <label class="campo"><span>CNPJ da transportadora <small>(opcional)</small></span><input id="rTransp" inputmode="numeric"><small id="rTranspNome" class="suave"></small></label>
+      <label class="campo"><span>Frete por conta</span><select id="rFrete"><option value="1">Destinatário (quem vendeu)</option><option value="0">Remetente (nós)</option><option value="2">Terceiros</option><option value="9">Sem frete</option></select></label>
+      <label class="campo"><span>IE da transportadora <small>(opcional)</small></span><input id="rTranspIe" inputmode="numeric"></label>
+      <label class="campo"><span>Volumes: quantidade e espécie</span><span style="display:flex;gap:6px"><input id="rVolQ" inputmode="numeric" value="1" style="width:70px"><input id="rVolE" value="CAIXA"></span></label>
+      <label class="campo"><span>Peso bruto (kg)</span><input id="rPB" inputmode="decimal" placeholder="2,500"></label>
+      <label class="campo"><span>Peso líquido (kg)</span><input id="rPL" inputmode="decimal" placeholder="1,800"></label>
+    </div>`;
+  let transp = {};
+  const ler = () => ({
+    operacao: 'conserto', referenciada: $('#rChave').value, informacoes: $('#rInfo').value,
+    destinatario: { documento: $('#rDest').value, ie: $('#rDestIe').value },
+    itens: $$('.rItem').map((tr) => ({ codigo: $('.rCod', tr).value, descricao: $('.rDesc', tr).value, ncm: $('.rNcm', tr).value, unidade: $('.rUn', tr).value, quantidade: $('.rQtd', tr).value, valor: $('.rVal', tr).value })).filter((i) => i.descricao || i.valor),
+    transporte: { modalidade: $('#rFrete').value, cnpj: $('#rTransp').value, ie: $('#rTranspIe').value, nome: transp.nome || '', municipio: transp.municipio || '', uf: transp.uf || '', volumes: { quantidade: $('#rVolQ').value, especie: $('#rVolE').value, pesoBruto: $('#rPB').value, pesoLiquido: $('#rPL').value } },
+  });
+  const promessa = dialogo({
+    titulo: 'Remessa para conserto (NF-e)', sub: `${esc(e.nome)} devolve mercadoria ao fornecedor para reparo. Nota sem cobrança.`, corpo,
+    botoes: [{ texto: 'Cancelar', valor: null }, {
+      texto: 'Emitir remessa', classe: 'primario',
+      acao: async () => {
+        const dados = ler();
+        if (!dados.itens.length) throw new Error('Inclua ao menos um item.');
+        return api(`/escritorio/empresas/${e.id}/vendas`, { body: dados });
+      },
+    }],
+  });
+  // Liga os campos depois que a janela abre
+  setTimeout(() => {
+    $('#rMais').addEventListener('click', () => { $('#rItens').insertAdjacentHTML('beforeend', linhaItemRem()); ligaX(); });
+    const ligaX = () => $$('.rX').forEach((b) => { b.onclick = () => { if ($$('.rItem').length > 1) b.closest('tr').remove(); }; });
+    ligaX();
+    const busca = async (campo, alvo, guarda) => {
+      const d = $(campo).value.replace(/\D/g, '');
+      if (d.length !== 14) { $(alvo).textContent = ''; return; }
+      try { const r = await api(`/escritorio/tomador/${d}`); $(alvo).textContent = `${r.nome} · ${r.municipio}/${r.uf}`; if (guarda) guarda(r); } catch (err) { $(alvo).textContent = err.message; }
+    };
+    $('#rDest').addEventListener('change', () => busca('#rDest', '#rDestNome'));
+    $('#rTransp').addEventListener('change', () => busca('#rTransp', '#rTranspNome', (r) => { transp = r; }));
+  }, 0);
+  const r = await promessa;
+  if (r && r.venda) {
+    aviso(r.venda.status === 'emitida' ? `Remessa nº ${esc(r.venda.numero)} emitida.` : 'Remessa enviada à SEFAZ; ainda processando.');
+    if (r.venda.danfe) window.open(r.venda.danfe, '_blank', 'noopener');
+    recarrega();
+  }
 }
 
 // ----- Cupom fiscal: lista das empresas, configuração na Focus (uma vez) e atalho para emitir -----
