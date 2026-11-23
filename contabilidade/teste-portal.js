@@ -755,6 +755,10 @@ const notas = require('./portal/notas');
           assert.strictEqual((await req('POST', bf, { cscHomologacao: 'CSC-TESTE', idTokenHomologacao: '1', enviarCertificado: true }, admin)).status, 400, 'sem IE');
           assert.strictEqual((await req('POST', bf, { ie: '123456789110', cscHomologacao: 'CSC-TESTE', idTokenHomologacao: '1' }, admin)).status, 400, 'primeira vez exige certificado');
           r = await req('POST', bf, { ie: '123.456.789.110', cscHomologacao: 'CSC-TESTE', idTokenHomologacao: '1', enviarCertificado: true }, admin);
+          assert.strictEqual(r.status, 400, 'sem rua no cadastro: recusa antes de mandar');
+          assert.match(r.json.erro, /endereço da empresa está incompleto/);
+          { const dbT = require('./portal/db'); const um = dbT.acha('usuarios', (x) => x.id === idMaria); dbT.atualiza('usuarios', idMaria, { empresa: { ...um.empresa, endereco: { ...(um.empresa.endereco || {}), logradouro: 'Rua das Flores', numero: '10', bairro: 'Centro', cep: '01001000' } } }); }
+          r = await req('POST', bf, { ie: '123.456.789.110', cscHomologacao: 'CSC-TESTE', idTokenHomologacao: '1', enviarCertificado: true }, admin);
           assert.strictEqual(r.status, 200, JSON.stringify(r.json));
           assert.deepStrictEqual([r.json.focus.configurada, r.json.focus.homologacao, r.json.focus.producao, r.json.focus.ie], [true, true, false, '123456789110']);
           assert.ok(!/tk-|CSC-TESTE/.test(JSON.stringify(r.json)), 'tokens e CSC não voltam para a tela');
@@ -762,6 +766,7 @@ const notas = require('./portal/notas');
           assert.strictEqual(cad.auth, `Basic ${Buffer.from('tok-focus:').toString('base64')}`, 'cadastro com o token master');
           assert.deepStrictEqual([cad.corpo.cnpj, cad.corpo.inscricao_estadual, cad.corpo.regime_tributario, cad.corpo.habilita_nfce, cad.corpo.csc_nfce_homologacao, cad.corpo.id_token_nfce_homologacao], ['12345678000195', 123456789110, 4, true, 'CSC-TESTE', 1], 'MEI = regime 4');
           assert.ok(cad.corpo.arquivo_certificado_base64 && cad.corpo.senha_certificado, 'manda o A1');
+          assert.ok(cad.corpo.logradouro && cad.corpo.cep && cad.corpo.municipio && cad.corpo.uf, 'endereço completo do emitente: ' + JSON.stringify([cad.corpo.logradouro, cad.corpo.cep, cad.corpo.municipio, cad.corpo.uf]));
           const guardado = JSON.stringify(require('./portal/db').acha('usuarios', (x) => x.id === idMaria).fiscal.focus);
           assert.ok(!guardado.includes('tk-hom-maria'), 'token guardado cifrado');
           r = await req('POST', `${bv}/vendas`, { modelo: 'nfce', itens: [{ produtoId: idProd, quantidade: 1 }] }, admin);

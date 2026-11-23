@@ -1289,7 +1289,14 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       if (!cert) return res.status(409).json({ erro: 'Esta empresa não tem certificado A1 conectado no painel. Conecte em Configurações ou desmarque o envio.' });
     } else if (!antes.id) return res.status(400).json({ erro: 'Na primeira configuração o certificado A1 vai para a Focus (ela assina os cupons).' });
     try {
-      const r = await vendas.cadastraEmpresa(u, dados, cert);
+      // A nota exige o endereço completo do emitente: se o cadastro não tem a rua, completa pela consulta do CNPJ
+      let uCad = u;
+      const endAtual = (u.empresa && u.empresa.endereco) || {};
+      if (!endAtual.logradouro) {
+        const emp = await buscaEmpresa(u.cnpj).catch(() => null);
+        if (emp && emp.endereco) uCad = { ...u, empresa: { ...(u.empresa || {}), endereco: { ...emp.endereco, municipio: emp.municipio, uf: emp.uf }, municipio: (u.empresa && u.empresa.municipio) || emp.municipio, uf: (u.empresa && u.empresa.uf) || emp.uf } };
+      }
+      const r = await vendas.cadastraEmpresa(uCad, dados, cert);
       const tokens = { ...(antes.tokens || {}) };
       if (r.tokenProducao) tokens.producao = certificado.sela(r.tokenProducao);
       if (r.tokenHomologacao) tokens.homologacao = certificado.sela(r.tokenHomologacao);

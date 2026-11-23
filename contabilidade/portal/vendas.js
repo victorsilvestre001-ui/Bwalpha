@@ -151,6 +151,7 @@ async function cancela(venda, justificativa, amb, emitente) {
 async function cadastraEmpresa(u, dados, cert) {
   const e = u.empresa || {};
   const end = e.endereco || {};
+  if (!(end.logradouro || e.logradouro) || !(end.cep || e.cep)) throw new ErroVenda('O endereço da empresa está incompleto (rua e CEP). Atualize os dados do CNPJ da empresa e tente de novo.');
   const num = (v) => (so(v) ? Number(so(v)) : undefined);
   const corpoEmp = {
     nome: e.razaoSocial || u.nome, nome_fantasia: e.nomeFantasia || undefined, cnpj: so(u.cnpj),
