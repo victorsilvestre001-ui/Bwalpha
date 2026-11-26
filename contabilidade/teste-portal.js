@@ -737,6 +737,20 @@ const notas = require('./portal/notas');
           assert.strictEqual(cr.informacoes_adicionais_contribuinte, 'Defeito no solado.');
           assert.strictEqual((await req('GET', `${bv}/vendas`, null, admin)).json.produtos.length, prodAntes, 'itens da remessa não viram produto');
           console.log('ok remessa para conserto');
+          // Frete cobrado na NF-e de venda: entra no total, rateado nos itens, não vira produto
+          {
+            const antesFrete = envRem.length;
+            const qtdProd = (await req('GET', `${bv}/vendas`, null, admin)).json.produtos.length;
+            r = await req('POST', `${bv}/vendas?espera=0`, { modelo: 'nfe', itens: [{ produtoId: idProd, quantidade: 2, valor: '100,00' }, { produtoId: idProd, quantidade: 1, valor: '50' }], frete: '180,00', pagamento: '17', destinatario: { documento: '11222333000181' } }, admin);
+            assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+            assert.deepStrictEqual([r.json.venda.total, r.json.venda.frete], [430, 180]);
+            const cf = envRem.slice(antesFrete).find((x) => x.metodo === 'POST').corpo;
+            assert.deepStrictEqual([cf.valor_produtos, cf.valor_frete, cf.valor_total, cf.modalidade_frete], [250, 180, 430, 0]);
+            assert.deepStrictEqual(cf.items.map((i) => i.valor_frete), [144, 36], 'rateio proporcional ao valor de cada item');
+            assert.deepStrictEqual(cf.formas_pagamento, [{ forma_pagamento: '17', valor_pagamento: 430 }]);
+            assert.strictEqual((await req('GET', `${bv}/vendas`, null, admin)).json.produtos.length, qtdProd, 'frete não vira produto');
+            console.log('ok frete na NF-e');
+          }
         }
         // Cupom fiscal: cadastro da empresa na Focus pelo painel e emissão com o token dela
         {

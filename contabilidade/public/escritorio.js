@@ -288,6 +288,7 @@ async function abaVendas(d) {
           <label class="campo"><span>Nome do cliente</span><input id="vNome" maxlength="60"></label>
           <div class="form-obra"><label class="campo"><span>CEP</span><input id="vCep" inputmode="numeric" placeholder="00000-000"></label><label class="campo"><span>Número</span><input id="vNum" placeholder="123"></label></div>
           <label class="campo"><span>Inscrição estadual do cliente <small>(se for contribuinte)</small></span><input id="vIe" inputmode="numeric"></label>
+          <label class="campo"><span>Frete cobrado do cliente (R$) <small>(opcional; entra no total da nota)</small></span><input id="vFrete" inputmode="decimal" placeholder="0,00"></label>
         </div>
         <span class="rotulo">Produtos</span>
         <div id="vItens"></div>
@@ -326,8 +327,9 @@ async function abaVendas(d) {
   const linhaItem = () => $('#vItens').append(linhaVendaRapida({ buscar: (q) => api(`/escritorio/empresas/${e.id}/produtos/sugestoes?q=${encodeURIComponent(q)}`).then((r) => r.sugestoes), aoMudar: soma }));
   const num = (s) => Number(String(s || '').replace(/\./g, '').replace(',', '.')) || 0;
   const itens = () => lerItensVendaRapida($('#vItens'));
-  const soma = () => { $('#vTotal').textContent = brl(itens().reduce((t, i) => t + Number(i.quantidade || 0) * num(i.valor), 0)); };
+  const soma = () => { $('#vTotal').textContent = brl(itens().reduce((t, i) => t + Number(i.quantidade || 0) * num(i.valor), 0) + (modelo() === 'nfe' ? num($('#vFrete').value) : 0)); };
   linhaItem();
+  $('#vFrete').addEventListener('input', () => soma());
   $('#vMais').addEventListener('click', linhaItem);
   $('#vRem').addEventListener('click', () => remessaConserto(e, recarrega));
   $('#vEmitir').addEventListener('click', async () => {
@@ -348,7 +350,7 @@ async function abaVendas(d) {
     const janela = modelo() === 'nfce' ? window.open('', '_blank') : null;
     if (janela) janela.document.write('<p style="font:16px system-ui;padding:24px">Emitindo o cupom…</p>');
     try {
-      const r = await api(`/escritorio/empresas/${e.id}/vendas`, { body: { modelo: modelo(), itens: it, pagamento: $('#vPag').value, destinatario: { documento: docC, nome: $('#vNome').value, cep: $('#vCep').value, numero: $('#vNum').value, ie: $('#vIe').value } } });
+      const r = await api(`/escritorio/empresas/${e.id}/vendas`, { body: { modelo: modelo(), itens: it, pagamento: $('#vPag').value, frete: modelo() === 'nfe' ? $('#vFrete').value : '', destinatario: { documento: docC, nome: $('#vNome').value, cep: $('#vCep').value, numero: $('#vNum').value, ie: $('#vIe').value } } });
       aviso(r.venda.status === 'emitida' ? `${modelo() === 'nfe' ? 'NF-e' : 'Cupom'} nº ${esc(r.venda.numero)} emitido.` : 'Enviada à SEFAZ; ainda processando.');
       if (janela) { if (r.venda.status === 'emitida' && r.venda.danfe) janela.location.href = impressaoVenda(e.id, r.venda.id); else janela.close(); }
       else if (r.venda.danfe) window.open(r.venda.danfe, '_blank', 'noopener');

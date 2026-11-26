@@ -78,7 +78,14 @@ function corpo(venda, emitente) {
   const interestadual = venda.modelo === 'nfe' && !!d.uf && ufDest !== ufEmit;
   const itens = venda.itens.map((p, i) => item(p, i, { interestadual }));
   const total = r2(itens.reduce((t, x) => t + x.valor_bruto, 0));
-  const pagamento = [{ forma_pagamento: String(venda.pagamento || '01').padStart(2, '0'), valor_pagamento: total }];
+  // Frete cobrado do cliente (só NF-e): rateado entre os itens pelo valor de cada um; o último fica com o centavo que sobra
+  const frete = venda.modelo === 'nfe' ? r2(venda.frete) : 0;
+  if (frete > 0 && total > 0) {
+    let resto = frete;
+    itens.forEach((x, i) => { const parte = i === itens.length - 1 ? r2(resto) : r2((frete * x.valor_bruto) / total); x.valor_frete = parte; resto = r2(resto - parte); });
+  }
+  const totalNota = r2(total + frete);
+  const pagamento = [{ forma_pagamento: String(venda.pagamento || '01').padStart(2, '0'), valor_pagamento: totalNota }];
   if (venda.modelo === 'nfce') {
     const c = { cnpj_emitente: emitente.cnpj, data_emissao: agoraSP(), natureza_operacao: 'Venda ao consumidor', presenca_comprador: 1, modalidade_frete: 9, local_destino: 1, items: itens, formas_pagamento: pagamento };
     if (so(d.documento).length === 11) c.cpf_destinatario = so(d.documento);
@@ -98,11 +105,13 @@ function corpo(venda, emitente) {
   const c = {
     natureza_operacao: remessa ? 'Remessa de mercadoria ou bem para conserto ou reparo' : 'Venda de mercadoria', data_emissao: agoraSP(), tipo_documento: 1, finalidade_emissao: 1,
     cnpj_emitente: emitente.cnpj, local_destino: interestadual ? 2 : 1, consumidor_final: contribuinte ? 0 : 1, presenca_comprador: remessa ? 9 : Number(venda.presenca || 1),
-    modalidade_frete: t.modalidade !== undefined && t.modalidade !== '' ? Number(t.modalidade) : 9,
+    // Frete cobrado na nota: por conta do remetente (0); sem frete: 9
+    modalidade_frete: t.modalidade !== undefined && t.modalidade !== '' ? Number(t.modalidade) : frete > 0 ? 0 : 9,
     nome_destinatario: String(d.nome || '').slice(0, 60), [doc.length === 14 ? 'cnpj_destinatario' : 'cpf_destinatario']: doc,
     indicador_inscricao_estadual_destinatario: contribuinte ? 1 : 9, ...(contribuinte ? { inscricao_estadual_destinatario: so(d.ie) } : {}),
     logradouro_destinatario: e.logradouro, numero_destinatario: e.numero || 'S/N', bairro_destinatario: e.bairro || '', municipio_destinatario: e.municipio || '', uf_destinatario: ufDest, cep_destinatario: so(e.cep),
-    items: itens, formas_pagamento: remessa ? [{ forma_pagamento: '90', valor_pagamento: 0 }] : pagamento, valor_produtos: total, valor_total: total,
+    items: itens, formas_pagamento: remessa ? [{ forma_pagamento: '90', valor_pagamento: 0 }] : pagamento, valor_produtos: total, valor_total: totalNota,
+    ...(frete > 0 ? { valor_frete: frete } : {}),
   };
   if (venda.referenciada) c.notas_referenciadas = [{ chave_nfe: so(venda.referenciada) }];
   if (so(t.cnpj).length === 14 || so(t.cnpj).length === 11) {

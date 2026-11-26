@@ -1415,7 +1415,9 @@ module.exports = function rotasPortal({ analisa, buscaEmpresa, tabelaPrecos, ass
       if (c) { destinatario.endereco.municipio = c.municipio; destinatario.uf = destinatario.uf || c.uf; }
     }
     const ambiente = ambVendas(u);
-    let venda = db.insere('vendas', { usuarioId: u.id, modelo, ambiente, status: 'processando', itens, destinatario, ...extrasRemessa, pagamento: remessa ? '90' : String(body.pagamento || '01'), total: Math.round(itens.reduce((t, i) => t + i.quantidade * i.valor, 0) * 100) / 100, pedidoPor: quem });
+    // Frete cobrado do cliente (NF-e de venda): entra no total e é rateado nos itens; não vira produto
+    const frete = modelo === 'nfe' && !remessa ? Math.max(0, dinheiro(numBr(body.frete) || 0)) : 0;
+    let venda = db.insere('vendas', { usuarioId: u.id, modelo, ambiente, status: 'processando', itens, destinatario, ...extrasRemessa, ...(frete ? { frete } : {}), pagamento: remessa ? '90' : String(body.pagamento || '01'), total: Math.round((itens.reduce((t, i) => t + i.quantidade * i.valor, 0) + frete) * 100) / 100, pedidoPor: quem });
     try {
       venda = db.atualiza('vendas', venda.id, await vendas.emite(venda, u, ambiente));
       // NF-e é assíncrona: confere algumas vezes antes de responder
